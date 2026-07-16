@@ -261,10 +261,5 @@ pnpm dev
 
 <div align="center">
 
-**Hopak** — hopak.com
-
-*ภาษา: ไทย 🇹🇭 · สกุลเงิน: บาท (฿) · ตลาดเริ่มต้น: มหาสารคาม · ขอนแก่น · เชียงใหม่*
-
-Made with ❤️ by [karshi02](https://github.com/karshi02)
 
 </div>
