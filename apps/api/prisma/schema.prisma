@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TENANT
+  OWNER
+  ADMIN
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  FINANCE
+  SUPPORT
+}
+
+enum DormStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum RoomType {
+  AIR
+  FAN
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  SETTLED
+  TRANSFERRED
+}
+
+enum CampaignKind {
+  BOOST
+  BANNER
+  FEATURED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  role      Role
+  name      String
+  email     String?  @unique
+  phone     String?  @unique
+  avatarUrl String?
+  googleId  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dorms         Dorm[]
+  bookings      Booking[]
+  notifications Notification[]
+  admin         Admin?
+}
+
+model Dorm {
+  id            String     @id @default(cuid())
+  ownerId       String
+  owner         User       @relation(fields: [ownerId], references: [id])
+  name          String
+  description   String
+  province      String
+  university    String?
+  lat           Float
+  lng           Float
+  waterRate     Float
+  electricRate  Float
+  deposit       Float
+  amenities     Json
+  images        String[]
+  status        DormStatus @default(PENDING_APPROVAL)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  rooms      Room[]
+  campaigns  Campaign[]
+}
+
+model Room {
+  id            String     @id @default(cuid())
+  dormId        String
+  dorm          Dorm       @relation(fields: [dormId], references: [id])
+  type          RoomType
+  pricePerMonth Float
+  status        RoomStatus @default(AVAILABLE)
+
+  bookings Booking[]
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  tenantId       String
+  tenant         User          @relation(fields: [tenantId], references: [id])
+  roomId         String
+  room           Room          @relation(fields: [roomId], references: [id])
+  checkInDate    DateTime
+  amount         Float
+  status         BookingStatus @default(PENDING)
+  contactName    String
+  contactPhone   String
+  note           String?
+  cancelDeadline DateTime
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  payment Payment?
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  bookingId   String        @unique
+  booking     Booking       @relation(fields: [bookingId], references: [id])
+  amount      Float
+  commission  Float
+  ownerPayout Float
+  method      String
+  status      PaymentStatus @default(PENDING)
+  settledAt   DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Campaign {
+  id      String       @id @default(cuid())
+  dormId  String
+  dorm    Dorm         @relation(fields: [dormId], references: [id])
+  kind    CampaignKind
+  startAt DateTime
+  endAt   DateTime
+  price   Float
+}
+
+model Admin {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  adminRole AdminRole
+}
