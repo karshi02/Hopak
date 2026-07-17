@@ -19,7 +19,10 @@ export class BookingsController {
   }
 
   @Get()
-  list(@CurrentUser() user: { id: string }) {
+  list(@CurrentUser() user: { id: string; role: string }) {
+    const role = user.role.toLowerCase();
+    if (role === 'admin') return this.bookingsService.listAll();
+    if (role === 'owner') return this.bookingsService.listForOwner(user.id);
     return this.bookingsService.listForTenant(user.id);
   }
 
@@ -33,6 +36,13 @@ export class BookingsController {
   @UseGuards(RolesGuard)
   confirm(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.bookingsService.confirm(user.id, id);
+  }
+
+  @Patch(':id/reject')
+  @Roles('owner')
+  @UseGuards(RolesGuard)
+  reject(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.bookingsService.reject(user.id, id);
   }
 
   @Patch(':id/cancel')

@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { Booking } from '@hopak/shared';
+import { PageLoader } from '@/components/PageLoader';
 
 function NewBookingForm() {
   const router = useRouter();
@@ -77,7 +78,7 @@ function NewBookingForm() {
 
 export default function NewBookingPage() {
   return (
-    <Suspense fallback={<main className="p-6">กำลังโหลด...</main>}>
+    <Suspense fallback={<PageLoader fullScreen />}>
       <NewBookingForm />
     </Suspense>
   );

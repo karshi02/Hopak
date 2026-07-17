@@ -7,10 +7,29 @@ import { AnalyticsController } from './analytics/analytics.controller';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AdminsController } from './admins/admins.controller';
 import { AdminsService } from './admins/admins.service';
+import { AdminUsersController } from './users/admin-users.controller';
+import { AdminUsersService } from './users/admin-users.service';
+import { AdminCampaignsController } from './campaigns/admin-campaigns.controller';
+import { PromotionsService } from '../promotions/promotions.service';
 import { PrismaService } from '../../prisma.service';
 
 @Module({
-  controllers: [ApprovalsController, FinanceController, AnalyticsController, AdminsController],
-  providers: [ApprovalsService, FinanceService, AnalyticsService, AdminsService, PrismaService],
+  controllers: [
+    ApprovalsController,
+    FinanceController,
+    AnalyticsController,
+    AdminsController,
+    AdminUsersController,
+    AdminCampaignsController,
+  ],
+  providers: [
+    ApprovalsService,
+    FinanceService,
+    AnalyticsService,
+    AdminsService,
+    AdminUsersService,
+    PromotionsService,
+    PrismaService,
+  ],
 })
 export class AdminModule {}

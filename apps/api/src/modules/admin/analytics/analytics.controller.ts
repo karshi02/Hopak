@@ -14,4 +14,9 @@ export class AnalyticsController {
   bookingsByProvince() {
     return this.analyticsService.bookingsByProvince();
   }
+
+  @Get('summary')
+  summary() {
+    return this.analyticsService.summary();
+  }
 }

@@ -17,6 +17,13 @@ export class DormsController {
     return this.dormsService.search(query);
   }
 
+  @Get('mine')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('owner')
+  listMine(@CurrentUser() user: { id: string }) {
+    return this.dormsService.listMine(user.id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.dormsService.findOne(id);

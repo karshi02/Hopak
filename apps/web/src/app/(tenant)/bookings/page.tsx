@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useBookings } from '@/hooks/useBookings';
+import { normalizeStatus } from '@/lib/normalize';
+import { PageLoader } from '@/components/PageLoader';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'รอเจ้าของหอยืนยัน',
@@ -16,18 +18,24 @@ export default function BookingsPage() {
 
   return (
     <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-xl font-bold">รายการจองของฉัน</h1>
+      <h1 className="text-xl font-bold text-[#0b0b0b] dark:text-white">รายการจองของฉัน</h1>
       {loading ? (
-        <p className="mt-4 text-gray-500">กำลังโหลด...</p>
+        <PageLoader fullScreen />
       ) : (
         <div className="mt-4 flex flex-col gap-3">
           {bookings.map((b) => (
-            <Link key={b.id} href={`/bookings/${b.id}`} className="block rounded border p-4">
-              <p className="font-medium">{STATUS_LABEL[b.status]}</p>
-              <p className="text-sm text-gray-600">วันเข้าอยู่: {b.checkInDate}</p>
+            <Link
+              key={b.id}
+              href={`/bookings/${b.id}`}
+              className="block rounded-lg border border-black/10 p-4 hover:shadow dark:border-white/10"
+            >
+              <p className="font-medium text-[#0b0b0b] dark:text-white">
+                {STATUS_LABEL[normalizeStatus(b.status)]}
+              </p>
+              <p className="text-sm text-[#898781]">วันเข้าอยู่: {b.checkInDate}</p>
             </Link>
           ))}
-          {bookings.length === 0 && <p className="text-gray-500">ยังไม่มีการจอง</p>}
+          {bookings.length === 0 && <p className="text-[#898781]">ยังไม่มีการจอง</p>}
         </div>
       )}
     </main>

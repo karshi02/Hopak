@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { Dorm } from '@hopak/shared';
+import { PageLoader } from '@/components/PageLoader';
 
 export default function EditDormPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +24,7 @@ export default function EditDormPage() {
     setSaved(true);
   }
 
-  if (!dorm) return <p>กำลังโหลด...</p>;
+  if (!dorm) return <PageLoader fullScreen />;
 
   return (
     <div className="max-w-lg">
@@ -42,10 +43,10 @@ export default function EditDormPage() {
           onChange={(e) => setDorm({ ...dorm, description: e.target.value })}
           className="rounded border px-3 py-2"
         />
-        <button onClick={handleSave} className="rounded bg-green-600 px-4 py-2 text-white">
+        <button onClick={handleSave} className="rounded bg-seller px-4 py-2 text-white">
           บันทึก
         </button>
-        {saved && <p className="text-sm text-green-700">บันทึกแล้ว</p>}
+        {saved && <p className="text-sm text-seller">บันทึกแล้ว</p>}
       </div>
     </div>
   );

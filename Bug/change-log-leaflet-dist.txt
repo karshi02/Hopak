@@ -1,0 +1,40 @@
+Hopak — บันทึกการเปลี่ยนแปลง: ลบโฟลเดอร์ dist/ (Leaflet ต้นฉบับ)
+==========================
+
+ทำอะไรไป
+--------------------------------------------------------
+1. ผู้ใช้ดาวน์โหลด Leaflet 1.9.4 จาก leafletjs.com มาไว้ที่ C:\Users\karsh\Desktop\Hopak\dist\
+   (มี leaflet.js, leaflet-src.js, leaflet.css, source map, และรูป marker ในโฟลเดอร์ images/)
+2. Copy รูป 3 ไฟล์ที่ระบบใช้จริงออกมาก่อน:
+   - dist/images/marker-icon.png
+   - dist/images/marker-icon-2x.png
+   - dist/images/marker-shadow.png
+   ไปไว้ที่ apps/web/public/leaflet/ (path ใหม่ที่เว็บเรียกใช้จริง)
+3. แก้ apps/web/src/components/map/MapPicker.tsx ให้ชี้ iconUrl/iconRetinaUrl/shadowUrl
+   ไปที่ /leaflet/marker-icon.png ฯลฯ (จาก public/) แทนที่จะโหลดจาก unpkg CDN ภายนอก
+4. ลบโฟลเดอร์ C:\Users\karsh\Desktop\Hopak\dist\ ทิ้งทั้งหมด
+
+ทำไมลบได้ปลอดภัย
+--------------------------------------------------------
+- โค้ด Leaflet ที่ระบบใช้จริงตอนรัน มาจาก node_modules/leaflet (ติดตั้งผ่าน pnpm/npm
+  ในตอน `pnpm install` ของ apps/web/package.json) ไม่ได้อ้างอิงไฟล์ใน dist/ นี้เลย
+- ไฟล์ dist/ ที่โหลดมาเป็นแค่ "ต้นฉบับสำรอง" ไว้ดูเฉยๆ ไม่ได้ผูกกับ build pipeline
+- ของที่ใช้จริง (รูป marker 3 ไฟล์) ถูก copy ออกมาไว้ที่ apps/web/public/leaflet/ ก่อนลบแล้ว
+- ตรวจสอบก่อนลบ: build (`npx next build`) + รัน dev server ยิง curl ไปที่
+  /leaflet/marker-icon.png และ /leaflet/marker-shadow.png ได้ 200 ทั้งคู่ ยืนยันว่า
+  เว็บไม่พึ่งพา dist/ เดิมแล้ว
+
+หากมีปัญหาภายหลัง (แผนที่ไม่ขึ้น / marker หาย / error หา icon ไม่เจอ)
+--------------------------------------------------------
+1. เช็คก่อนว่าปัญหาเกี่ยวกับไฟล์ที่ลบไปจริงไหม — เปิด browser devtools ดู Network tab
+   ว่า request ไปที่ /leaflet/marker-icon.png, marker-icon-2x.png, marker-shadow.png
+   ได้ 200 หรือ 404
+2. ถ้า 404 (ไฟล์หาย): เช็คว่า apps/web/public/leaflet/ ยังมีไฟล์ครบ 3 ไฟล์ไหม
+   ถ้าหาย โหลด Leaflet 1.9.4 ใหม่จาก https://leafletjs.com/download.html
+   แตกไฟล์ แล้ว copy จาก images/marker-icon.png, marker-icon-2x.png, marker-shadow.png
+   ไปวางที่ apps/web/public/leaflet/ เหมือนเดิม (ไม่ต้องเอาทั้งโฟลเดอร์ dist/ มาไว้ที่ root อีก)
+3. ถ้าอยาก rollback กลับไปใช้ CDN แบบเดิม: แก้ apps/web/src/components/map/MapPicker.tsx
+   เปลี่ยน iconUrl กลับเป็น https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png
+   (และอีก 2 บรรทัดที่เหลือ) แต่จะกลับไปพึ่งพา network ภายนอกเหมือนก่อนแก้
+4. โค้ด Leaflet หลัก (MapContainer, TileLayer ฯลฯ) ไม่กระทบจากการลบครั้งนี้เลย
+   เพราะมาจาก node_modules/leaflet เสมอ — ถ้าพังคือปัญหาอื่น ไม่เกี่ยวกับ dist/ ที่ลบไป

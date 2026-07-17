@@ -63,6 +63,7 @@ model User {
   name      String
   email     String?  @unique
   phone     String?  @unique
+  password  String?
   avatarUrl String?
   googleId  String?  @unique
   createdAt DateTime @default(now())

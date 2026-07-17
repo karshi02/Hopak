@@ -16,4 +16,16 @@ export class AnalyticsService {
     }
     return counts;
   }
+
+  async summary() {
+    const [totalUsers, totalDorms, totalBookings, settledPayments] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.dorm.count(),
+      this.prisma.booking.count(),
+      this.prisma.payment.findMany({ where: { status: { in: ['SETTLED', 'TRANSFERRED'] } } }),
+    ]);
+    const totalRevenue = settledPayments.reduce((sum, p) => sum + p.commission, 0);
+
+    return { totalUsers, totalDorms, totalBookings, totalRevenue };
+  }
 }

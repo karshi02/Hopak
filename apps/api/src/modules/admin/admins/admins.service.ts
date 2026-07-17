@@ -6,7 +6,13 @@ export class AdminsService {
   constructor(private prisma: PrismaService) {}
 
   list() {
-    return this.prisma.admin.findMany({ include: { user: true } });
+    return this.prisma.admin.findMany({
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true },
+        },
+      },
+    });
   }
 
   create(userId: string, adminRole: 'SUPER_ADMIN' | 'ADMIN' | 'FINANCE' | 'SUPPORT') {

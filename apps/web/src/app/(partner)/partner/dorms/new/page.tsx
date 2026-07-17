@@ -1,9 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { PROVINCES } from '@hopak/shared';
+
+const MapPicker = dynamic(() => import('@/components/map/MapPicker'), { ssr: false });
+
+const MAHASARAKHAM = { lat: 16.246, lng: 103.252 };
 
 export default function NewDormPage() {
   const router = useRouter();
@@ -11,8 +16,8 @@ export default function NewDormPage() {
     name: '',
     description: '',
     province: PROVINCES[0] as string,
-    lat: 0,
-    lng: 0,
+    lat: MAHASARAKHAM.lat,
+    lng: MAHASARAKHAM.lng,
     waterRate: 0,
     electricRate: 0,
     deposit: 0,
@@ -36,26 +41,26 @@ export default function NewDormPage() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-xl font-bold">เพิ่มหอพัก</h1>
+      <h1 className="text-xl font-bold text-ink-strong dark:text-white">เพิ่มหอพัก</h1>
       <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
         <input
           placeholder="ชื่อหอพัก"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="rounded border px-3 py-2"
+          className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
           required
         />
         <textarea
           placeholder="คำอธิบาย"
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
-          className="rounded border px-3 py-2"
+          className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
           required
         />
         <select
           value={form.province}
           onChange={(e) => setForm({ ...form, province: e.target.value })}
-          className="rounded border px-3 py-2"
+          className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
         >
           {PROVINCES.map((p) => (
             <option key={p} value={p}>
@@ -63,45 +68,42 @@ export default function NewDormPage() {
             </option>
           ))}
         </select>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            placeholder="lat"
-            value={form.lat}
-            onChange={(e) => setForm({ ...form, lat: Number(e.target.value) })}
-            className="w-1/2 rounded border px-3 py-2"
+
+        <div>
+          <p className="mb-1.5 text-sm text-ink-faint">ปักหมุดตำแหน่งหอพัก (คลิกหรือลากหมุด)</p>
+          <MapPicker
+            lat={form.lat}
+            lng={form.lng}
+            onChange={(lat, lng) => setForm({ ...form, lat, lng })}
           />
-          <input
-            type="number"
-            placeholder="lng"
-            value={form.lng}
-            onChange={(e) => setForm({ ...form, lng: Number(e.target.value) })}
-            className="w-1/2 rounded border px-3 py-2"
-          />
+          <p className="mt-1 text-xs tabular-nums text-ink-faint">
+            พิกัด: {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
+          </p>
         </div>
+
         <input
           type="number"
           placeholder="ค่าน้ำ"
           value={form.waterRate}
           onChange={(e) => setForm({ ...form, waterRate: Number(e.target.value) })}
-          className="rounded border px-3 py-2"
+          className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
         />
         <input
           type="number"
           placeholder="ค่าไฟ"
           value={form.electricRate}
           onChange={(e) => setForm({ ...form, electricRate: Number(e.target.value) })}
-          className="rounded border px-3 py-2"
+          className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
         />
         <input
           type="number"
           placeholder="มัดจำ"
           value={form.deposit}
           onChange={(e) => setForm({ ...form, deposit: Number(e.target.value) })}
-          className="rounded border px-3 py-2"
+          className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" className="rounded bg-green-600 px-4 py-2 text-white">
+        <button type="submit" className="rounded-lg bg-seller py-2.5 text-sm font-medium text-white hover:bg-seller-dark">
           บันทึก
         </button>
       </form>

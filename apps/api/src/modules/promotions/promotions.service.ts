@@ -9,6 +9,10 @@ export class PromotionsService {
     return this.prisma.campaign.create({ data: { dormId, kind, startAt, endAt, price } });
   }
 
+  listAll() {
+    return this.prisma.campaign.findMany({ include: { dorm: true }, orderBy: { startAt: 'desc' } });
+  }
+
   activeSponsored() {
     const now = new Date();
     return this.prisma.campaign.findMany({

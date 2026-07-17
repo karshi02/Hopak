@@ -6,7 +6,14 @@ export class ApprovalsService {
   constructor(private prisma: PrismaService) {}
 
   listPending() {
-    return this.prisma.dorm.findMany({ where: { status: 'PENDING_APPROVAL' }, include: { owner: true } });
+    return this.prisma.dorm.findMany({
+      where: { status: 'PENDING_APPROVAL' },
+      include: {
+        owner: {
+          select: { id: true, name: true, email: true, phone: true },
+        },
+      },
+    });
   }
 
   approve(dormId: string) {

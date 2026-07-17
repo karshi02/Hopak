@@ -23,6 +23,14 @@ export class DormsService {
     return this.prisma.dorm.findUniqueOrThrow({ where: { id }, include: { rooms: true } });
   }
 
+  listMine(ownerId: string) {
+    return this.prisma.dorm.findMany({
+      where: { ownerId },
+      include: { rooms: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   create(ownerId: string, dto: CreateDormDto) {
     return this.prisma.dorm.create({
       data: { ...dto, ownerId, status: 'PENDING_APPROVAL' },

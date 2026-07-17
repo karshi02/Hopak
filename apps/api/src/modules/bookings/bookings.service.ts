@@ -33,6 +33,21 @@ export class BookingsService {
     return this.prisma.booking.findMany({ where: { tenantId }, include: { room: true } });
   }
 
+  listForOwner(ownerId: string) {
+    return this.prisma.booking.findMany({
+      where: { room: { dorm: { ownerId } } },
+      include: { room: { include: { dorm: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  listAll() {
+    return this.prisma.booking.findMany({
+      include: { room: { include: { dorm: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findOne(id: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id }, include: { room: { include: { dorm: true } } } });
     if (!booking) throw new NotFoundException('Booking not found');
@@ -51,6 +66,13 @@ export class BookingsService {
     assertTransition(booking.status.toLowerCase() as any, 'paid');
     await this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'OCCUPIED' } });
     return this.prisma.booking.update({ where: { id }, data: { status: 'PAID' } });
+  }
+
+  async reject(ownerId: string, id: string) {
+    const booking = await this.findOne(id);
+    if (booking.room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
+    assertTransition(booking.status.toLowerCase() as any, 'cancelled');
+    return this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
   }
 
   async cancel(tenantId: string, id: string) {

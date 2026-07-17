@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
+import { normalizeStatus } from '@/lib/normalize';
 import type { Booking } from '@hopak/shared';
+import { PageLoader } from '@/components/PageLoader';
 
-const STEPS = ['pending', 'confirmed', 'paid', 'completed'] as const;
+const STEPS =['pending', 'confirmed', 'paid', 'completed'] as const;
 const STEP_LABEL: Record<string, string> = {
   pending: 'ส่งคำขอจอง',
   confirmed: 'เจ้าของหอยืนยัน',
@@ -15,6 +17,7 @@ const STEP_LABEL: Record<string, string> = {
 
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [booking, setBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
@@ -26,36 +29,41 @@ export default function BookingDetailPage() {
     apiClient.get<Booking>(`/bookings/${id}`).then(setBooking);
   }
 
-  async function handlePay() {
-    await apiClient.post(`/bookings/${id}/payment`, { method: 'promptpay' });
-    apiClient.get<Booking>(`/bookings/${id}`).then(setBooking);
-  }
+  if (!booking) return <PageLoader fullScreen />;
 
-  if (!booking) return <main className="p-6">กำลังโหลด...</main>;
-
-  const currentIndex = STEPS.indexOf(booking.status as (typeof STEPS)[number]);
-  const canCancel = new Date() <= new Date(booking.cancelDeadline) && booking.status !== 'cancelled';
+  const status = normalizeStatus(booking.status);
+  const currentIndex = STEPS.indexOf(status as (typeof STEPS)[number]);
+  const canCancel = new Date() <= new Date(booking.cancelDeadline) && status !== 'cancelled';
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="text-xl font-bold">รายละเอียดการจอง</h1>
+      <h1 className="text-xl font-bold text-[#0b0b0b] dark:text-white">รายละเอียดการจอง</h1>
 
       <ol className="mt-4 flex flex-col gap-2">
         {STEPS.map((step, i) => (
-          <li key={step} className={i <= currentIndex ? 'font-medium text-green-700' : 'text-gray-400'}>
+          <li
+            key={step}
+            className={i <= currentIndex ? 'font-medium text-green-700 dark:text-green-400' : 'text-[#898781]'}
+          >
             {STEP_LABEL[step]}
           </li>
         ))}
       </ol>
 
       <div className="mt-6 flex gap-3">
-        {booking.status === 'confirmed' && (
-          <button onClick={handlePay} className="rounded bg-green-600 px-4 py-2 text-white">
+        {status === 'confirmed' && (
+          <button
+            onClick={() => router.push(`/bookings/${id}/pay`)}
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
             ชำระเงิน
           </button>
         )}
         {canCancel && (
-          <button onClick={handleCancel} className="rounded border border-red-500 px-4 py-2 text-red-600">
+          <button
+            onClick={handleCancel}
+            className="rounded-lg border border-red-500 px-4 py-2 text-sm font-medium text-red-600"
+          >
             ยกเลิกการจอง
           </button>
         )}

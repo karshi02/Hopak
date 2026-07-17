@@ -1,0 +1,184 @@
+Hopak — บันทึกบั๊กที่เจอ
+==========================
+
+[แก้แล้ว] Role case-mismatch — RolesGuard ปฏิเสธทุก request
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/auth/auth.service.ts
+อาการ: JWT เก็บ role ตัวใหญ่ตาม Prisma enum (TENANT/OWNER/ADMIN)
+แต่ @Roles() decorator เช็คตัวเล็ก (tenant/owner/admin) ตาม @hopak/shared
+ผล: ทุก endpoint ที่มี RolesGuard ตอบ 403 Forbidden ตลอด
+(จองห้อง, ยืนยันจอง, อนุมัติหอ ฯลฯ ใช้งานไม่ได้เลย)
+แก้ไข: sign() แปลง role เป็น .toLowerCase() ก่อนใส่ JWT
+สถานะ: แก้แล้ว + ทดสอบ booking flow เต็มรอบผ่าน (16/07/2026)
+
+[แก้แล้ว] ไม่มีการเช็ค/hash password จริง — ช่องโหว่ความปลอดภัยร้ายแรง
+--------------------------------------------------------
+ไฟล์: apps/api/prisma/schema.prisma, apps/api/src/modules/auth/auth.service.ts,
+apps/api/src/modules/users/users.service.ts,
+apps/api/src/modules/admin/admins/admins.service.ts,
+apps/api/src/modules/admin/approvals/approvals.service.ts,
+apps/api/prisma/seed.ts
+อาการ: User model ใน Prisma ไม่มี field password เลย login() หา user จาก
+email/phone อย่างเดียว ไม่เช็ค password ที่ส่งมา — ใครก็ login ด้วย email
+ไหนก็ได้โดยไม่ต้องรู้รหัสผ่านจริง
+แก้ไข:
+- เพิ่ม password String? ใน User model + migrate (add-user-password)
+- register() hash ด้วย bcryptjs (10 rounds) ก่อนเก็บ, login() เทียบด้วย
+  bcrypt.compare จริง, ปฏิเสธถ้า user ไม่มี password (เช่น Google-only account)
+- ใช้ bcryptjs แทน bcrypt (native) เลี่ยงปัญหา compile บน Windows
+- ระหว่างแก้เจอเพิ่ม: user object (รวม password hash) ถูกส่งกลับตรงๆ ใน
+  response หลายจุด (auth.service register/login, users.service findById/
+  updateProfile/becomeOwner, admins.service list ใช้ include:{user:true},
+  approvals.service listPending ใช้ include:{owner:true}) — แก้ให้ใช้
+  select เฉพาะ field ที่ปลอดภัย/omitPassword() ทุกจุด ไม่ให้ hash รั่วออกไป
+- seed.ts: ตั้ง password ทดสอบ "hopak1234" ให้ account seed (admin/owner)
+สถานะ: แก้แล้ว + ทดสอบผ่านครบ 5 เคส (16/07/2026): register ไม่รั่ว password,
+login รหัสถูก 201, รหัสผิด 401, account เก่าที่ไม่มี password ถูกล็อก 401
+(ถูกต้อง — ต้อง reset ผ่านช่องทางอื่น), seed admin login ด้วยรหัสใหม่ 201
+
+[gap] /admin/users endpoint ไม่มีจริงใน backend
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(admin)/admin/users/page.tsx
+อาการ: หน้าเว็บแอดมิน "ผู้ใช้" เรียก GET /admin/users
+แต่ apps/api ยังไม่มี endpoint นี้ (มีแต่ /admin/admins, /admin/approvals,
+/admin/finance, /admin/analytics)
+ผล: หน้า /admin/users โหลดไม่ได้ข้อมูล (error เงียบ, users เป็น [])
+สถานะ: ยังไม่แก้ — ต้องเพิ่ม endpoint listing users ทั้งหมดในฝั่ง admin module
+
+[gap] Partner dashboard เรียก endpoint admin-only — owner ไม่มีสิทธิ์เห็นข้อมูล
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(partner)/partner/dashboard/page.tsx,
+apps/api/src/modules/admin/finance/finance.controller.ts
+อาการ: หน้า partner/dashboard เรียก GET /admin/finance/summary
+แต่ endpoint นี้ guard ด้วย @Roles('admin') เท่านั้น เจ้าของหอ (owner) โดน 403
+ทุกครั้ง (เงียบ เพราะมี .catch แล้วโชว์ 0 แทน error)
+ผล: เจ้าของหอไม่เห็นรายได้/ยอดจองของตัวเองในแดชบอร์ดเลย
+ต้นตอ: backend ไม่มี endpoint สำหรับ owner ดูสรุปยอดจอง/รายได้เฉพาะหอตัวเอง
+(bookings.service listForTenant กรองด้วย tenantId เท่านั้น ไม่มี listForOwner)
+สถานะ: ยังไม่แก้ — ต้องเพิ่ม endpoint ฝั่ง owner (เช่น GET /partner/summary)
+ที่กรองด้วย ownerId แทน
+
+[แก้แล้ว] Room/Dorm status case-mismatch — การ์ดหอพักขึ้น "ห้องเต็ม" ทั้งที่มีห้องว่าง
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(tenant)/search/page.tsx, apps/web/src/app/(tenant)/dorms/[id]/page.tsx
+อาการ: Prisma ส่ง Room.status เป็นตัวใหญ่ (AVAILABLE/OCCUPIED) ตาม enum จริง
+แต่ frontend filter เทียบกับ '@hopak/shared' Room type ที่นิยามตัวเล็ก (available/occupied)
+ผล: r.status === 'available' ไม่ match กับข้อมูลจริงจาก API เลยสักครั้ง
+การ์ดค้นหาขึ้น "ห้องเต็ม" ตลอด แม้หอมีห้องว่างจริง (เหมือนบั๊ก role case-mismatch ก่อนหน้า
+แต่รอบนี้อยู่ฝั่ง data ไม่ใช่ auth)
+แก้ไข: เทียบแบบ case-insensitive (.toUpperCase() === 'AVAILABLE'/'AIR') ในหน้า
+search และ dorms/[id]
+สถานะ: แก้แล้วในหน้า search + dorms/[id] — ยังไม่เช็ค partner/rooms ว่ากระทบเหมือนกันไหม
+(ทางแก้ระยะยาว: ให้ backend normalize enum เป็น lowercase ก่อนส่งออก จะได้ไม่ต้องแก้ทุกจุดที่ใช้)
+
+[แก้แล้ว] profile page เช็ค role ตัวเล็กแต่ API ส่งตัวใหญ่ — ปุ่ม "เปิดหอพักกับ Hopak" ไม่โผล่
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(tenant)/profile/page.tsx
+อาการ: user.role === 'tenant' เทียบตัวเล็ก แต่ GET /users/me ส่ง role ตรงจาก
+Prisma enum ('TENANT' ตัวใหญ่) — เงื่อนไขไม่ match เลยสักครั้ง (บั๊กรูปแบบเดียวกับ
+role case-mismatch ใน auth และ room/dorm status ก่อนหน้า — เกิดซ้ำเพราะ backend
+ส่ง enum ดิบไม่แปลงเป็น lowercase ก่อนส่งออกทุก endpoint)
+ผล: ผู้เช่าไม่เห็นปุ่ม "เปิดหอพักกับ Hopak" เลย เปิดเป็นเจ้าของหอไม่ได้ผ่าน UI
+แก้ไข: เทียบ user.role.toLowerCase() === 'tenant' + เชื่อม flow ให้หลังกด
+becomeOwner แล้ว redirect ไป /partner/dorms/new ทันที (แทนที่จะ refetch เฉยๆ)
+สถานะ: แก้แล้ว
+หมายเหตุ: ควรพิจารณาแก้ที่ต้นตอ (normalize role/status enum เป็น lowercase
+ที่ response interceptor ฝั่ง backend ทีเดียว) แทนแก้เป็นจุดๆ ในทุกหน้าเว็บ
+
+[แก้แล้ว] Booking status case-mismatch กระจายหลายหน้า (timeline/label/filter ไม่ทำงาน)
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(tenant)/bookings/[id]/page.tsx, bookings/page.tsx,
+(admin)/admin/bookings/page.tsx, (partner)/partner/requests/page.tsx,
+(partner)/partner/slips/page.tsx
+อาการ: booking.status จาก API เป็นตัวใหญ่ (PENDING/CONFIRMED/...) แต่ทุกหน้า
+เทียบ/lookup ด้วยตัวเล็ก (STEPS indexOf, STATUS_LABEL[status], filter === 'pending')
+ผล: timeline ไม่ไฮไลท์ขั้นไหนเลย, ป้ายสถานะว่างเปล่า (undefined), ปุ่มชำระเงิน/ยืนยัน
+ไม่โผล่, ตัวกรองสถานะใน admin ไม่ทำงาน, requests/slips filter ไม่เจอ booking เลย
+สักตัว — บั๊กรูปแบบเดียวกับ role/room-status ซ้ำเป็นครั้งที่ 4
+แก้ไข: เพิ่ม apps/web/src/lib/normalize.ts (normalizeStatus) แล้วเรียกใช้ตอน
+compare/lookup ทุกจุดที่ระบุด้านบน
+สถานะ: แก้แล้ว
+
+[gap ร้ายแรง] GET /bookings กรองด้วย tenantId เสมอ ไม่สนใจ role ผู้เรียก
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/bookings/bookings.controller.ts,
+apps/api/src/modules/bookings/bookings.service.ts (listForTenant)
+อาการ: endpoint เดียวใช้ทั้ง tenant/owner/admin แต่ service กรองด้วย
+tenantId=user.id ตายตัว ไม่เช็ค role เลย
+ผล: partner/requests (คำขอจอง) กับ admin/bookings (การจองทั้งหมด) เห็นข้อมูลผิด
+คนละชุด — owner/admin เห็นแค่ booking ที่ตัวเองเคยจองในฐานะผู้เช่าเท่านั้น
+(ปกติมักจะว่างเปล่า) ไม่ใช่คำขอจองที่เข้ามาที่หอตัวเอง/ทั้งระบบ
+สถานะ: ยังไม่แก้ — ต้องเพิ่ม logic ฝั่ง backend: admin เห็นทั้งหมด,
+owner เห็นเฉพาะ booking ของห้องในหอที่ตัวเองเป็นเจ้าของ, tenant เห็นของตัวเอง
+(เกี่ยวโยงกับ gap "partner dashboard data" ที่บันทึกไว้ก่อนหน้า — ควรแก้พร้อมกัน)
+
+[แก้แล้ว] partner/rooms ใช้กรอก Dorm ID มือ + room.status case-mismatch อีกจุด
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(partner)/partner/rooms/page.tsx
+อาการ: หน้าเดิมให้ owner กรอก Dorm ID เองแบบ raw text (ใช้งานจริงไม่ได้ ไม่มีทาง
+รู้ dormId ของตัวเอง) + toggleStatus เทียบ current==='available' ตัวเล็ก
+(บั๊กเคสเดียวกับที่เจอซ้ำหลายจุด)
+ผล: หน้าจัดการห้องใช้งานจริงไม่ได้เลย ต้องรู้ dormId ล่วงหน้า
+แก้ไข: เปลี่ยนเป็น dropdown เลือกจาก GET /dorms/mine (endpoint ใหม่ที่เพิ่มพร้อม
+แก้ partner-dashboard gap) + ใช้ normalizeStatus() เทียบสถานะ
+สถานะ: แก้แล้ว
+
+[แก้แล้ว] Partner dashboard / GET bookings ผิด scope (ต่อจาก gap ที่บันทึกไว้ก่อนหน้า)
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/bookings/bookings.controller.ts,
+apps/api/src/modules/bookings/bookings.service.ts,
+apps/api/src/modules/dorms/dorms.controller.ts, dorms.service.ts,
+apps/web/src/app/(partner)/partner/dashboard/page.tsx
+แก้ไข:
+- เพิ่ม bookingsService.listForOwner()/listAll() แล้วให้ GET /bookings
+  เช็ค role: admin เห็นทั้งหมด, owner เห็นเฉพาะ booking ของหอตัวเอง, tenant เห็นของตัวเอง
+- เพิ่ม GET /dorms/mine (owner-only) คืนหอ+ห้องของเจ้าของที่ login อยู่
+- partner/dashboard คำนวณรายได้/ห้องทั้งหมด/ห้องว่างจากข้อมูลจริงที่ scope ถูกแล้ว
+สถานะ: แก้แล้ว — ทำให้ partner/requests, partner/slips, admin/bookings,
+partner/dashboard เห็นข้อมูลถูก scope ทั้งหมดพร้อมกัน (root cause เดียวกัน)
+
+[แก้แล้ว] partner/slips ลิงก์ไปหน้า PDF ที่ไม่มีจริง (dead link)
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(partner)/partner/slips/page.tsx
+อาการ: ปุ่ม "ปริ้น PDF" เดิมลิงก์ไป /api/documents/booking-slip/:id ซึ่งไม่มี
+route นี้อยู่จริงทั้งฝั่งเว็บ (ไม่มี proxy) และฝั่ง api (PdfService มีแต่ยังไม่ผูก
+controller/route ใดๆ)
+ผล: กดแล้วเจอ 404 เงียบๆ
+แก้ไข: เปลี่ยนเป็นปุ่ม disabled พร้อม title อธิบายว่ายังไม่เชื่อมระบบ PDF จริง
+(ตรงไปตรงมากว่าลิงก์เสีย) — เช่นเดียวกับปุ่ม Export PDF ในหน้า admin/finance
+สถานะ: แก้แล้ว (UI ไม่หลอกผู้ใช้ว่าใช้งานได้) — งานจริง (ผูก PdfService เข้า
+controller + route) ยังไม่ทำ
+
+[ยังไม่ทดสอบ]
+--------------------------------------------------------
+- Realtime WebSocket (booking:new event ฝั่ง partner/requests)
+- PDF generation (documents module)
+- Uploads (S3)
+- Google OAuth จริง (ตอนนี้ใช้ placeholder clientID กัน crash)
+
+[14] ไม่มี Navbar ในหน้า tenant/public (พบตอน "ตอนนี้ระบบถึงไหนเเล้ว")
+- ปัญหา: (tenant) และ (auth) route group ไม่มี layout.tsx เลย หน้าแรก/search/booking/profile เลยไม่มีเมนู login, register, ค้นหา, ออกจากระบบ ทั้งที่ (admin)/(partner) มี sidebar แล้ว
+- แก้: สร้าง apps/web/src/components/Navbar.tsx (เช็ค token, โชว์ role-aware dashboard link, login/logout) + เพิ่ม layout.tsx ให้ (tenant) และ (auth) group + เติม Navbar เข้า root page.tsx (home อยู่นอก group)
+- สถานะ: แก้แล้ว
+
+[15] /search พัง 500 หลังรัน `next build` ทับตอน dev server ยังรันอยู่
+- ปัญหา: รัน `next build` (production build เพื่อเช็ค type error) ขณะ dev server เดิม (PID 896) ยังใช้ .next/ อยู่ ทำให้ webpack chunk เพี้ยน (Cannot find module './192.js')
+- แก้: ลบ apps/web/.next ทิ้ง แล้ว kill dev server เก่า restart `next dev` ใหม่ทั้งหมด
+- ป้องกันครั้งหน้า: ห้ามรัน `next build` ขณะ dev server ตัวเดียวกันกำลังรันอยู่ ใช้คนละ terminal/คนละเวลา หรือลบ .next ก่อน restart ทุกครั้งหลัง build
+- สถานะ: แก้แล้ว
+
+[16] Dev server jest-worker crash ชั่วคราวตอนคอมไพล์ /dorms/[id] ครั้งแรกหลัง redesign
+- อาการ: "Error: Jest worker encountered 2 child process exceptions, exceeding retry limit" ทำให้ /dorms/x ตอบ 500 ครั้งแรก
+- สาเหตุ: worker process ของ Next.js dev server ล่มชั่วคราว (มักเกิดจาก resource ตอน compile หน้าใหญ่ครั้งแรกบน Windows) ไม่ใช่บัคโค้ด
+- แก้: restart dev server ใหม่ ครั้งที่ 2 compile ผ่านปกติ (200)
+- หมายเหตุ: ถ้าเจอ error นี้อีกให้ restart ก่อน ไม่ต้องแก้โค้ด
+
+[17] Partner "คำขอจอง" ไม่มีปุ่มปฏิเสธจริง (mockup มีปุ่ม ปฏิเสธ แต่ backend ไม่มี endpoint)
+- ปัญหา: /bookings/:id/cancel เช็ค tenantId เท่านั้น เจ้าของหอเรียกไม่ได้ (403) ไม่มีทางปฏิเสธคำขอจองที่ค้างอยู่
+- แก้: เพิ่ม PATCH /bookings/:id/reject (@Roles('owner')) เช็ค dorm ownership, transition pending->cancelled เหมือน cancel แต่ไม่เช็ค cancel-window เพราะเป็นฝั่งเจ้าของหอปฏิเสธ ไม่ใช่ผู้เช่ายกเลิก
+- สถานะ: แก้แล้ว (bookings.service.ts, bookings.controller.ts, partner/requests page ต่อปุ่มจริง)
+
+[18] Admin finance summary รวม SETTLED+TRANSFERRED เข้าด้วยกัน ไม่แยกยอด "โอนแล้ว" กับ "ค้างโอน"
+- ปัญหา: ไม่มีทางแสดง KPI "ยอดเข้าบัญชีส่วนกลาง / คงค้างรอโอน" ตาม mockup เพราะ service คืนแค่ totalCommission/totalPayout รวมทุกสถานะ
+- แก้: เพิ่ม totalReceived, totalTransferred, totalPending แยกตาม Payment.status ใน finance.service.ts summary()
+- สถานะ: แก้แล้ว
