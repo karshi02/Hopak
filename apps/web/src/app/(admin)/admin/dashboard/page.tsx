@@ -23,6 +23,7 @@ const QUICK_ACTIONS = [
   { href: '/admin/admins', label: 'เพิ่มผู้ดูแล (Admin)', bg: 'bg-[#E9F7EF]', color: 'text-success' },
   { href: '/admin/finance', label: 'การเงิน & รวมบิล', bg: 'bg-[#FEF6E7]', color: 'text-warning-dark' },
   { href: '/admin/approvals', label: 'คิวรออนุมัติหอพัก', bg: 'bg-[#F3ECFB]', color: 'text-admin' },
+  { href: '/admin/owner-requests', label: 'คำขอเป็นเจ้าของหอ', bg: 'bg-[#FEEAEA]', color: 'text-danger' },
   { href: '/admin/bookings', label: 'ดูการจองทั้งหมด', bg: 'bg-[#F1F3F6]', color: 'text-ink-subtitle' },
 ];
 

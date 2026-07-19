@@ -10,6 +10,8 @@ import { AdminsService } from './admins/admins.service';
 import { AdminUsersController } from './users/admin-users.controller';
 import { AdminUsersService } from './users/admin-users.service';
 import { AdminCampaignsController } from './campaigns/admin-campaigns.controller';
+import { OwnerRequestsController } from './owner-requests/owner-requests.controller';
+import { OwnerRequestsService } from './owner-requests/owner-requests.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { PrismaService } from '../../prisma.service';
 
@@ -21,6 +23,7 @@ import { PrismaService } from '../../prisma.service';
     AdminsController,
     AdminUsersController,
     AdminCampaignsController,
+    OwnerRequestsController,
   ],
   providers: [
     ApprovalsService,
@@ -29,6 +32,7 @@ import { PrismaService } from '../../prisma.service';
     AdminsService,
     AdminUsersService,
     PromotionsService,
+    OwnerRequestsService,
     PrismaService,
   ],
 })

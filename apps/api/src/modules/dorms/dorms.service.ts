@@ -3,24 +3,41 @@ import { PrismaService } from '../../prisma.service';
 import { CreateDormDto } from './dto/create-dorm.dto';
 import { UpdateDormDto } from './dto/update-dorm.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
+import { ReviewsService } from '../reviews/reviews.service';
 
 @Injectable()
 export class DormsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private reviewsService: ReviewsService,
+  ) {}
 
-  search(query: SearchQueryDto) {
-    return this.prisma.dorm.findMany({
+  async search(query: SearchQueryDto) {
+    const dorms = await this.prisma.dorm.findMany({
       where: {
         status: 'APPROVED',
         province: query.province,
         university: query.university,
+        ...(query.q
+          ? {
+              OR: [
+                { name: { contains: query.q, mode: 'insensitive' as const } },
+                { province: { contains: query.q, mode: 'insensitive' as const } },
+                { university: { contains: query.q, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
       },
       include: { rooms: true },
     });
+    const ratings = await this.reviewsService.summaryForDorms(dorms.map((d) => d.id));
+    return dorms.map((d) => ({ ...d, ...ratings.get(d.id) }));
   }
 
-  findOne(id: string) {
-    return this.prisma.dorm.findUniqueOrThrow({ where: { id }, include: { rooms: true } });
+  async findOne(id: string) {
+    const dorm = await this.prisma.dorm.findUniqueOrThrow({ where: { id }, include: { rooms: true } });
+    const ratings = await this.reviewsService.summaryForDorms([id]);
+    return { ...dorm, ...ratings.get(id) };
   }
 
   listMine(ownerId: string) {

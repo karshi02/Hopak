@@ -17,7 +17,7 @@ export class PromotionsService {
     const now = new Date();
     return this.prisma.campaign.findMany({
       where: { kind: 'FEATURED', startAt: { lte: now }, endAt: { gte: now } },
-      include: { dorm: true },
+      include: { dorm: { include: { rooms: true } } },
     });
   }
 }

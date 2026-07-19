@@ -1,12 +1,16 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { PageLoader } from '@/components/PageLoader';
 
 const NAV = [
   { href: '/admin/dashboard', label: 'แดชบอร์ด' },
   { href: '/admin/bookings', label: 'การจอง & สถานะ' },
   { href: '/admin/approvals', label: 'หอพัก (อนุมัติ)' },
+  { href: '/admin/owner-requests', label: 'คำขอเป็นเจ้าของหอ' },
   { href: '/admin/users', label: 'ผู้ใช้ (Users)' },
   { href: '/admin/finance', label: 'การเงิน & รวมบิล' },
   { href: '/admin/campaigns', label: 'โฆษณา & แคมเปญ' },
@@ -15,6 +19,15 @@ const NAV = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading } = useCurrentUser();
+  const isAdmin = user?.role.toLowerCase() === 'admin';
+
+  useEffect(() => {
+    if (!loading && !isAdmin) router.replace('/login');
+  }, [loading, isAdmin, router]);
+
+  if (loading || !isAdmin) return <PageLoader fullScreen />;
 
   return (
     <div className="flex min-h-screen">

@@ -1,9 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useBookings } from '@/hooks/useBookings';
 import { normalizeStatus } from '@/lib/normalize';
 import { PageLoader } from '@/components/PageLoader';
+import { getToken } from '@/lib/auth';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'รอเจ้าของหอยืนยัน',
@@ -14,7 +17,12 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function BookingsPage() {
+  const router = useRouter();
   const { bookings, loading } = useBookings();
+
+  useEffect(() => {
+    if (!getToken()) router.replace('/login');
+  }, [router]);
 
   return (
     <main className="mx-auto max-w-3xl p-6">

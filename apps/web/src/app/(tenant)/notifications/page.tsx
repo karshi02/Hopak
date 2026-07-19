@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
+import { getToken } from '@/lib/auth';
 
 interface NotificationItem {
   id: string;
@@ -11,11 +13,16 @@ interface NotificationItem {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
-    apiClient.get<NotificationItem[]>('/notifications').then(setItems);
-  }, []);
+    if (!getToken()) {
+      router.replace('/login');
+      return;
+    }
+    apiClient.get<NotificationItem[]>('/notifications').then(setItems).catch(() => {});
+  }, [router]);
 
   return (
     <main className="mx-auto max-w-2xl p-6">

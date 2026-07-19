@@ -11,3 +11,14 @@ export interface User {
   avatarUrl?: string;
   googleId?: string;
 }
+
+export type OwnerRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface OwnerRequest {
+  id: string;
+  userId: string;
+  status: OwnerRequestStatus;
+  createdAt: string;
+  decidedAt?: string | null;
+  user?: { id: string; name: string; email?: string; phone?: string; createdAt: string };
+}

@@ -6,18 +6,21 @@ import type { Dorm, Room } from '@hopak/shared';
 
 type DormWithRooms = Dorm & { rooms: Room[] };
 
-export function useDormSearch(query: { province?: string; university?: string }) {
+export function useDormSearch(query: { q?: string; province?: string; university?: string }) {
   const [dorms, setDorms] = useState<DormWithRooms[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams(query as Record<string, string>);
+    const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
+    if (query.province) params.set('province', query.province);
+    if (query.university) params.set('university', query.university);
     apiClient
       .get<DormWithRooms[]>(`/dorms?${params.toString()}`)
       .then(setDorms)
       .finally(() => setLoading(false));
-  }, [query.province, query.university]);
+  }, [query.q, query.province, query.university]);
 
   return { dorms, loading };
 }

@@ -11,6 +11,8 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { FavoritesModule } from './modules/favorites/favorites.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { AdminModule } from './modules/admin/admin.module';
     PromotionsModule,
     UploadsModule,
     AdminModule,
+    ReviewsModule,
+    FavoritesModule,
   ],
 })
 export class AppModule {}

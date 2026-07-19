@@ -12,6 +12,7 @@ export function useBookings() {
     apiClient
       .get<Booking[]>('/bookings')
       .then(setBookings)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

@@ -17,6 +17,28 @@ export interface Dorm {
   amenities: string[];
   images: string[];
   status: DormStatus;
+  avgRating?: number | null;
+  reviewCount?: number;
+}
+
+export interface Review {
+  id: string;
+  dormId: string;
+  tenantId: string;
+  rating: number;
+  comment?: string | null;
+  createdAt: string;
+  tenant?: { name: string; avatarUrl?: string | null };
+}
+
+export interface Campaign {
+  id: string;
+  dormId: string;
+  kind: 'boost' | 'banner' | 'featured';
+  startAt: string;
+  endAt: string;
+  price: number;
+  dorm?: Dorm;
 }
 
 export interface Room {

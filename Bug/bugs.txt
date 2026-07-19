@@ -182,3 +182,40 @@ controller + route) ยังไม่ทำ
 - ปัญหา: ไม่มีทางแสดง KPI "ยอดเข้าบัญชีส่วนกลาง / คงค้างรอโอน" ตาม mockup เพราะ service คืนแค่ totalCommission/totalPayout รวมทุกสถานะ
 - แก้: เพิ่ม totalReceived, totalTransferred, totalPending แยกตาม Payment.status ใน finance.service.ts summary()
 - สถานะ: แก้แล้ว
+
+[19] npm install -g railway ผิดแพ็กเกจ + PATH เครื่อง user ไม่มี npm global bin เลย
+- ปัญหา: (1) `npm i -g railway` ลง package ผิด (ของจริงคือ @railway/cli) รันคำสั่ง railway ไม่เจอ (2) แม้ลงถูกแล้ว ก็ยังเรียกไม่ได้เพราะ %APPDATA%\npm ไม่อยู่ใน User PATH เลย (ปัญหาถาวรของเครื่อง ไม่เกี่ยวกับแพ็กเกจนี้อย่างเดียว - CLI tool ที่ลงด้วย npm -g ตัวอื่นก็ใช้ไม่ได้เหมือนกัน)
+- แก้: uninstall railway (ผิด) -> install @railway/cli (ถูก) -> เพิ่ม %APPDATA%\npm เข้า User PATH ถาวรด้วย [Environment]::SetEnvironmentVariable + เพิ่ม session ปัจจุบันด้วย $env:PATH
+- สถานะ: แก้แล้ว, railway --version รันได้ปกติ (5.27.0) ต้องเปิด terminal ใหม่ถึงจะเห็น PATH ถาวรใน session อื่น
+
+[20] Jest worker crash ("exceeding retry limit") ตอนเปิดหน้าเว็บ + error log "Cannot read properties of null (reading 'useContext')" ตามมา
+- ปัญหา: dev server เดิมค้าง state เสีย (jest-worker child process ตายซ้ำเกิน retry limit) หลัง request ถูก abort กลางคัน ("The user aborted a request.") ทำให้ Next พยายาม render internal ErrorBoundary เพื่อ log error แต่ตัว ErrorBoundary เรียก usePathname() นอก component tree ที่มี context ทำให้ throw ซ้อนอีกชั้น (log อย่างเดียว ไม่ทำหน้าเว็บพัง)
+- แก้: kill process เดิม (PID บน port 3001), rm -rf apps/web/.next, รัน pnpm dev ใหม่ - รูปแบบเดิมกับบัค [16] (ปัญหา dev-server ค้าง ไม่ใช่บัคโค้ด)
+- พบเพิ่ม: Bash tool session เอง PATH ก็ไม่มี %APPDATA%\npm เหมือนกัน (คนละ session กับ PowerShell ที่แก้ไปแล้วใน [19]) - ต้อง export PATH เพิ่ม npm global bin ทุกครั้งที่เปิด Bash ใหม่เพื่อเรียก pnpm ได้
+- สถานะ: แก้แล้ว, home/search คืน 200 หลัง restart
+
+[21] useDormSearch ส่ง province/university=undefined เป็น string จริง ทำ filter "ทั้งหมด" อาจไม่คืนหอที่ไม่ตรงเงื่อนไข
+- ปัญหา: new URLSearchParams({ province: undefined }) ใน JS coerce ค่า undefined เป็น string "undefined" จริง (ยืนยันด้วย node -e) ทำให้ query ที่ส่งไป backend กลายเป็น ?province=undefined แทนที่จะไม่ส่ง key เลย ฝั่ง service ทำ where: { province: "undefined" } กรองไม่ตรงกับหอพักไหนเลย
+- แก้: เขียน useDormSearch ใหม่ ใช้ params.set() แค่ตอนมีค่าจริงเท่านั้น (ไม่ผ่าน object ที่มี key เป็น undefined เข้า URLSearchParams ตรงๆ) พร้อมเพิ่ม q (ค้นหาชื่อ/จังหวัด/มหาลัยรวม) รองรับช่องค้นหาใน Navbar ใหม่
+- สถานะ: แก้แล้ว (useDormSearch.ts, search-query.dto.ts เพิ่ม q, dorms.service.ts เพิ่ม OR contains)
+
+[22] Login page ถูกไฟล์นอก (IDE/linter tool) แทนที่ทั้งหมดด้วย mock component ที่พังทั้งเว็บ
+- ปัญหา: มีเครื่องมือภายนอกแก้ apps/web/src/app/(auth)/login/page.tsx เขียนทับของจริงทั้งหมด (comment โค้ดเดิมทิ้ง) ด้วย preview component ปลอม ที่ (1) ไม่มี 'use client' (comment ทิ้งไปด้วย) ทำ Next โยน error "importing component that needs useState... Server Components by default" พังทั้ง /login และลามไป GET / 500 ด้วย (2) ใช้ mockApi.post ปลอมแทน apiClient จริง ล็อกอินสำเร็จปลอมทุกครั้งที่ email มีค่า+password>=4 ตัว ไม่เซ็ต token จริง ไม่ redirect จริง (3) มี TS error 5 ตัว (implicit any, useState(null) ไม่ type, accessToken บน unknown)
+- แก้: เขียนใหม่เก็บ UI/เลย์เอาต์ใหม่ตามที่ user เลือก (เก็บ UI ใหม่ ต่อ backend จริง) แต่ใส่ 'use client' คืน, ต่อ apiClient.post('/auth/login') จริง, setToken+router.push('/') จริง, Google button ใช้ href จริงไป /auth/google, ลบ mockApi/loggedIn-preview-screen ออกหมด
+- สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error, home+login คืน 200, ตรวจ log ยืนยันไม่มี error ซ้ำ
+
+[23] Admin/Owner console เข้าไม่ได้เลยจริงๆ ผ่าน middleware ที่เช็ค cookie ซึ่งไม่มีใครเซ็ตเลย
+- ปัญหา: middleware.ts เช็ค request.cookies.get('hopak_token') เพื่อ gate /admin/* และ /partner/* แต่ setToken() ใน lib/auth.ts เซ็ตแค่ localStorage อย่างเดียว ไม่เคยเซ็ต cookie ชื่อนี้เลยที่ไหนในโค้ดทั้งหมด (grep ทั้ง backend/frontend ไม่เจอ) ผลคือ middleware redirect ไป /login ทุกครั้งแบบไม่มีเงื่อนไข แม้ล็อกอินเป็น admin/owner จริงและมี token ใน localStorage ถูกต้องก็ตาม - เข้าคอนโซลผ่าน URL ไม่ได้เลย
+- พบเพิ่ม: (admin)/admin/layout.tsx และ (partner)/partner/layout.tsx เองก็ไม่มี client-side auth/role guard เลย (ถ้าไม่มี middleware ตัวนี้ ใครก็เปิดดู shell คอนโซลได้แม้ไม่ได้ล็อกอิน หรือล็อกอินผิด role ก็เห็น dashboard ว่างเปล่าค้างตลอดไป ไม่ redirect) - backend เองปลอดภัย (RolesGuard บล็อก 401/403 ถูกต้องทุก endpoint) แต่ UI ฝั่งหน้าไม่มีการ์ดเลย
+- แก้: (1) setToken()/clearToken() ใน auth.ts เซ็ต/ลบ cookie hopak_token คู่กับ localStorage ด้วย (2) เพิ่ม useCurrentUser hook + client guard ใน admin+partner layout เช็ค role จริง ไม่ตรง redirect /login พร้อม PageLoader ระหว่างเช็ค
+- สถานะ: แก้แล้ว, ยืนยันด้วย curl: ไม่มี cookie -> 307 ไป login, มี cookie (token จริง) -> 200 เข้าได้, tsc ผ่าน 0 error
+
+[24] หน้าฝั่ง tenant หลายหน้า throw "Unhandled Runtime Error: Unauthorized" ถ้าเข้าโดยไม่ได้ล็อกอิน (หรือ token หมดอายุ)
+- ปัญหา: useBookings.ts, notifications/page.tsx, profile/page.tsx, bookings/[id]/page.tsx, bookings/[id]/pay/page.tsx, useFavorites.ts (toggle) เรียก apiClient.get/post แล้วต่อ .then(...) โดยไม่มี .catch เลย พอ backend คืน 401 (ไม่มี token หรือ token หมดอายุ) promise reject ไม่มีใครจับ กลายเป็น unhandled rejection ทำ Next dev โชว์ full-page error overlay แทนที่จะ redirect ไป login เฉยๆ - เกิดขึ้นจริงตอนกด "การจองของฉัน" ใน navbar (ลิงก์โชว์ตลอดไม่ว่าล็อกอินหรือไม่ตาม design ใหม่) ทั้งที่หน้า /bookings มี router.replace('/login') guard อยู่แล้ว แต่ useBookings hook เองยัง fetch แบบไม่ป้องกันคู่ขนานกัน เลย throw ก่อน redirect จะทันเกิด
+- แก้: เพิ่ม .catch() ทุกจุดที่ขาด (hooks + pages) และเพิ่ม guard เช็ค getToken() ก่อน fetch พร้อม router.replace('/login') ใน notifications, profile, bookings/[id], bookings/[id]/pay (bookings list กับ saved มี guard อยู่แล้วจากรอบก่อน แค่เพิ่ม catch ให้ hook)
+- สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error
+
+[25] สมัครสมาชิกซ้ำเบอร์/อีเมล ได้ "Internal server error" (500) แทนข้อความบอกว่าซ้ำ
+- ปัญหา: AuthService.register() ไม่ catch Prisma unique constraint error เลย พอ email หรือ phone ซ้ำกับ user เดิม throw PrismaClientKnownRequestError (P2002) ดิบๆ ขึ้นไป Nest แปลงเป็น 500 generic "Internal server error" ผู้ใช้ไม่รู้เลยว่าปัญหาคืออะไร (เจอจริงจาก user สมัครด้วยเบอร์ 0859295863 ที่มีบัญชีอยู่แล้ว)
+- แก้: ครอบ try/catch ใน register(), เช็ค err.code === 'P2002' แยกตาม err.meta.target ว่าเป็น email หรือ phone โยน ConflictException (409) พร้อมข้อความไทยชัดเจน "อีเมลนี้ถูกใช้งานแล้ว" / "เบอร์โทรนี้ถูกใช้งานแล้ว"
+- สถานะ: แก้แล้ว, ยืนยันด้วย curl ซ้ำเบอร์เดิมจริง -> คืน 409 {"message":"เบอร์โทรนี้ถูกใช้งานแล้ว"} แทน 500, tsc ผ่าน 0 error

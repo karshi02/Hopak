@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { PageLoader } from '@/components/PageLoader';
 
 const NAV = [
   { href: '/partner/dashboard', label: 'แดชบอร์ด' },
@@ -14,6 +17,15 @@ const NAV = [
 
 export default function PartnerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading } = useCurrentUser();
+  const isOwner = user?.role.toLowerCase() === 'owner';
+
+  useEffect(() => {
+    if (!loading && !isOwner) router.replace('/login');
+  }, [loading, isOwner, router]);
+
+  if (loading || !isOwner) return <PageLoader fullScreen />;
 
   return (
     <div className="flex min-h-screen">

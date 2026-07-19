@@ -1,5 +1,6 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -25,19 +26,29 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
-    const user = await this.prisma.user.create({
-      data: {
-        role: 'TENANT',
-        name: dto.name,
-        email: dto.email,
-        phone: dto.phone,
-        password: passwordHash,
-      },
-    });
-    return { accessToken: this.sign(user), user: this.omitPassword(user) };
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          role: 'TENANT',
+          name: dto.name,
+          email: dto.email,
+          phone: dto.phone,
+          password: passwordHash,
+        },
+      });
+      return { accessToken: this.sign(user), user: this.omitPassword(user) };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const target = (err.meta?.target as string[] | undefined) ?? [];
+        if (target.includes('email')) throw new ConflictException('อีเมลนี้ถูกใช้งานแล้ว');
+        if (target.includes('phone')) throw new ConflictException('เบอร์โทรนี้ถูกใช้งานแล้ว');
+        throw new ConflictException('ข้อมูลนี้ถูกใช้งานแล้ว');
+      }
+      throw err;
+    }
   }
 
-  async login(dto: LoginDto) {
+  private async verifyCredentials(dto: LoginDto) {
     const user = await this.prisma.user.findFirst({
       where: dto.email ? { email: dto.email } : { phone: dto.phone },
     });
@@ -46,6 +57,18 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.password);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
+    return user;
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.verifyCredentials(dto);
+    if (user.role === 'ADMIN') throw new UnauthorizedException('Invalid credentials');
+    return { accessToken: this.sign(user), user: this.omitPassword(user) };
+  }
+
+  async adminLogin(dto: LoginDto) {
+    const user = await this.verifyCredentials(dto);
+    if (user.role !== 'ADMIN') throw new UnauthorizedException('Invalid credentials');
     return { accessToken: this.sign(user), user: this.omitPassword(user) };
   }
 
