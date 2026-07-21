@@ -20,4 +20,4 @@ COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/prisma ./prisma
 COPY --from=build /app/node_modules ./node_modules
 EXPOSE 4000
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
