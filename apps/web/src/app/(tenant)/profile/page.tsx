@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken, clearToken } from '@/lib/auth';
+import { resetSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import type { OwnerRequest, User } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
@@ -320,6 +321,7 @@ export default function ProfilePage() {
 
   function handleLogout() {
     clearToken();
+    resetSocket();
     router.push('/');
   }
 

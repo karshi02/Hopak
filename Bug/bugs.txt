@@ -219,3 +219,19 @@ controller + route) ยังไม่ทำ
 - ปัญหา: AuthService.register() ไม่ catch Prisma unique constraint error เลย พอ email หรือ phone ซ้ำกับ user เดิม throw PrismaClientKnownRequestError (P2002) ดิบๆ ขึ้นไป Nest แปลงเป็น 500 generic "Internal server error" ผู้ใช้ไม่รู้เลยว่าปัญหาคืออะไร (เจอจริงจาก user สมัครด้วยเบอร์ 0859295863 ที่มีบัญชีอยู่แล้ว)
 - แก้: ครอบ try/catch ใน register(), เช็ค err.code === 'P2002' แยกตาม err.meta.target ว่าเป็น email หรือ phone โยน ConflictException (409) พร้อมข้อความไทยชัดเจน "อีเมลนี้ถูกใช้งานแล้ว" / "เบอร์โทรนี้ถูกใช้งานแล้ว"
 - สถานะ: แก้แล้ว, ยืนยันด้วย curl ซ้ำเบอร์เดิมจริง -> คืน 409 {"message":"เบอร์โทรนี้ถูกใช้งานแล้ว"} แทน 500, tsc ผ่าน 0 error
+
+[26] PATCH /notifications/:id/read ไม่เช็คว่า notification เป็นของ user ที่ล็อกอินอยู่จริง
+- ปัญหา: NotificationsController.markRead(id) รับแค่ id จาก param ส่งตรงเข้า service.markRead(id) โดยไม่เช็คว่า notification.userId ตรงกับ user ที่ authenticate อยู่เลย ใครก็ตามที่ login อยู่ (role ไหนก็ได้) เดา/รู้ id ของ notification คนอื่น สามารถยิง PATCH ไปมาร์คว่าอ่านแล้วแทนเจ้าของจริงได้ (severity ต่ำ - แค่เปลี่ยน readAt ไม่ใช่ข้อมูลรั่ว แต่เป็นช่องโหว่ authorization จริง)
+- พบระหว่าง: สร้างฟีเจอร์ใบตักเตือน (admin ส่ง notification ให้ user) แล้วเพิ่ม UI mark-read บนหน้า /notifications ที่ก่อนหน้านี้ไม่เคยต่อปุ่มไว้เลย
+- สถานะ: ยังไม่แก้ (นอกขอบเขตงานที่ขอตอนนี้) - ต้องเพิ่มเช็ค ownership ใน markRead ก่อน update ถ้าจะแก้
+
+[27] MailService.send() ไม่ catch error จาก nodemailer เลย ทำ endpoint ส่งใบตักเตือน 500 ทั้งที่ notification สร้างสำเร็จแล้ว
+- ปัญหา: transporter.sendMail() throw ตรงๆ ถ้า SMTP provider reject (เช่น Resend sandbox mode ปฏิเสธส่งไปโดเมนแปลกที่ไม่ verify - "550 Invalid `to` field... use testing email address") ทำให้ทั้ง request 500 ทั้งที่ NotificationsService.create() ทำสำเร็จไปแล้วก่อนหน้า (แค่ยิง email ต่อพัง)
+- แก้: ครอบ try/catch ใน MailService.send() log error แล้ว return false แทน throw - endpoint คืน {notified:true, emailSent:false} เสมอไม่ว่า SMTP จะสำเร็จหรือพัง
+- สถานะ: แก้แล้ว, ยืนยันด้วย curl คืน {"notified":true,"emailSent":false} แทน 500, tsc ผ่าน 0 error
+- หมายเหตุ: SMTP เชื่อมต่อ Resend สำเร็จจริง (ไม่ใช่ปัญหา config) แค่ sandbox ของ Resend (ยังไม่ verify domain) ปฏิเสธส่งไปโดเมนทดสอบอย่าง example.com - ต้องทดสอบด้วยอีเมลจริงของเจ้าของบัญชี Resend เอง หรือ verify domain ก่อนถึงส่งไปอีเมลอื่นได้
+
+[28] SMTP - Resend ยังไม่ verify domain ส่งอีเมลจริงไปหาผู้ใช้ทั่วไปไม่ได้ (ยังไม่ใช่บัคโค้ด แค่ setup ค้าง)
+- สถานะ: SMTP เชื่อมต่อ+auth สำเร็จแล้ว (smtp.resend.com, API key ใส่ใน apps/api/.env แล้ว) โค้ด MailService ทำงานถูกต้อง
+- ติดอยู่ที่: บัญชี Resend เป็น sandbox mode (ยังไม่ verify โดเมนตัวเอง) ส่งได้แค่ไปอีเมลเจ้าของบัญชี Resend เอง ส่งไปโดเมนอื่น (user ทั่วไป) โดน reject 550
+- ต้องทำต่อ (ทีหลัง): ไป resend.com/domains verify โดเมนจริงของ Hopak (ต้องมี domain ของตัวเองก่อน + ตั้ง DNS record) ถึงจะส่งอีเมลใบตักเตือนไปหา user จริงในระบบได้ครบ

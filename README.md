@@ -109,32 +109,34 @@ stateDiagram-v2
 <td width="33%" valign="top">
 
 ### 🔵 ผู้เช่า
-- 🔍 ค้นหาตามจังหวัด / พิกัด / มหาวิทยาลัย
+- 🔍 ค้นหาตามจังหวัด / มหาวิทยาลัย / ชื่อหอ + กรองราคา ประเภทห้อง สิ่งอำนวยความสะดวก
 - 🏠 ดูรายละเอียดหอ ราคา ค่าน้ำ-ไฟ แผนที่
+- ⭐ รีวิว + ให้คะแนน (เฉพาะคนที่เคยจอง+จ่ายเงินแล้ว) · บันทึกหอที่ถูกใจ
 - 📅 จองห้อง + ติดตามสถานะแบบ timeline
-- 💳 ชำระเงินปลอดภัยผ่านบัญชีกลาง
-- 🧾 ใบจอง + ใบเสร็จ PDF อัตโนมัติ
+- 💳 ชำระเงินผ่านบัญชีกลาง (QR PromptPay)
 - 🔔 แจ้งเตือนสถานะ + โปรโมชัน
+- 👤 จัดการโปรไฟล์ เปลี่ยนรหัสผ่าน ขอเป็นเจ้าของหอได้จากหน้าเดียว
 
 </td>
 <td width="33%" valign="top">
 
 ### 🟢 เจ้าของหอ
-- 🏢 เพิ่ม/แก้ไขหอเองได้ทันที ไม่ต้องรอแอดมิน
+- 🔐 สมัครผ่านบัญชีผู้เช่าเดิม — ต้องรอแอดมินอนุมัติคำขอก่อนถึงเปลี่ยน role ได้
+- 🏢 แก้ไขหอเองได้ทันที (หอใหม่ต้องรอแอดมินอนุมัติครั้งแรก)
 - 🛏️ จัดการห้อง — ตัดห้องเต็มอัตโนมัติ
-- ⚡ คำขอจองเด้ง realtime → กดยืนยัน
-- 🖨️ ใบจองรายวัน + ปริ้น PDF
+- ⚡ คำขอจองเข้าคิว → กดยืนยัน/ปฏิเสธ
 - 📊 แดชบอร์ดรายได้ ยอดจอง กราฟรายเดือน
-- 🏦 รับยอดโอนหลังหักค่าบริการ 10%
+- 🏦 ดูยอดโอนหลังหักค่าบริการ 10% (แยกยอดรับแล้ว/รอโอน)
 
 </td>
 <td width="33%" valign="top">
 
 ### 🟣 แอดมิน
+- 🔒 ล็อกอินผ่าน portal เฉพาะ (URL + endpoint แยกจากผู้ใช้ทั่วไป)
 - 📈 แดชบอร์ดรายได้ระบบ + ยอดจองต่อจังหวัด
-- ✅ คิวอนุมัติหอใหม่ (เอกสาร + พิกัด)
+- ✅ คิวอนุมัติหอใหม่ + คิวอนุมัติคำขอเป็นเจ้าของหอ
 - 👥 จัดการผู้ใช้ / ระงับบัญชี
-- 💸 การเงิน & รวมบิล + Export
+- 💸 การเงิน & รวมบิล (แยกยอดรับแล้ว/โอนแล้ว/ค้างโอน)
 - 📢 โฆษณา Boost / Banner / Featured
 - 🔐 แบ่งสิทธิ์ Super Admin · Finance · Support
 
@@ -168,7 +170,6 @@ hopak/
 │
 ├── packages/
 │   ├── shared/       📦  types · constants · business logic (หัก 10%, ยกเลิก 1 วัน — เขียนที่เดียว)
-│   ├── ui/           🎨  shared React components
 │   └── config/       🔧  eslint · tsconfig กลาง
 │
 ├── docker/           🐳  docker-compose (PostgreSQL + Redis) สำหรับ dev
@@ -205,7 +206,7 @@ docker compose -f docker/docker-compose.yml up -d
 
 # 5. Migrate + Seed ฐานข้อมูล
 pnpm db:migrate
-pnpm db:seed
+pnpm --filter api db:seed
 
 # 6. รันทุกแอปพร้อมกัน 🎉
 pnpm dev
@@ -214,8 +215,8 @@ pnpm dev
 | Service | URL |
 |:---|:---|
 | 🌐 Web | `http://localhost:3000` |
-| ⚙️ API | `http://localhost:3001` |
-| 📱 Mobile | Expo Go — `pnpm --filter mobile dev` |
+| ⚙️ API | `http://localhost:4000` |
+| 📱 Mobile | ยังไม่เริ่มพัฒนา (ดู Roadmap) |
 
 ---
 
@@ -229,7 +230,7 @@ pnpm dev
 | **API** | REST · JWT + SSO · WebSocket (realtime booking) |
 | **Database** | PostgreSQL + Prisma ORM · Redis (cache/queue) |
 | **Storage** | S3 / Object Storage (รูป, เอกสาร, PDF) |
-| **Payment** | PromptPay · Omise / 2C2P |
+| **Payment** | PromptPay QR (ตอนนี้เป็น manual confirm — ยังไม่เชื่อม gateway จริงอย่าง Omise/2C2P) |
 | **Notification** | Expo Notifications (FCM + APNs) |
 | **Monorepo** | pnpm workspaces + Turborepo |
 | **Deploy** | Web → Vercel · API → Railway/Docker · App → EAS Build |
@@ -252,10 +253,13 @@ pnpm dev
 ## 🗺️ Roadmap
 
 - [x] **Phase 0** — ออกแบบระบบ · UI ทุกหน้าจอ · โครงสร้าง Monorepo
-- [ ] **Phase 1** — Backend API (NestJS + Prisma + PostgreSQL) + Admin Console
-- [ ] **Phase 2** — เว็บผู้เช่า + Partner Console (Next.js)
-- [ ] **Phase 3** — แอพมือถือ iOS/Android (Expo) + Push Notifications
-- [ ] **Next** — รีวิว & คะแนนหอพัก · GPA ความน่าเชื่อถือ · ขยายจังหวัด
+- [x] **Phase 1** — Backend API (NestJS + Prisma + PostgreSQL) + Admin Console
+- [x] **Phase 2** — เว็บผู้เช่า + Partner Console (Next.js) — ค้นหา/กรอง หอพัก, จอง, แดชบอร์ดเจ้าของหอ, คอนโซลแอดมินครบ 8 หน้า
+- [x] รีวิว & บันทึกหอพัก (Favorites) — รีวิวได้เฉพาะคนที่เคยจอง+จ่ายเงินจริงเท่านั้น กันรีวิวปลอม
+- [x] ระบบอนุมัติเป็นเจ้าของหอ (Owner Request Queue) — ต้องผ่านแอดมินอนุมัติก่อนเปลี่ยน role ไม่ใช่กดปุ่มเดียวได้ทันที
+- [x] แยก Portal ผู้ดูแลระบบ — URL + endpoint login เฉพาะ แยกจากผู้ใช้ทั่วไปทั้งหมด กัน brute-force
+- [ ] **Phase 3** — แอพมือถือ iOS/Android (Expo) + Push Notifications *(ยังไม่เริ่ม)*
+- [ ] **Next** — เชื่อม payment gateway จริง (PromptPay/Omise) · GPA ความน่าเชื่อถือหอพัก · ขยายจังหวัด
 
 ---
 
@@ -263,4 +267,3 @@ pnpm dev
 
 
 </div>
-  เเก้ส่วนนี้หน่อ ให้เข้ากับที่อัฟเดท

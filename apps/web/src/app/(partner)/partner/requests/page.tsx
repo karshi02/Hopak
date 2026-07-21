@@ -20,8 +20,12 @@ export default function PartnerRequestsPage() {
     socket.on('booking:new', (booking: Booking) => {
       setBookings((prev) => [booking, ...prev]);
     });
+    socket.on('booking:updated', (updated: Booking) => {
+      setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    });
     return () => {
       socket.off('booking:new');
+      socket.off('booking:updated');
     };
   }, []);
 

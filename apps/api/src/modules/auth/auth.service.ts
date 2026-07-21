@@ -56,6 +56,7 @@ export class AuthService {
 
     const valid = await bcrypt.compare(dto.password, user.password);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (user.suspended) throw new UnauthorizedException('บัญชีนี้ถูกระงับการใช้งาน');
 
     return user;
   }
@@ -84,6 +85,7 @@ export class AuthService {
         },
       });
     }
+    if (user.suspended) throw new UnauthorizedException('บัญชีนี้ถูกระงับการใช้งาน');
     return { accessToken: this.sign(user), user: this.omitPassword(user) };
   }
 }

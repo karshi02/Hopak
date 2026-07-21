@@ -3,18 +3,22 @@ import { getCancelDeadline, canCancel } from '@hopak/shared';
 import { PrismaService } from '../../prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { assertTransition } from './booking-state.machine';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 @Injectable()
 export class BookingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private realtime: RealtimeGateway,
+  ) {}
 
   async create(tenantId: string, dto: CreateBookingDto) {
-    const room = await this.prisma.room.findUnique({ where: { id: dto.roomId } });
+    const room = await this.prisma.room.findUnique({ where: { id: dto.roomId }, include: { dorm: true } });
     if (!room) throw new NotFoundException('Room not found');
     if (room.status !== 'AVAILABLE') throw new BadRequestException('Room not available');
 
     const now = new Date();
-    return this.prisma.booking.create({
+    const booking = await this.prisma.booking.create({
       data: {
         tenantId,
         roomId: dto.roomId,
@@ -27,6 +31,8 @@ export class BookingsService {
         cancelDeadline: getCancelDeadline(now),
       },
     });
+    this.realtime.emitToUser(room.dorm.ownerId, 'booking:new', booking);
+    return booking;
   }
 
   listForTenant(tenantId: string) {
@@ -58,7 +64,9 @@ export class BookingsService {
     const booking = await this.findOne(id);
     if (booking.room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
     assertTransition(booking.status.toLowerCase() as any, 'confirmed');
-    return this.prisma.booking.update({ where: { id }, data: { status: 'CONFIRMED' } });
+    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CONFIRMED' } });
+    this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    return updated;
   }
 
   async markPaid(id: string) {
@@ -72,7 +80,9 @@ export class BookingsService {
     const booking = await this.findOne(id);
     if (booking.room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
     assertTransition(booking.status.toLowerCase() as any, 'cancelled');
-    return this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+    this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    return updated;
   }
 
   async cancel(tenantId: string, id: string) {
@@ -82,6 +92,8 @@ export class BookingsService {
     if (!canCancel(booking.createdAt)) {
       throw new BadRequestException('Cancel window (24h) has passed');
     }
-    return this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+    this.realtime.emitToUser(booking.room.dorm.ownerId, 'booking:updated', updated);
+    return updated;
   }
 }

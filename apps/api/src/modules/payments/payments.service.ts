@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { calcCommission, calcOwnerPayout } from '@hopak/shared';
 import { PrismaService } from '../../prisma.service';
 import { PromptPayGateway } from './gateway/promptpay.gateway';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private gateway: PromptPayGateway,
+    private realtime: RealtimeGateway,
   ) {}
 
   async pay(bookingId: string, method: string) {
@@ -38,10 +40,11 @@ export class PaymentsService {
         where: { id: payment.id },
         data: { status: 'SETTLED', settledAt: new Date() },
       });
-      await this.prisma.booking.update({
+      const booking = await this.prisma.booking.update({
         where: { id: payment.bookingId },
         data: { status: 'PAID' },
       });
+      this.realtime.emitToUser(booking.tenantId, 'booking:updated', booking);
     }
     return { settled: due.length };
   }

@@ -10,6 +10,9 @@ export interface User {
   phone?: string;
   avatarUrl?: string;
   googleId?: string;
+  suspended?: boolean;
+  createdAt?: string;
+  bookingCount?: number;
 }
 
 export type OwnerRequestStatus = 'pending' | 'approved' | 'rejected';

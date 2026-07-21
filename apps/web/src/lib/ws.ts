@@ -10,3 +10,8 @@ export function getSocket(): Socket {
   }
   return socket;
 }
+
+export function resetSocket(): void {
+  socket?.disconnect();
+  socket = null;
+}

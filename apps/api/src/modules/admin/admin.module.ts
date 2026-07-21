@@ -13,6 +13,8 @@ import { AdminCampaignsController } from './campaigns/admin-campaigns.controller
 import { OwnerRequestsController } from './owner-requests/owner-requests.controller';
 import { OwnerRequestsService } from './owner-requests/owner-requests.service';
 import { PromotionsService } from '../promotions/promotions.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../../prisma.service';
 
 @Module({
@@ -33,6 +35,8 @@ import { PrismaService } from '../../prisma.service';
     AdminUsersService,
     PromotionsService,
     OwnerRequestsService,
+    NotificationsService,
+    MailService,
     PrismaService,
   ],
 })

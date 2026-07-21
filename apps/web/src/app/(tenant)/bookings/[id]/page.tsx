@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
+import { getSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import type { Booking } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
@@ -28,6 +29,18 @@ export default function BookingDetailPage() {
     }
     apiClient.get<Booking>(`/bookings/${id}`).then(setBooking).catch(() => router.replace('/login'));
   }, [id, router]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    const socket = getSocket();
+    const onUpdated = (updated: Booking) => {
+      if (updated.id === id) setBooking(updated);
+    };
+    socket.on('booking:updated', onUpdated);
+    return () => {
+      socket.off('booking:updated', onUpdated);
+    };
+  }, [id]);
 
   async function handleCancel() {
     await apiClient.patch(`/bookings/${id}/cancel`);

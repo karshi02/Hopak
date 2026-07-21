@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken, clearToken } from '@/lib/auth';
+import { resetSocket } from '@/lib/ws';
 import type { User } from '@hopak/shared';
 
 export function Navbar() {
@@ -27,6 +28,7 @@ export function Navbar() {
 
   function handleLogout() {
     clearToken();
+    resetSocket();
     setUser(null);
     router.push('/');
   }
