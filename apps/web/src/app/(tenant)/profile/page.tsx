@@ -325,7 +325,7 @@ export default function ProfilePage() {
     router.push('/');
   }
 
-  if (!user) return <PageLoader fullScreen />;
+  if (!user) return <PageLoader />;
 
   const role = user.role.toLowerCase();
 

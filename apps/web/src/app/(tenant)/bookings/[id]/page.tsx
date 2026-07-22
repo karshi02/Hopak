@@ -47,7 +47,7 @@ export default function BookingDetailPage() {
     apiClient.get<Booking>(`/bookings/${id}`).then(setBooking);
   }
 
-  if (!booking) return <PageLoader fullScreen />;
+  if (!booking) return <PageLoader />;
 
   const status = normalizeStatus(booking.status);
   const currentIndex = STEPS.indexOf(status as (typeof STEPS)[number]);

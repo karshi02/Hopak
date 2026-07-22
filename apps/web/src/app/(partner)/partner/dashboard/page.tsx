@@ -30,7 +30,7 @@ export default function PartnerDashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <PageLoader fullScreen />;
+  if (loading) return <PageLoader />;
 
   const rooms = dorms.flatMap((d) => d.rooms);
   const availableRooms = rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');

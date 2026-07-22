@@ -116,7 +116,7 @@ function NewBookingForm() {
 
 export default function NewBookingPage() {
   return (
-    <Suspense fallback={<PageLoader fullScreen />}>
+    <Suspense fallback={<PageLoader />}>
       <NewBookingForm />
     </Suspense>
   );

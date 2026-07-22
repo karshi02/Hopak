@@ -50,7 +50,7 @@ export default function DormDetailPage() {
     }
   }
 
-  if (!dorm) return <PageLoader fullScreen />;
+  if (!dorm) return <PageLoader />;
 
   const availableRooms = dorm.rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');
   const cheapestRoom = [...availableRooms].sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
