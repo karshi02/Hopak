@@ -1,6 +1,6 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -19,41 +19,62 @@ interface MapPickerProps {
   readOnly?: boolean;
 }
 
-function ClickHandler({ onChange }: { onChange: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click(e) {
-      onChange(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
-
 export default function MapPicker({ lat, lng, onChange, readOnly }: MapPickerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Next.js App Router can resume a hidden/cached page tree without an
+    // unmount in between, leaving the previous Leaflet instance's flag on
+    // this DOM node — clear it so re-init on the same node doesn't throw.
+    if ((container as unknown as { _leaflet_id?: number })._leaflet_id) {
+      delete (container as unknown as { _leaflet_id?: number })._leaflet_id;
+    }
+
+    const map = L.map(container, { attributionControl: true }).setView([lat, lng], 14);
+    mapRef.current = map;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    const marker = L.marker([lat, lng], { icon: markerIcon, draggable: !readOnly }).addTo(map);
+    markerRef.current = marker;
+
+    if (!readOnly && onChangeRef.current) {
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        onChangeRef.current?.(pos.lat, pos.lng);
+      });
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        marker.setLatLng(e.latlng);
+        onChangeRef.current?.(e.latlng.lat, e.latlng.lng);
+      });
+    }
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    markerRef.current?.setLatLng([lat, lng]);
+    mapRef.current?.panTo([lat, lng]);
+  }, [lat, lng]);
+
   return (
-    <div className="h-64 w-full overflow-hidden rounded-lg border border-black/10 dark:border-white/10">
-      <MapContainer center={[lat, lng]} zoom={14} className="h-full w-full">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <Marker
-          position={[lat, lng]}
-          icon={markerIcon}
-          draggable={!readOnly}
-          eventHandlers={
-            readOnly || !onChange
-              ? undefined
-              : {
-                  dragend: (e) => {
-                    const marker = e.target as L.Marker;
-                    const pos = marker.getLatLng();
-                    onChange(pos.lat, pos.lng);
-                  },
-                }
-          }
-        />
-        {!readOnly && onChange && <ClickHandler onChange={onChange} />}
-      </MapContainer>
-    </div>
+    <div
+      ref={containerRef}
+      className="h-64 w-full overflow-hidden rounded-lg border border-black/10 dark:border-white/10"
+    />
   );
 }

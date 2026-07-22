@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { useLang } from '@/hooks/useLang';
 import { Badge } from '@/components/dashboard/Badge';
 import { StatTile } from '@/components/dashboard/StatTile';
 
@@ -15,10 +16,51 @@ interface Campaign {
   dorm: { name: string };
 }
 
-const KIND_LABEL: Record<Campaign['kind'], string> = {
-  BOOST: 'Boost',
-  BANNER: 'แบนเนอร์',
-  FEATURED: 'Featured',
+const TEXT = {
+  th: {
+    title: 'โฆษณา & แคมเปญ',
+    create: '+ สร้างแคมเปญ',
+    active: 'กำลังแสดง',
+    total: 'แคมเปญทั้งหมด',
+    totalBudget: 'งบรวมทั้งหมด',
+    dormId: 'Dorm ID',
+    price: 'ราคา',
+    save: 'บันทึก',
+    createError: 'เพิ่มแคมเปญไม่สำเร็จ',
+    dorm: 'หอพัก',
+    type: 'ประเภท',
+    budget: 'งบ',
+    duration: 'ระยะเวลา',
+    status: 'สถานะ',
+    none: 'ยังไม่มีแคมเปญ',
+    kindLabel: { BOOST: 'Boost', BANNER: 'แบนเนอร์', FEATURED: 'Featured' } as Record<Campaign['kind'], string>,
+    statusEnded: 'จบแล้ว',
+    statusUpcoming: 'รอเริ่ม',
+    statusLive: 'กำลังแสดง',
+    dateLocale: 'th-TH',
+  },
+  en: {
+    title: 'Ads & Campaigns',
+    create: '+ Create campaign',
+    active: 'Live',
+    total: 'Total campaigns',
+    totalBudget: 'Total budget',
+    dormId: 'Dorm ID',
+    price: 'Price',
+    save: 'Save',
+    createError: 'Failed to add campaign',
+    dorm: 'Dorm',
+    type: 'Type',
+    budget: 'Budget',
+    duration: 'Duration',
+    status: 'Status',
+    none: 'No campaigns yet',
+    kindLabel: { BOOST: 'Boost', BANNER: 'Banner', FEATURED: 'Featured' } as Record<Campaign['kind'], string>,
+    statusEnded: 'Ended',
+    statusUpcoming: 'Upcoming',
+    statusLive: 'Live',
+    dateLocale: 'en-US',
+  },
 };
 
 const KIND_VARIANT: Record<Campaign['kind'], 'info' | 'warning' | 'purple'> = {
@@ -27,18 +69,20 @@ const KIND_VARIANT: Record<Campaign['kind'], 'info' | 'warning' | 'purple'> = {
   FEATURED: 'purple',
 };
 
-function campaignStatus(c: Campaign): { label: string; variant: 'good' | 'warning' | 'neutral' } {
-  const now = new Date();
-  if (new Date(c.endAt) < now) return { label: 'จบแล้ว', variant: 'neutral' };
-  if (new Date(c.startAt) > now) return { label: 'รอเริ่ม', variant: 'warning' };
-  return { label: 'กำลังแสดง', variant: 'good' };
-}
-
 export default function AdminCampaignsPage() {
+  const { lang } = useLang();
+  const t = TEXT[lang];
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ dormId: '', kind: 'BOOST' as Campaign['kind'], startAt: '', endAt: '', price: 0 });
   const [error, setError] = useState<string | null>(null);
+
+  function campaignStatus(c: Campaign): { label: string; variant: 'good' | 'warning' | 'neutral' } {
+    const now = new Date();
+    if (new Date(c.endAt) < now) return { label: t.statusEnded, variant: 'neutral' };
+    if (new Date(c.startAt) > now) return { label: t.statusUpcoming, variant: 'warning' };
+    return { label: t.statusLive, variant: 'good' };
+  }
 
   function reload() {
     apiClient.get<Campaign[]>('/admin/campaigns').then(setCampaigns).catch(() => setCampaigns([]));
@@ -59,26 +103,26 @@ export default function AdminCampaignsPage() {
       setForm({ dormId: '', kind: 'BOOST', startAt: '', endAt: '', price: 0 });
       reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'เพิ่มแคมเปญไม่สำเร็จ');
+      setError(err instanceof Error ? err.message : t.createError);
     }
   }
 
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-ink-strong dark:text-white">โฆษณา & แคมเปญ</h1>
+        <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
         <button
           onClick={() => setShowForm((v) => !v)}
           className="rounded-btn bg-admin px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
         >
-          + สร้างแคมเปญ
+          {t.create}
         </button>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatTile label="กำลังแสดง" value={`${activeCount}`} />
-        <StatTile label="แคมเปญทั้งหมด" value={`${campaigns.length}`} />
-        <StatTile label="งบรวมทั้งหมด" value={`฿${totalBudget.toLocaleString()}`} />
+        <StatTile label={t.active} value={`${activeCount}`} />
+        <StatTile label={t.total} value={`${campaigns.length}`} />
+        <StatTile label={t.totalBudget} value={`฿${totalBudget.toLocaleString()}`} />
       </div>
 
       {showForm && (
@@ -87,7 +131,7 @@ export default function AdminCampaignsPage() {
           className="mt-4 flex flex-col gap-3 rounded-lg border border-card-border p-4 dark:border-white/10"
         >
           <input
-            placeholder="Dorm ID"
+            placeholder={t.dormId}
             value={form.dormId}
             onChange={(e) => setForm({ ...form, dormId: e.target.value })}
             className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
@@ -98,9 +142,9 @@ export default function AdminCampaignsPage() {
             onChange={(e) => setForm({ ...form, kind: e.target.value as Campaign['kind'] })}
             className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
           >
-            <option value="BOOST">Boost</option>
-            <option value="BANNER">แบนเนอร์</option>
-            <option value="FEATURED">Featured</option>
+            <option value="BOOST">{t.kindLabel.BOOST}</option>
+            <option value="BANNER">{t.kindLabel.BANNER}</option>
+            <option value="FEATURED">{t.kindLabel.FEATURED}</option>
           </select>
           <div className="flex gap-2">
             <input
@@ -120,14 +164,14 @@ export default function AdminCampaignsPage() {
           </div>
           <input
             type="number"
-            placeholder="ราคา"
+            placeholder={t.price}
             value={form.price}
             onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
             className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" className="rounded-lg bg-tenant py-2 text-sm font-medium text-white hover:bg-tenant-dark">
-            บันทึก
+            {t.save}
           </button>
         </form>
       )}
@@ -136,11 +180,11 @@ export default function AdminCampaignsPage() {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-card-border text-xs text-ink-faint dark:border-white/10">
-              <th className="p-3 font-normal">หอพัก</th>
-              <th className="p-3 font-normal">ประเภท</th>
-              <th className="p-3 font-normal">งบ</th>
-              <th className="p-3 font-normal">ระยะเวลา</th>
-              <th className="p-3 font-normal">สถานะ</th>
+              <th className="p-3 font-normal">{t.dorm}</th>
+              <th className="p-3 font-normal">{t.type}</th>
+              <th className="p-3 font-normal">{t.budget}</th>
+              <th className="p-3 font-normal">{t.duration}</th>
+              <th className="p-3 font-normal">{t.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -150,11 +194,11 @@ export default function AdminCampaignsPage() {
                 <tr key={c.id} className="border-t border-card-border dark:border-white/10">
                   <td className="p-3 font-medium text-ink-strong dark:text-white">{c.dorm.name}</td>
                   <td className="p-3">
-                    <Badge label={KIND_LABEL[c.kind]} variant={KIND_VARIANT[c.kind]} />
+                    <Badge label={t.kindLabel[c.kind]} variant={KIND_VARIANT[c.kind]} />
                   </td>
                   <td className="p-3 font-sans tabular-nums">฿{c.price.toLocaleString()}</td>
                   <td className="p-3 text-ink-subtitle">
-                    {new Date(c.startAt).toLocaleDateString('th-TH')} – {new Date(c.endAt).toLocaleDateString('th-TH')}
+                    {new Date(c.startAt).toLocaleDateString(t.dateLocale)} – {new Date(c.endAt).toLocaleDateString(t.dateLocale)}
                   </td>
                   <td className="p-3">
                     <Badge label={status.label} variant={status.variant} />
@@ -164,7 +208,7 @@ export default function AdminCampaignsPage() {
             })}
           </tbody>
         </table>
-        {campaigns.length === 0 && <p className="p-4 text-ink-faint">ยังไม่มีแคมเปญ</p>}
+        {campaigns.length === 0 && <p className="p-4 text-ink-faint">{t.none}</p>}
       </div>
     </div>
   );

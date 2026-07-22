@@ -4,13 +4,33 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useLang } from '@/hooks/useLang';
 import { getToken } from '@/lib/auth';
 import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { StarRating } from '@/components/StarRating';
 
+const TEXT = {
+  th: {
+    title: 'หอพักที่บันทึกไว้',
+    photoPlaceholder: 'รูปหอพัก',
+    perMonth: '/ เดือน',
+    full: 'ห้องเต็ม',
+    none: 'ยังไม่มีหอพักที่บันทึกไว้',
+  },
+  en: {
+    title: 'Saved Dorms',
+    photoPlaceholder: 'Dorm photo',
+    perMonth: '/ month',
+    full: 'Fully booked',
+    none: 'No saved dorms yet',
+  },
+};
+
 export default function SavedPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = TEXT[lang];
   const { favorites, favoriteIds, loaded, toggle } = useFavorites();
   const visibleFavorites = favorites.filter((d) => favoriteIds.has(d.id));
 
@@ -22,7 +42,7 @@ export default function SavedPage() {
 
   return (
     <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">หอพักที่บันทึกไว้</h1>
+      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visibleFavorites.map((dorm) => {
@@ -35,7 +55,7 @@ export default function SavedPage() {
               className="relative block overflow-hidden rounded-card border border-card-border bg-white hover:shadow-md dark:border-white/10 dark:bg-[#1a1a19]"
             >
               <div className="relative flex h-36 items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
-                รูปหอพัก
+                {t.photoPlaceholder}
                 <FavoriteButton active={favoriteIds.has(dorm.id)} onToggle={() => toggle(dorm.id)} />
               </div>
               <div className="p-4">
@@ -50,17 +70,17 @@ export default function SavedPage() {
                       <span className="font-sans text-lg font-bold text-ink-strong dark:text-white">
                         ฿{startingRoom.pricePerMonth.toLocaleString()}
                       </span>
-                      <span className="text-ink-faint"> / เดือน</span>
+                      <span className="text-ink-faint"> {t.perMonth}</span>
                     </>
                   ) : (
-                    <span className="text-ink-faint">ห้องเต็ม</span>
+                    <span className="text-ink-faint">{t.full}</span>
                   )}
                 </p>
               </div>
             </Link>
           );
         })}
-        {visibleFavorites.length === 0 && <p className="text-ink-faint">ยังไม่มีหอพักที่บันทึกไว้</p>}
+        {visibleFavorites.length === 0 && <p className="text-ink-faint">{t.none}</p>}
       </div>
     </main>
   );

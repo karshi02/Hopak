@@ -71,6 +71,7 @@ model User {
   phone     String?  @unique
   password  String?
   avatarUrl String?
+  address   String?
   googleId  String?  @unique
   suspended Boolean  @default(false)
   createdAt DateTime @default(now())

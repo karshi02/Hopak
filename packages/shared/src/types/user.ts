@@ -9,6 +9,7 @@ export interface User {
   email?: string;
   phone?: string;
   avatarUrl?: string;
+  address?: string;
   googleId?: string;
   suspended?: boolean;
   createdAt?: string;

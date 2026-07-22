@@ -4,8 +4,58 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
+import { useLang } from '@/hooks/useLang';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
+const TEXT = {
+  th: {
+    welcome: 'ยินดีต้อนรับ',
+    welcomeBack: 'กลับมา 👋',
+    perks: [
+      'ดูการจองทั้งหมดของคุณ พร้อมสถานะล่าสุด',
+      'ค้นหาหอพักใหม่ๆ ทั่วมหาสารคาม ขอนแก่น เชียงใหม่',
+      'ข้อมูลส่วนตัวถูกปกป้อง เบอร์ซ่อนบางส่วน',
+    ],
+    footer: '© 2026 Hopak · แพลตฟอร์มจองหอพักออนไลน์',
+    title: 'เข้าสู่ระบบ',
+    subtitle: 'เข้าสู่บัญชี Hopak ของคุณ',
+    google: 'เข้าสู่ระบบด้วย Google',
+    or: 'หรือ',
+    emailLabel: 'อีเมล หรือ เบอร์โทร',
+    passwordLabel: 'รหัสผ่าน',
+    forgotPassword: 'ลืมรหัสผ่าน?',
+    fillRequired: 'กรุณากรอกอีเมลและรหัสผ่าน',
+    genericError: 'เข้าสู่ระบบไม่สำเร็จ',
+    submitting: 'กำลังเข้าสู่ระบบ...',
+    submit: 'เข้าสู่ระบบ',
+    noAccount: 'ยังไม่มีบัญชี?',
+    signUp: 'สมัครสมาชิก',
+  },
+  en: {
+    welcome: 'Welcome',
+    welcomeBack: 'back 👋',
+    perks: [
+      'See all your bookings with the latest status',
+      'Find new dorms across Mahasarakham, Khon Kaen, Chiang Mai',
+      'Your personal info is protected, phone numbers partly hidden',
+    ],
+    footer: '© 2026 Hopak · An online dorm-booking platform',
+    title: 'Log in',
+    subtitle: 'Log in to your Hopak account',
+    google: 'Log in with Google',
+    or: 'or',
+    emailLabel: 'Email or phone',
+    passwordLabel: 'Password',
+    forgotPassword: 'Forgot password?',
+    fillRequired: 'Please enter your email and password',
+    genericError: 'Log in failed',
+    submitting: 'Logging in...',
+    submit: 'Log in',
+    noAccount: "Don't have an account?",
+    signUp: 'Sign up',
+  },
+};
 
 const inputClass =
   'h-12 rounded-lg border border-gray-200 px-3.5 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none bg-white';
@@ -33,6 +83,8 @@ function GoogleIcon() {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = TEXT[lang];
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,7 +94,7 @@ export default function LoginPage() {
   async function handleSubmit() {
     setError(null);
     if (!email || !password) {
-      setError('กรุณากรอกอีเมลและรหัสผ่าน');
+      setError(t.fillRequired);
       return;
     }
     setLoading(true);
@@ -51,7 +103,7 @@ export default function LoginPage() {
       setToken(accessToken);
       router.push('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'เข้าสู่ระบบไม่สำเร็จ');
+      setError(err instanceof Error ? err.message : t.genericError);
     } finally {
       setLoading(false);
     }
@@ -73,53 +125,47 @@ export default function LoginPage() {
           </div>
 
           <h1 className="mt-10 text-3xl font-bold leading-snug">
-            ยินดีต้อนรับ
+            {t.welcome}
             <br />
-            กลับมา 👋
+            {t.welcomeBack}
           </h1>
 
           <ul className="mt-8 flex flex-col gap-4 text-sm leading-relaxed text-white text-opacity-90">
-            <li className="flex gap-3">
-              <Check />
-              <span>ดูการจองทั้งหมดของคุณ พร้อมสถานะล่าสุด</span>
-            </li>
-            <li className="flex gap-3">
-              <Check />
-              <span>ค้นหาหอพักใหม่ๆ ทั่วมหาสารคาม ขอนแก่น เชียงใหม่</span>
-            </li>
-            <li className="flex gap-3">
-              <Check />
-              <span>ข้อมูลส่วนตัวถูกปกป้อง เบอร์ซ่อนบางส่วน</span>
-            </li>
+            {t.perks.map((perk) => (
+              <li key={perk} className="flex gap-3">
+                <Check />
+                <span>{perk}</span>
+              </li>
+            ))}
           </ul>
         </div>
 
-        <div className="text-xs text-white text-opacity-70">© 2026 Hopak · แพลตฟอร์มจองหอพักออนไลน์</div>
+        <div className="text-xs text-white text-opacity-70">{t.footer}</div>
       </div>
 
       {/* ฝั่งขวา: ฟอร์ม */}
       <div className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-gray-900">เข้าสู่ระบบ</h2>
-          <p className="mt-1 text-sm text-gray-500">เข้าสู่บัญชี Hopak ของคุณ</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t.title}</h2>
+          <p className="mt-1 text-sm text-gray-500">{t.subtitle}</p>
 
           <a
             href={`${API_URL}/auth/google`}
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-3 text-sm font-medium text-gray-800 hover:bg-gray-50"
           >
             <GoogleIcon />
-            เข้าสู่ระบบด้วย Google
+            {t.google}
           </a>
 
           <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
             <span className="h-px flex-1 bg-gray-200" />
-            หรือ
+            {t.or}
             <span className="h-px flex-1 bg-gray-200" />
           </div>
 
           <div className="flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-600">อีเมล หรือ เบอร์โทร</label>
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">{t.emailLabel}</label>
               <input
                 type="email"
                 placeholder="you@email.com"
@@ -132,9 +178,9 @@ export default function LoginPage() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-xs font-medium text-gray-600">รหัสผ่าน</label>
+                <label className="text-xs font-medium text-gray-600">{t.passwordLabel}</label>
                 <a href="#" className="text-xs font-medium text-blue-600">
-                  ลืมรหัสผ่าน?
+                  {t.forgotPassword}
                 </a>
               </div>
               <div className="relative">
@@ -164,14 +210,14 @@ export default function LoginPage() {
               disabled={loading}
               className="mt-1 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
             >
-              {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+              {loading ? t.submitting : t.submit}
             </button>
           </div>
 
           <p className="mt-6 text-center text-sm text-gray-500">
-            ยังไม่มีบัญชี?{' '}
+            {t.noAccount}{' '}
             <a href="/register" className="font-semibold text-blue-600">
-              สมัครสมาชิก
+              {t.signUp}
             </a>
           </p>
         </div>

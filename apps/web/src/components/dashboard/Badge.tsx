@@ -1,3 +1,5 @@
+import type { Lang } from '@/hooks/useLang';
+
 type BadgeVariant = 'good' | 'warning' | 'critical' | 'info' | 'purple' | 'neutral';
 
 const VARIANT_CLASS: Record<BadgeVariant, string> = {
@@ -17,36 +19,40 @@ export function Badge({ label, variant = 'neutral' }: { label: string; variant?:
   );
 }
 
-export function bookingStatusBadge(status: string): { label: string; variant: BadgeVariant } {
-  switch (status.toLowerCase()) {
-    case 'pending':
-      return { label: 'รอยืนยัน', variant: 'warning' };
-    case 'confirmed':
-      return { label: 'ยืนยันแล้ว', variant: 'good' };
-    case 'paid':
-      return { label: 'ชำระเงินแล้ว', variant: 'good' };
-    case 'completed':
-      return { label: 'เสร็จสิ้น', variant: 'neutral' };
-    case 'cancelled':
-      return { label: 'ยกเลิก', variant: 'critical' };
-    default:
-      return { label: status, variant: 'neutral' };
-  }
+export function bookingStatusBadge(status: string, lang: Lang = 'th'): { label: string; variant: BadgeVariant } {
+  const labels: Record<string, Record<string, string>> = {
+    pending: { th: 'รอยืนยัน', en: 'Pending' },
+    confirmed: { th: 'ยืนยันแล้ว', en: 'Confirmed' },
+    paid: { th: 'ชำระเงินแล้ว', en: 'Paid' },
+    completed: { th: 'เสร็จสิ้น', en: 'Completed' },
+    cancelled: { th: 'ยกเลิก', en: 'Cancelled' },
+  };
+  const variants: Record<string, BadgeVariant> = {
+    pending: 'warning',
+    confirmed: 'good',
+    paid: 'good',
+    completed: 'neutral',
+    cancelled: 'critical',
+  };
+  const key = status.toLowerCase();
+  return { label: labels[key]?.[lang] ?? status, variant: variants[key] ?? 'neutral' };
 }
 
-export function dormStatusBadge(status: string): { label: string; variant: BadgeVariant } {
-  switch (status.toLowerCase()) {
-    case 'pending_approval':
-      return { label: 'รออนุมัติ', variant: 'warning' };
-    case 'approved':
-      return { label: 'อนุมัติแล้ว', variant: 'good' };
-    case 'rejected':
-      return { label: 'ไม่รับ', variant: 'critical' };
-    case 'suspended':
-      return { label: 'ระงับ', variant: 'critical' };
-    default:
-      return { label: status, variant: 'neutral' };
-  }
+export function dormStatusBadge(status: string, lang: Lang = 'th'): { label: string; variant: BadgeVariant } {
+  const labels: Record<string, Record<string, string>> = {
+    pending_approval: { th: 'รออนุมัติ', en: 'Pending approval' },
+    approved: { th: 'อนุมัติแล้ว', en: 'Approved' },
+    rejected: { th: 'ไม่รับ', en: 'Rejected' },
+    suspended: { th: 'ระงับ', en: 'Suspended' },
+  };
+  const variants: Record<string, BadgeVariant> = {
+    pending_approval: 'warning',
+    approved: 'good',
+    rejected: 'critical',
+    suspended: 'critical',
+  };
+  const key = status.toLowerCase();
+  return { label: labels[key]?.[lang] ?? status, variant: variants[key] ?? 'neutral' };
 }
 
 export function adminRoleBadge(role: string): { label: string; variant: BadgeVariant } {
@@ -64,8 +70,8 @@ export function adminRoleBadge(role: string): { label: string; variant: BadgeVar
   }
 }
 
-export function roomStatusBadge(status: string): { label: string; variant: BadgeVariant } {
+export function roomStatusBadge(status: string, lang: Lang = 'th'): { label: string; variant: BadgeVariant } {
   return status.toUpperCase() === 'AVAILABLE'
-    ? { label: 'ว่าง', variant: 'good' }
-    : { label: 'ไม่ว่าง', variant: 'neutral' };
+    ? { label: lang === 'th' ? 'ว่าง' : 'Available', variant: 'good' }
+    : { label: lang === 'th' ? 'ไม่ว่าง' : 'Occupied', variant: 'neutral' };
 }

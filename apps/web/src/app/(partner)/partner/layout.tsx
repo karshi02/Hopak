@@ -4,21 +4,34 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useLang } from '@/hooks/useLang';
+import { LangSwitch } from '@/components/LangSwitch';
 import { PageLoader } from '@/components/PageLoader';
 
-const NAV = [
-  { href: '/partner/dashboard', label: 'แดชบอร์ด' },
-  { href: '/partner/dorms/new', label: 'เพิ่มหอพัก' },
-  { href: '/partner/rooms', label: 'จัดการห้อง' },
-  { href: '/partner/requests', label: 'คำขอจอง' },
-  { href: '/partner/slips', label: 'ใบจอง' },
-  { href: '/partner/settings', label: 'ตั้งค่า' },
-];
+const NAV = {
+  th: [
+    { href: '/partner/dashboard', label: 'แดชบอร์ด' },
+    { href: '/partner/dorms/new', label: 'เพิ่มหอพัก' },
+    { href: '/partner/rooms', label: 'จัดการห้อง' },
+    { href: '/partner/requests', label: 'คำขอจอง' },
+    { href: '/partner/slips', label: 'ใบจอง' },
+    { href: '/partner/settings', label: 'ตั้งค่า' },
+  ],
+  en: [
+    { href: '/partner/dashboard', label: 'Dashboard' },
+    { href: '/partner/dorms/new', label: 'Add Dorm' },
+    { href: '/partner/rooms', label: 'Manage Rooms' },
+    { href: '/partner/requests', label: 'Booking Requests' },
+    { href: '/partner/slips', label: 'Slips' },
+    { href: '/partner/settings', label: 'Settings' },
+  ],
+};
 
 export default function PartnerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useCurrentUser();
+  const { lang, setLang } = useLang();
   const isOwner = user?.role.toLowerCase() === 'owner';
 
   useEffect(() => {
@@ -36,8 +49,11 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           </span>
           <span className="text-base font-bold text-white">Owner Console</span>
         </div>
+        <div className="px-2 pb-3">
+          <LangSwitch lang={lang} onChange={setLang} dark />
+        </div>
         <nav className="flex flex-col gap-1">
-          {NAV.map((item) => {
+          {NAV[lang].map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + '/');
             return (
               <Link

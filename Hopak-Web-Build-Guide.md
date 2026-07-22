@@ -32,13 +32,13 @@
 - [x] ระบบอนุมัติเป็นเจ้าของหอ (Owner Request Queue) — ต้องผ่านแอดมินอนุมัติก่อน ไม่ใช่กดปุ่มเดียวได้ role ฟรี
 - [x] แยก Admin Portal ปลอดภัย — URL + endpoint login เฉพาะ แยกจากผู้ใช้ทั่วไปทั้งหมด
 - [x] ระบบระงับบัญชี (suspend) + ส่งใบตักเตือน (แจ้งเตือนในระบบ + อีเมลจริงผ่าน Resend SMTP)
+- [x] ระบบแจ้งเตือน realtime (WebSocket) — ต่อ JWT auth เข้า gateway จริง, จองใหม่ดันแบบ live หาเจ้าของหอ, สถานะจองอัปเดต live หาผู้เช่า (ยืนยัน/ปฏิเสธ/ยกเลิก/ชำระเงินเสร็จจาก cron เที่ยงคืน) ทดสอบ e2e ด้วย socket.io-client จริงผ่านแล้ว
 
 ### 🔨 กำลังทำ
 - [ ] ปรับปรุง UX/UI ย่อยตาม feedback ต่อเนื่อง (มีบัค + งานเล็กๆ เข้ามาเรื่อยๆ ระหว่างทดสอบจริง)
 
 ### ⬜ ยังไม่เริ่ม
 - [ ] เชื่อม Payment Gateway จริง (PromptPay / Omise / 2C2P) — ตอนนี้เป็น manual self-report ("ฉันชำระเงินแล้ว") เท่านั้น
-- [ ] ระบบแจ้งเตือน realtime (WebSocket) — มีไฟล์ gateway โครงไว้ (`realtime.gateway.ts`) แต่ยังไม่ได้ต่อเรียกใช้จริงจากที่ไหนเลย ฝั่งเว็บก็ไม่มี client ฟัง
 - [ ] แอพมือถือ (Expo) — โฟลเดอร์ `apps/mobile` ยังว่างเปล่า ยังไม่เริ่มเลย
 - [ ] Deploy: เว็บ/API/DB ขึ้น host จริง — กำลังตัดสินใจระหว่าง Railway กับ HostAtom Cloud VPS
 
@@ -143,7 +143,7 @@ apps/web/
 
 ## 5. Backend API (เว็บและแอพเรียกร่วมกัน)
 
-**Stack:** NestJS + Prisma + PostgreSQL + Redis · Auth JWT+SSO · Realtime WebSocket (โครงไว้ ยังไม่ต่อใช้จริง)
+**Stack:** NestJS + Prisma + PostgreSQL + Redis · Auth JWT+SSO · Realtime WebSocket (ต่อใช้จริงแล้ว)
 
 ### Data Model (มีจริงในระบบ)
 - **User** — role `tenant|owner|admin`, ชื่อ, เบอร์, อีเมล, รูป, `suspended`
@@ -205,7 +205,7 @@ GET  /admin/approvals  PATCH /admin/approvals/:id/approve|reject
 - **Phase 1** — Monorepo + Backend API (NestJS + Prisma + PostgreSQL) + Admin อนุมัติ ✅ **เสร็จแล้ว**
 - **Phase 2** — เว็บ Next.js เรียก API (ผู้เช่า → Seller → Admin) ✅ **เสร็จแล้ว** (รวม favorites/reviews/owner-approval/admin security เกินแผนเดิม)
 - **Phase 3** — แอพ Expo เรียก API เดิม + Push + offline ⬜ **ยังไม่เริ่ม**
-- **Next** — เชื่อม payment gateway จริง, ต่อ realtime WebSocket ให้ใช้งานจริง, Deploy ขึ้น host จริง
+- **Next** — เชื่อม payment gateway จริง, Deploy ขึ้น host จริง
 
 ---
 

@@ -13,6 +13,7 @@ const SELECT_SAFE = {
   email: true,
   phone: true,
   avatarUrl: true,
+  address: true,
   googleId: true,
   createdAt: true,
   updatedAt: true,

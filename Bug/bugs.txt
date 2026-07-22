@@ -235,3 +235,32 @@ controller + route) ยังไม่ทำ
 - สถานะ: SMTP เชื่อมต่อ+auth สำเร็จแล้ว (smtp.resend.com, API key ใส่ใน apps/api/.env แล้ว) โค้ด MailService ทำงานถูกต้อง
 - ติดอยู่ที่: บัญชี Resend เป็น sandbox mode (ยังไม่ verify โดเมนตัวเอง) ส่งได้แค่ไปอีเมลเจ้าของบัญชี Resend เอง ส่งไปโดเมนอื่น (user ทั่วไป) โดน reject 550
 - ต้องทำต่อ (ทีหลัง): ไป resend.com/domains verify โดเมนจริงของ Hopak (ต้องมี domain ของตัวเองก่อน + ตั้ง DNS record) ถึงจะส่งอีเมลใบตักเตือนไปหา user จริงในระบบได้ครบ
+
+[29] สลับภาษา TH/EN ไม่ real-time — ต้อง reload/เปลี่ยนหน้าถึงจะเห็นผล
+--------------------------------------------------------
+ไฟล์: apps/web/src/hooks/useLang.ts
+อาการ: useLang() ใช้ useState ในตัวมันเอง แยกกันคนละ instance ต่อ component
+ที่เรียกใช้ (Navbar, layout, แต่ละหน้า) กดสวิตช์ใน Navbar เรียก setLang ของ
+instance ตัวเอง อัปเดตแค่ state ตัวเอง + localStorage แต่ instance อื่น (เช่น
+เนื้อหาในหน้า) ไม่รู้ว่าเปลี่ยน เพราะ useEffect อ่าน localStorage แค่ตอน mount
+ครั้งเดียว ต้อง reload หรือเปลี่ยนหน้า (remount) ถึงจะเห็นภาษาใหม่
+ผล: กดสวิตช์ภาษาแล้วเหมือนไม่ทำงาน (จริงๆ ทำงานแค่ปุ่ม ไม่ทำงานที่เนื้อหาหน้า)
+แก้ไข: เพิ่ม module-level pub-sub ใน useLang.ts (currentLang + listeners Set)
+setLang() อัปเดต localStorage แล้ว broadcast ให้ทุก instance ที่ subscribe อยู่
+เปลี่ยน state ทันที ไม่ต้อง reload/remount
+สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error (22/07/2026)
+
+[30] แผนที่ (MapPicker) พัง "Error: Map container is already initialized" ตอนกลับมาหน้าเดิม
+--------------------------------------------------------
+ไฟล์: apps/web/src/components/map/MapPicker.tsx
+อาการ: หน้า dorms/[id] และ partner/dorms/new ใช้ react-leaflet's <MapContainer>
+Next.js App Router บางครั้ง resume หน้าที่ cache ไว้ (เช่นกด back) โดยไม่ unmount
+component tree จริงๆ ก่อน (React "reappearLayoutEffects") ทำให้ layout effect
+ของ MapContainer รันซ้ำบน DOM node เดิมที่ยังมีค่า _leaflet_id จากรอบก่อนติดอยู่
+Leaflet เช็คเจอค่านี้แล้ว throw ทันที ("Map container is already initialized")
+พังทั้งหน้าเป็น Unhandled Runtime Error
+แก้ไข: เขียน MapPicker.tsx ใหม่ไม่ใช้ <MapContainer>/<TileLayer>/<Marker> ของ
+react-leaflet แล้ว ใช้ Leaflet API ตรง (L.map, L.tileLayer, L.marker) ใน useEffect
+เอง พร้อม guard ลบ _leaflet_id เก่าทิ้งก่อนสร้าง map ใหม่ทุกครั้ง (กันกรณี node
+ถูก reuse โดยไม่ cleanup) + cleanup จริงเรียก map.remove() ตอน unmount
+สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error (22/07/2026)

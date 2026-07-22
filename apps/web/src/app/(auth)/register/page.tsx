@@ -1,20 +1,86 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
+import { useLang } from '@/hooks/useLang';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const TOTAL_STEPS = 2;
 
-const PERKS = [
-  'หอพักคุณภาพจากเจ้าของจริง ผ่านการยืนยันตัวตน',
-  'จองออนไลน์ปลอดภัย ไม่มีค่าธรรมเนียมแอบแฝง',
-  'ข้อมูลส่วนตัวปลอดภัย เก็บเบอร์ให้เฉพาะเจ้าของหอที่จองเท่านั้น',
-];
+const TEXT = {
+  th: {
+    heroTitle1: 'หาหอพักที่ใช่',
+    heroTitle2: 'ได้ในไม่กี่คลิก',
+    perks: [
+      'หอพักคุณภาพจากเจ้าของจริง ผ่านการยืนยันตัวตน',
+      'จองออนไลน์ปลอดภัย ไม่มีค่าธรรมเนียมแอบแฝง',
+      'ข้อมูลส่วนตัวปลอดภัย เก็บเบอร์ให้เฉพาะเจ้าของหอที่จองเท่านั้น',
+    ],
+    haveAccount: 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ',
+    step1Title: 'สมัครสมาชิก',
+    step1Subtitle: 'สร้างบัญชีเพื่อเริ่มค้นหาและจองหอพัก',
+    google: 'สมัครด้วย Google',
+    or: 'หรือ',
+    namePlaceholder: 'ชื่อ-นามสกุล',
+    emailPlaceholder: 'อีเมล',
+    phonePlaceholder: 'เบอร์โทร',
+    passwordPlaceholder: 'รหัสผ่าน',
+    createAccountError: 'สร้างบัญชีไม่สำเร็จ',
+    submit: 'สมัครสมาชิก',
+    haveAccount2: 'มีบัญชีแล้ว?',
+    login: 'เข้าสู่ระบบ',
+    step2Title: 'ตั้งค่าโปรไฟล์',
+    step2Subtitle: 'เพิ่มรูปโปรไฟล์ (ข้ามได้)',
+    photoLabel: 'รูป',
+    avatarPlaceholder: 'ลิงก์รูปโปรไฟล์ (ถ้ามี)',
+    addressLabel: 'ที่อยู่',
+    addressPlaceholder: 'กรอกที่อยู่ของคุณ',
+    useLocation: 'ใช้ตำแหน่งปัจจุบัน',
+    locating: 'กำลังค้นหาตำแหน่ง...',
+    locationDenied: 'ไม่สามารถเข้าถึงตำแหน่งได้ กรุณากรอกที่อยู่เอง',
+    locationUnsupported: 'เบราว์เซอร์นี้ไม่รองรับการค้นหาตำแหน่ง',
+    saveProfileError: 'บันทึกโปรไฟล์ไม่สำเร็จ',
+    start: 'เริ่มใช้งาน Hopak',
+  },
+  en: {
+    heroTitle1: 'Find the right dorm',
+    heroTitle2: 'in just a few clicks',
+    perks: [
+      'Quality dorms from verified real owners',
+      'Safe online booking, no hidden fees',
+      'Your info is protected — phone shared only with dorms you book',
+    ],
+    haveAccount: 'Already have an account? Log in',
+    step1Title: 'Sign up',
+    step1Subtitle: 'Create an account to start finding and booking dorms',
+    google: 'Sign up with Google',
+    or: 'or',
+    namePlaceholder: 'Full name',
+    emailPlaceholder: 'Email',
+    phonePlaceholder: 'Phone number',
+    passwordPlaceholder: 'Password',
+    createAccountError: 'Failed to create account',
+    submit: 'Sign up',
+    haveAccount2: 'Already have an account?',
+    login: 'Log in',
+    step2Title: 'Set up your profile',
+    step2Subtitle: 'Add a profile photo (optional)',
+    photoLabel: 'Photo',
+    avatarPlaceholder: 'Profile photo link (optional)',
+    addressLabel: 'Address',
+    addressPlaceholder: 'Enter your address',
+    useLocation: 'Use current location',
+    locating: 'Locating...',
+    locationDenied: "Couldn't access your location — please enter your address manually",
+    locationUnsupported: "This browser doesn't support location lookup",
+    saveProfileError: 'Failed to save profile',
+    start: 'Get started with Hopak',
+  },
+};
 
-function BrandPanel({ step }: { step: number }) {
+function BrandPanel({ step, t }: { step: number; t: (typeof TEXT)['th'] }) {
   return (
     <div className="hidden w-[38%] shrink-0 flex-col justify-between bg-gradient-to-br from-tenant to-tenant-dark p-10 text-white lg:flex">
       <div>
@@ -22,13 +88,13 @@ function BrandPanel({ step }: { step: number }) {
           H
         </div>
         <h1 className="mt-8 text-2xl font-semibold leading-snug">
-          หาหอพักที่ใช่
+          {t.heroTitle1}
           <br />
-          ได้ในไม่กี่คลิก
+          {t.heroTitle2}
         </h1>
 
         <ul className="mt-8 flex flex-col gap-4">
-          {PERKS.map((perk) => (
+          {t.perks.map((perk) => (
             <li key={perk} className="flex items-start gap-2 text-sm text-white/90">
               <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 font-sans text-xs">
                 ✓
@@ -48,7 +114,7 @@ function BrandPanel({ step }: { step: number }) {
       <div className="font-sans text-xs text-white/70">
         © 2026 Hopak ·{' '}
         <a href="/login" className="underline">
-          มีบัญชีอยู่แล้ว? เข้าสู่ระบบ
+          {t.haveAccount}
         </a>
       </div>
     </div>
@@ -60,6 +126,8 @@ const inputClass =
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = TEXT[lang];
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +136,53 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [address, setAddress] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const autoSavedRef = useRef(false);
+
+  function handleUseLocation() {
+    if (!navigator.geolocation) {
+      setLocationError(t.locationUnsupported);
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`,
+          );
+          const data = await res.json();
+          if (data?.display_name) setAddress(data.display_name);
+        } catch {
+          setLocationError(t.locationDenied);
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocationError(t.locationDenied);
+        setLocating(false);
+      },
+    );
+  }
+
+  // ขอตำแหน่งทันทีที่เข้าหน้าสมัครสมาชิก (ทั้งมือถือและคอมพิวเตอร์) แทนที่จะรอให้กดปุ่มเอง
+  useEffect(() => {
+    handleUseLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ทันทีที่มีบัญชี (เข้า step 2) และมีที่อยู่จากตำแหน่งแล้ว บันทึกให้อัตโนมัติครั้งเดียว
+  // จากนั้นผู้ใช้แก้ไขเองได้อีก โดยจะถูกบันทึกจริงตอนกด "เริ่มใช้งาน Hopak"
+  useEffect(() => {
+    if (step === 2 && address && !autoSavedRef.current) {
+      autoSavedRef.current = true;
+      apiClient.patch('/users/me', { address }).catch(() => {});
+    }
+  }, [step, address]);
 
   async function handleCreateAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -82,7 +197,7 @@ export default function RegisterPage() {
       setToken(accessToken);
       setStep(2);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'สร้างบัญชีไม่สำเร็จ');
+      setError(err instanceof Error ? err.message : t.createAccountError);
     }
   }
 
@@ -90,25 +205,28 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     try {
-      if (avatarUrl) {
-        await apiClient.patch('/users/me', { avatarUrl });
+      if (avatarUrl || address) {
+        await apiClient.patch('/users/me', {
+          ...(avatarUrl ? { avatarUrl } : {}),
+          ...(address ? { address } : {}),
+        });
       }
       router.push('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'บันทึกโปรไฟล์ไม่สำเร็จ');
+      setError(err instanceof Error ? err.message : t.saveProfileError);
     }
   }
 
   return (
     <main className="flex min-h-[calc(100vh-65px)] bg-surface-web">
-      <BrandPanel step={step} />
+      <BrandPanel step={step} t={t} />
 
       <div className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm">
           {step === 1 && (
             <div>
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">สมัครสมาชิก</h2>
-              <p className="mt-1 text-sm text-ink-subtitle">สร้างบัญชีเพื่อเริ่มค้นหาและจองหอพัก</p>
+              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.step1Title}</h2>
+              <p className="mt-1 text-sm text-ink-subtitle">{t.step1Subtitle}</p>
 
               <a
                 href={`${API_URL}/auth/google`}
@@ -129,19 +247,19 @@ export default function RegisterPage() {
                     d="M12 5.4c1.6 0 3 .6 4.1 1.6l3.1-3.1A11 11 0 002 7.1l3.7 2.8C6.6 7.3 9.1 5.4 12 5.4z"
                   />
                 </svg>
-                สมัครด้วย Google
+                {t.google}
               </a>
 
               <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
                 <span className="h-px flex-1 bg-card-border" />
-                หรือ
+                {t.or}
                 <span className="h-px flex-1 bg-card-border" />
               </div>
 
               <form onSubmit={handleCreateAccount} className="flex flex-col gap-3">
                 <input
                   type="text"
-                  placeholder="ชื่อ-นามสกุล"
+                  placeholder={t.namePlaceholder}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className={inputClass}
@@ -150,7 +268,7 @@ export default function RegisterPage() {
                 <div className="flex gap-3">
                   <input
                     type="email"
-                    placeholder="อีเมล"
+                    placeholder={t.emailPlaceholder}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={`${inputClass} flex-1 font-sans`}
@@ -158,7 +276,7 @@ export default function RegisterPage() {
                   />
                   <input
                     type="tel"
-                    placeholder="เบอร์โทร"
+                    placeholder={t.phonePlaceholder}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className={`${inputClass} flex-1 font-sans`}
@@ -166,7 +284,7 @@ export default function RegisterPage() {
                 </div>
                 <input
                   type="password"
-                  placeholder="รหัสผ่าน"
+                  placeholder={t.passwordPlaceholder}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={`${inputClass} font-sans`}
@@ -178,14 +296,14 @@ export default function RegisterPage() {
                   type="submit"
                   className="mt-1 rounded-btn bg-tenant py-2.5 text-sm font-medium text-white shadow-sm hover:bg-tenant-dark"
                 >
-                  สมัครสมาชิก
+                  {t.submit}
                 </button>
               </form>
 
               <p className="mt-5 text-center text-sm text-ink-subtitle lg:hidden">
-                มีบัญชีแล้ว?{' '}
+                {t.haveAccount2}{' '}
                 <a href="/login" className="font-medium text-tenant">
-                  เข้าสู่ระบบ
+                  {t.login}
                 </a>
               </p>
             </div>
@@ -193,25 +311,48 @@ export default function RegisterPage() {
 
           {step === 2 && (
             <div>
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">ตั้งค่าโปรไฟล์</h2>
-              <p className="mt-1 text-sm text-ink-subtitle">เพิ่มรูปโปรไฟล์ (ข้ามได้)</p>
+              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.step2Title}</h2>
+              <p className="mt-1 text-sm text-ink-subtitle">{t.step2Subtitle}</p>
               <form onSubmit={handleFinishProfile} className="mt-6 flex flex-col gap-3">
                 <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-surface-canvas text-xs text-ink-faint">
-                  รูป
+                  {t.photoLabel}
                 </div>
                 <input
                   type="url"
-                  placeholder="ลิงก์รูปโปรไฟล์ (ถ้ามี)"
+                  placeholder={t.avatarPlaceholder}
                   value={avatarUrl}
                   onChange={(e) => setAvatarUrl(e.target.value)}
                   className={`${inputClass} font-sans`}
                 />
+
+                <label className="text-sm font-medium text-ink-strong dark:text-white">{t.addressLabel}</label>
+                <textarea
+                  placeholder={t.addressPlaceholder}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  rows={2}
+                  className={`${inputClass} resize-none`}
+                />
+                <button
+                  type="button"
+                  onClick={handleUseLocation}
+                  disabled={locating}
+                  className="flex items-center justify-center gap-1.5 rounded-btn border border-card-border py-2 text-sm font-medium text-ink hover:bg-black/[0.02] disabled:opacity-50 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 21s-7-6.5-7-11a7 7 0 0114 0c0 4.5-7 11-7 11z" />
+                    <circle cx="12" cy="10" r="2.5" />
+                  </svg>
+                  {locating ? t.locating : t.useLocation}
+                </button>
+                {locationError && <p className="text-sm text-danger">{locationError}</p>}
+
                 {error && <p className="text-sm text-danger">{error}</p>}
                 <button
                   type="submit"
                   className="rounded-btn bg-tenant py-2.5 text-sm font-medium text-white shadow-sm hover:bg-tenant-dark"
                 >
-                  เริ่มใช้งาน Hopak
+                  {t.start}
                 </button>
               </form>
             </div>

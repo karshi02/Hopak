@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
+import { useLang } from '@/hooks/useLang';
 
 interface NotificationItem {
   id: string;
@@ -13,8 +14,15 @@ interface NotificationItem {
   readAt: string | null;
 }
 
+const TEXT = {
+  th: { title: 'แจ้งเตือน', none: 'ยังไม่มีการแจ้งเตือน' },
+  en: { title: 'Notifications', none: 'No notifications yet' },
+};
+
 export default function NotificationsPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = TEXT[lang];
   const [items, setItems] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -32,7 +40,7 @@ export default function NotificationsPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">แจ้งเตือน</h1>
+      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
       <div className="mt-4 flex flex-col gap-2">
         {items.map((n) => {
           const isWarning = n.type === 'warning';
@@ -54,7 +62,7 @@ export default function NotificationsPage() {
             </button>
           );
         })}
-        {items.length === 0 && <p className="text-ink-faint">ยังไม่มีการแจ้งเตือน</p>}
+        {items.length === 0 && <p className="text-ink-faint">{t.none}</p>}
       </div>
     </main>
   );

@@ -4,9 +4,41 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { getSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
+import { useLang } from '@/hooks/useLang';
 import type { Booking } from '@hopak/shared';
 
+const TEXT = {
+  th: {
+    title: 'คำขอจอง',
+    pendingCount: (n: number) => `รอยืนยัน ${n} รายการ · กดยืนยันเพื่อออกใบจองอัตโนมัติ`,
+    booker: 'ผู้จอง',
+    phone: 'เบอร์โทร',
+    checkIn: 'วันเข้าอยู่',
+    amount: 'ยอด',
+    confirm: 'ยืนยัน & ออกใบจอง',
+    reject: 'ปฏิเสธ',
+    none: 'ไม่มีคำขอใหม่',
+    footnote: 'เบอร์ผู้จองถูกซ่อนบางส่วน จะเปิดเผยเต็มหลังผู้เช่าชำระเงินเรียบร้อย',
+    dateLocale: 'th-TH',
+  },
+  en: {
+    title: 'Booking Requests',
+    pendingCount: (n: number) => `${n} pending · Confirm to auto-issue a booking slip`,
+    booker: 'Booker',
+    phone: 'Phone',
+    checkIn: 'Check-in date',
+    amount: 'Amount',
+    confirm: 'Confirm & issue slip',
+    reject: 'Reject',
+    none: 'No new requests',
+    footnote: "The booker's phone is partly hidden until fully paid",
+    dateLocale: 'en-US',
+  },
+};
+
 export default function PartnerRequestsPage() {
+  const { lang } = useLang();
+  const t = TEXT[lang];
   const [bookings, setBookings] = useState<Booking[]>([]);
 
   function reload() {
@@ -43,17 +75,17 @@ export default function PartnerRequestsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">คำขอจอง</h1>
-      <p className="mt-1 text-sm text-ink-faint">รอยืนยัน {pending.length} รายการ · กดยืนยันเพื่อออกใบจองอัตโนมัติ</p>
+      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
+      <p className="mt-1 text-sm text-ink-faint">{t.pendingCount(pending.length)}</p>
 
       <div className="mt-4 overflow-x-auto rounded-card border border-card-border dark:border-white/10">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-card-border text-xs text-ink-faint dark:border-white/10">
-              <th className="p-3 font-normal">ผู้จอง</th>
-              <th className="p-3 font-normal">เบอร์โทร</th>
-              <th className="p-3 font-normal">วันเข้าอยู่</th>
-              <th className="p-3 font-normal">ยอด</th>
+              <th className="p-3 font-normal">{t.booker}</th>
+              <th className="p-3 font-normal">{t.phone}</th>
+              <th className="p-3 font-normal">{t.checkIn}</th>
+              <th className="p-3 font-normal">{t.amount}</th>
               <th className="p-3 font-normal"></th>
             </tr>
           </thead>
@@ -62,7 +94,7 @@ export default function PartnerRequestsPage() {
               <tr key={b.id} className="border-t border-card-border dark:border-white/10">
                 <td className="p-3 font-medium text-ink-strong dark:text-white">{b.contactName}</td>
                 <td className="p-3 font-sans tabular-nums text-ink-subtitle">{b.contactPhone.slice(0, 8)}**-*</td>
-                <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString('th-TH')}</td>
+                <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</td>
                 <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
                 <td className="p-3">
                   <div className="flex justify-end gap-2">
@@ -70,13 +102,13 @@ export default function PartnerRequestsPage() {
                       onClick={() => confirm(b.id)}
                       className="rounded-lg bg-seller px-3 py-1.5 text-xs font-semibold text-white hover:bg-seller-dark"
                     >
-                      ยืนยัน &amp; ออกใบจอง
+                      {t.confirm}
                     </button>
                     <button
                       onClick={() => reject(b.id)}
                       className="rounded-lg bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger"
                     >
-                      ปฏิเสธ
+                      {t.reject}
                     </button>
                   </div>
                 </td>
@@ -84,10 +116,10 @@ export default function PartnerRequestsPage() {
             ))}
           </tbody>
         </table>
-        {pending.length === 0 && <p className="p-4 text-ink-faint">ไม่มีคำขอใหม่</p>}
+        {pending.length === 0 && <p className="p-4 text-ink-faint">{t.none}</p>}
       </div>
 
-      <p className="mt-3 text-xs text-ink-faint">เบอร์ผู้จองถูกซ่อนบางส่วน จะเปิดเผยเต็มหลังผู้เช่าชำระเงินเรียบร้อย</p>
+      <p className="mt-3 text-xs text-ink-faint">{t.footnote}</p>
     </div>
   );
 }

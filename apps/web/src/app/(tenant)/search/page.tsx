@@ -9,6 +9,7 @@ import type { Campaign, Dorm, Room } from '@hopak/shared';
 type SponsoredCampaign = Campaign & { dorm: Dorm & { rooms: Room[] } };
 import { useDormSearch } from '@/hooks/useDormSearch';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useLang } from '@/hooks/useLang';
 import { apiClient } from '@/lib/api-client';
 import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
@@ -27,6 +28,28 @@ const ALL_THAI_PROVINCES = [
   'อุบลราชธานี',
 ];
 
+const PROVINCE_EN_LABEL: Record<string, string> = {
+  กรุงเทพมหานคร: 'Bangkok', กระบี่: 'Krabi', กาญจนบุรี: 'Kanchanaburi', กาฬสินธุ์: 'Kalasin',
+  กำแพงเพชร: 'Kamphaeng Phet', ขอนแก่น: 'Khon Kaen', จันทบุรี: 'Chanthaburi', ฉะเชิงเทรา: 'Chachoengsao',
+  ชลบุรี: 'Chonburi', ชัยนาท: 'Chai Nat', ชัยภูมิ: 'Chaiyaphum', ชุมพร: 'Chumphon', เชียงราย: 'Chiang Rai',
+  เชียงใหม่: 'Chiang Mai', ตรัง: 'Trang', ตราด: 'Trat', ตาก: 'Tak', นครนายก: 'Nakhon Nayok',
+  นครปฐม: 'Nakhon Pathom', นครพนม: 'Nakhon Phanom', นครราชสีมา: 'Nakhon Ratchasima',
+  นครศรีธรรมราช: 'Nakhon Si Thammarat', นครสวรรค์: 'Nakhon Sawan', นนทบุรี: 'Nonthaburi',
+  นราธิวาส: 'Narathiwat', น่าน: 'Nan', บึงกาฬ: 'Bueng Kan', บุรีรัมย์: 'Buriram', ปทุมธานี: 'Pathum Thani',
+  ประจวบคีรีขันธ์: 'Prachuap Khiri Khan', ปราจีนบุรี: 'Prachinburi', ปัตตานี: 'Pattani',
+  พระนครศรีอยุธยา: 'Phra Nakhon Si Ayutthaya', พะเยา: 'Phayao', พังงา: 'Phang Nga', พัทลุง: 'Phatthalung',
+  พิจิตร: 'Phichit', พิษณุโลก: 'Phitsanulok', เพชรบุรี: 'Phetchaburi', เพชรบูรณ์: 'Phetchabun', แพร่: 'Phrae',
+  ภูเก็ต: 'Phuket', มหาสารคาม: 'Mahasarakham', มุกดาหาร: 'Mukdahan', แม่ฮ่องสอน: 'Mae Hong Son',
+  ยโสธร: 'Yasothon', ยะลา: 'Yala', ร้อยเอ็ด: 'Roi Et', ระนอง: 'Ranong', ระยอง: 'Rayong', ราชบุรี: 'Ratchaburi',
+  ลพบุรี: 'Lopburi', ลำปาง: 'Lampang', ลำพูน: 'Lamphun', เลย: 'Loei', ศรีสะเกษ: 'Sisaket',
+  สกลนคร: 'Sakon Nakhon', สงขลา: 'Songkhla', สตูล: 'Satun', สมุทรปราการ: 'Samut Prakan',
+  สมุทรสงคราม: 'Samut Songkhram', สมุทรสาคร: 'Samut Sakhon', สระแก้ว: 'Sa Kaeo', สระบุรี: 'Saraburi',
+  สิงห์บุรี: 'Sing Buri', สุโขทัย: 'Sukhothai', สุพรรณบุรี: 'Suphan Buri', สุราษฎร์ธานี: 'Surat Thani',
+  สุรินทร์: 'Surin', หนองคาย: 'Nong Khai', หนองบัวลำภู: 'Nong Bua Lamphu', อ่างทอง: 'Ang Thong',
+  อำนาจเจริญ: 'Amnat Charoen', อุดรธานี: 'Udon Thani', อุตรดิตถ์: 'Uttaradit', อุทัยธานี: 'Uthai Thani',
+  อุบลราชธานี: 'Ubon Ratchathani',
+};
+
 // จังหวัดที่ยังไม่มีหอพักในระบบ ผูกกับจังหวัดที่รองรับจริงที่ใกล้เคียงที่สุด (ติดกันจริงหรือภูมิภาคเดียวกัน)
 // จังหวัดใต้/กลาง/ตะวันออก/ตะวันตกไม่มีจังหวัดที่รองรับอยู่ใกล้เลย จึงใช้ขอนแก่นเป็นค่าเริ่มต้น (ศูนย์กลางประเทศที่สุดในสามจังหวัด)
 const NEAREST_SUPPORTED_PROVINCE: Record<string, string> = {
@@ -44,27 +67,84 @@ const NEAREST_SUPPORTED_PROVINCE: Record<string, string> = {
   พิจิตร: 'เชียงใหม่', เพชรบูรณ์: 'เชียงใหม่', นครสวรรค์: 'เชียงใหม่', อุทัยธานี: 'เชียงใหม่',
 };
 
-const PRICE_RANGES = [
-  { value: 'all', label: 'ราคาทั้งหมด' },
-  { value: 'under3000', label: 'ต่ำกว่า 3,000' },
-  { value: '3000-5000', label: '3,000 - 5,000' },
-  { value: 'above5000', label: 'มากกว่า 5,000' },
-];
-
-const ROOM_TYPES = [
-  { value: 'all', label: 'ทุกประเภทห้อง' },
-  { value: 'air', label: 'แอร์' },
-  { value: 'fan', label: 'พัดลม' },
-];
-
-const SORTS = [
-  { value: 'recommended', label: 'แนะนำ' },
-  { value: 'price_asc', label: 'ราคา ต่ำ - สูง' },
-  { value: 'price_desc', label: 'ราคา สูง - ต่ำ' },
-];
+const TEXT = {
+  th: {
+    title: 'ค้นหาหอพัก',
+    all: 'ทั้งหมด',
+    allProvinces77: 'ทุกจังหวัด (77 จังหวัด)',
+    amenity: 'สิ่งอำนวยความสะดวก',
+    sortBy: 'เรียงโดย',
+    fallbackNote: (picked: string, nearest: string) =>
+      `ยังไม่มีหอพักใน${picked}ตอนนี้ กำลังแสดงหอพักในจังหวัดใกล้เคียง (${nearest}) แทน`,
+    sponsored: 'สปอนเซอร์',
+    photoPlaceholder: 'รูปหอพัก',
+    ad: 'โฆษณา',
+    perMonth: '/ เดือน',
+    full: 'ห้องเต็ม',
+    allDormsIn: (p: string) => `หอพักทั้งหมด${p ? `ใน${p}` : ''}`,
+    count: (n: number) => `${n} แห่ง`,
+    recommended: '★ แนะนำ',
+    available: (n: number) => `ว่าง ${n} ห้อง`,
+    notFound: 'ไม่พบหอพัก',
+    priceRanges: [
+      { value: 'all', label: 'ราคาทั้งหมด' },
+      { value: 'under3000', label: 'ต่ำกว่า 3,000' },
+      { value: '3000-5000', label: '3,000 - 5,000' },
+      { value: 'above5000', label: 'มากกว่า 5,000' },
+    ],
+    roomTypes: [
+      { value: 'all', label: 'ทุกประเภทห้อง' },
+      { value: 'air', label: 'แอร์' },
+      { value: 'fan', label: 'พัดลม' },
+    ],
+    sorts: [
+      { value: 'recommended', label: 'แนะนำ' },
+      { value: 'price_asc', label: 'ราคา ต่ำ - สูง' },
+      { value: 'price_desc', label: 'ราคา สูง - ต่ำ' },
+    ],
+  },
+  en: {
+    title: 'Find Dorms',
+    all: 'All',
+    allProvinces77: 'All provinces (77)',
+    amenity: 'Amenities',
+    sortBy: 'Sort by',
+    fallbackNote: (picked: string, nearest: string) =>
+      `No dorms in ${picked} yet — showing dorms in the nearest supported province (${nearest}) instead`,
+    sponsored: 'Sponsored',
+    photoPlaceholder: 'Dorm photo',
+    ad: 'Ad',
+    perMonth: '/ month',
+    full: 'Fully booked',
+    allDormsIn: (p: string) => (p ? `Dorms in ${p}` : 'All dorms'),
+    count: (n: number) => `${n} listings`,
+    recommended: '★ Top rated',
+    available: (n: number) => `${n} available`,
+    notFound: 'No dorms found',
+    priceRanges: [
+      { value: 'all', label: 'Any price' },
+      { value: 'under3000', label: 'Under 3,000' },
+      { value: '3000-5000', label: '3,000 - 5,000' },
+      { value: 'above5000', label: 'Above 5,000' },
+    ],
+    roomTypes: [
+      { value: 'all', label: 'All room types' },
+      { value: 'air', label: 'Air-conditioned' },
+      { value: 'fan', label: 'Fan room' },
+    ],
+    sorts: [
+      { value: 'recommended', label: 'Recommended' },
+      { value: 'price_asc', label: 'Price: low to high' },
+      { value: 'price_desc', label: 'Price: high to low' },
+    ],
+  },
+};
 
 export default function SearchPage() {
   const params = useSearchParams();
+  const { lang } = useLang();
+  const t = TEXT[lang];
+  const provinceLabel = (p: string) => (lang === 'en' ? PROVINCE_EN_LABEL[p] ?? p : p);
   const [province, setProvince] = useState<string>(() => params.get('province') ?? '');
   const [pickedProvince, setPickedProvince] = useState('');
   const [priceRange, setPriceRange] = useState(() => params.get('priceRange') ?? 'all');
@@ -140,7 +220,7 @@ export default function SearchPage() {
 
   return (
     <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">ค้นหาหอพัก</h1>
+      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
 
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <button
@@ -149,7 +229,7 @@ export default function SearchPage() {
             province === '' && !pickedProvince ? 'bg-tenant text-white' : 'border border-card-border text-ink'
           }`}
         >
-          ทั้งหมด
+          {t.all}
         </button>
         {PROVINCES.map((p) => (
           <button
@@ -159,7 +239,7 @@ export default function SearchPage() {
               province === p && !pickedProvince ? 'bg-tenant text-white' : 'border border-card-border text-ink'
             }`}
           >
-            {p}
+            {provinceLabel(p)}
           </button>
         ))}
 
@@ -168,30 +248,30 @@ export default function SearchPage() {
           onChange={(e) => handleProvincePick(e.target.value)}
           className={selectClass}
         >
-          <option value="">ทุกจังหวัด (77 จังหวัด)</option>
+          <option value="">{t.allProvinces77}</option>
           {ALL_THAI_PROVINCES.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {provinceLabel(p)}
             </option>
           ))}
         </select>
 
         <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} className={selectClass}>
-          {PRICE_RANGES.map((o) => (
+          {t.priceRanges.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
         </select>
         <select value={roomType} onChange={(e) => setRoomType(e.target.value)} className={selectClass}>
-          {ROOM_TYPES.map((o) => (
+          {t.roomTypes.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
         </select>
         <select value={amenity} onChange={(e) => setAmenity(e.target.value)} className={selectClass}>
-          <option value="all">สิ่งอำนวยความสะดวก</option>
+          <option value="all">{t.amenity}</option>
           {amenityOptions.map((a) => (
             <option key={a} value={a}>
               {a}
@@ -199,9 +279,9 @@ export default function SearchPage() {
           ))}
         </select>
         <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`${selectClass} ml-auto`}>
-          {SORTS.map((o) => (
+          {t.sorts.map((o) => (
             <option key={o.value} value={o.value}>
-              เรียงโดย: {o.label}
+              {t.sortBy}: {o.label}
             </option>
           ))}
         </select>
@@ -209,7 +289,7 @@ export default function SearchPage() {
 
       {pickedProvince && (
         <p className="mt-3 rounded-btn bg-warning/10 px-4 py-2.5 text-sm text-warning-dark">
-          ยังไม่มีหอพักใน{pickedProvince}ตอนนี้ กำลังแสดงหอพักในจังหวัดใกล้เคียง ({province}) แทน
+          {t.fallbackNote(provinceLabel(pickedProvince), provinceLabel(province))}
         </p>
       )}
 
@@ -219,7 +299,7 @@ export default function SearchPage() {
         <>
           {sponsored.length > 0 && (
             <div className="mt-6">
-              <h2 className="font-semibold text-ink-strong dark:text-white">สปอนเซอร์</h2>
+              <h2 className="font-semibold text-ink-strong dark:text-white">{t.sponsored}</h2>
               <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {sponsored.map((c) => {
                   const dorm = c.dorm;
@@ -233,9 +313,9 @@ export default function SearchPage() {
                       className="relative block overflow-hidden rounded-card border border-card-border bg-white hover:shadow-md dark:border-white/10 dark:bg-[#1a1a19]"
                     >
                       <div className="relative flex h-36 items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
-                        รูปหอพัก
+                        {t.photoPlaceholder}
                         <span className="absolute left-3 top-3 rounded-full bg-ink-strong px-2.5 py-1 text-xs font-semibold text-white">
-                          โฆษณา
+                          {t.ad}
                         </span>
                       </div>
                       <div className="p-4">
@@ -247,10 +327,10 @@ export default function SearchPage() {
                               <span className="font-sans text-lg font-bold text-ink-strong dark:text-white">
                                 ฿{cheapest.pricePerMonth.toLocaleString()}
                               </span>
-                              <span className="text-ink-faint"> / เดือน</span>
+                              <span className="text-ink-faint"> {t.perMonth}</span>
                             </>
                           ) : (
-                            <span className="text-ink-faint">ห้องเต็ม</span>
+                            <span className="text-ink-faint">{t.full}</span>
                           )}
                         </p>
                       </div>
@@ -263,9 +343,9 @@ export default function SearchPage() {
 
           <div className="mt-6 flex items-baseline justify-between">
             <h2 className="font-semibold text-ink-strong dark:text-white">
-              หอพักทั้งหมด{province ? `ใน${province}` : ''}
+              {t.allDormsIn(province ? provinceLabel(province) : '')}
             </h2>
-            <span className="text-sm text-ink-faint">{filteredDorms.length} แห่ง</span>
+            <span className="text-sm text-ink-faint">{t.count(filteredDorms.length)}</span>
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -279,15 +359,15 @@ export default function SearchPage() {
                   className="relative block overflow-hidden rounded-card border border-card-border bg-white hover:shadow-md dark:border-white/10 dark:bg-[#1a1a19]"
                 >
                   <div className="relative flex h-36 items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
-                    รูปหอพัก
+                    {t.photoPlaceholder}
                     {isTopRated && (
                       <span className="absolute left-3 top-3 rounded-full bg-warning px-2.5 py-1 text-xs font-semibold text-white">
-                        ★ แนะนำ
+                        {t.recommended}
                       </span>
                     )}
                     {availableRooms.length > 0 && (
                       <span className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-success">
-                        ว่าง {availableRooms.length} ห้อง
+                        {t.available(availableRooms.length)}
                       </span>
                     )}
                     <FavoriteButton
@@ -317,17 +397,17 @@ export default function SearchPage() {
                           <span className="font-sans text-lg font-bold text-ink-strong dark:text-white">
                             ฿{startingRoom.pricePerMonth.toLocaleString()}
                           </span>
-                          <span className="text-ink-faint"> / เดือน</span>
+                          <span className="text-ink-faint"> {t.perMonth}</span>
                         </>
                       ) : (
-                        <span className="text-ink-faint">ห้องเต็ม</span>
+                        <span className="text-ink-faint">{t.full}</span>
                       )}
                     </p>
                   </div>
                 </Link>
               );
             })}
-            {filteredDorms.length === 0 && <p className="text-ink-faint">ไม่พบหอพัก</p>}
+            {filteredDorms.length === 0 && <p className="text-ink-faint">{t.notFound}</p>}
           </div>
         </>
       )}
