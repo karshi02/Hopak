@@ -27,7 +27,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!loading && !isAdmin) router.replace('/login');
   }, [loading, isAdmin, router]);
 
-  if (loading || !isAdmin) return <PageLoader fullScreen />;
+  if (loading || !isAdmin) return <PageLoader />;
 
   return (
     <div className="flex min-h-screen">

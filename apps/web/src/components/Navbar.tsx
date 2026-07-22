@@ -6,10 +6,37 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken, clearToken } from '@/lib/auth';
 import { resetSocket } from '@/lib/ws';
+import { useLang } from '@/hooks/useLang';
+import { LangSwitch } from '@/components/LangSwitch';
 import type { User } from '@hopak/shared';
+
+const TEXT = {
+  th: {
+    home: 'หน้าแรก',
+    bookings: 'การจองของฉัน',
+    saved: 'บันทึก',
+    refresh: 'รีเฟรช',
+    dashboard: 'แดชบอร์ด',
+    logout: 'ออกจากระบบ',
+    login: 'เข้าสู่ระบบ',
+    searchPlaceholder: 'ค้นหาจังหวัด / มหาวิทยาลัย / ชื่อหอพัก',
+  },
+  en: {
+    home: 'Home',
+    bookings: 'My Bookings',
+    saved: 'Saved',
+    refresh: 'Refresh',
+    dashboard: 'Dashboard',
+    logout: 'Log out',
+    login: 'Log in',
+    searchPlaceholder: 'Search province / university / dorm name',
+  },
+};
 
 export function Navbar() {
   const router = useRouter();
+  const { lang, setLang } = useLang();
+  const t = TEXT[lang];
   const [user, setUser] = useState<User | null>(null);
   const [checked, setChecked] = useState(false);
   const [q, setQ] = useState('');
@@ -59,26 +86,28 @@ export function Navbar() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="ค้นหาจังหวัด / มหาวิทยาลัย / ชื่อหอพัก"
+            placeholder={t.searchPlaceholder}
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint dark:text-white"
           />
         </form>
 
         <nav className="ml-auto flex items-center gap-5 text-sm">
           <Link href="/" className="hidden text-ink hover:text-tenant dark:text-white md:inline">
-            หน้าแรก
+            {t.home}
           </Link>
           <Link href="/bookings" className="hidden text-ink hover:text-tenant dark:text-white md:inline">
-            การจองของฉัน
+            {t.bookings}
           </Link>
           <Link href="/saved" className="hidden text-ink hover:text-tenant dark:text-white md:inline">
-            บันทึก
+            {t.saved}
           </Link>
+
+          <LangSwitch lang={lang} onChange={setLang} />
 
           <button
             type="button"
             onClick={() => router.refresh()}
-            title="รีเฟรช"
+            title={t.refresh}
             className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtitle hover:bg-black/[0.04] dark:text-white dark:hover:bg-white/10"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -96,14 +125,14 @@ export function Navbar() {
             <>
               {dashboardHref && (
                 <Link href={dashboardHref} className="text-ink hover:text-tenant dark:text-white">
-                  แดชบอร์ด
+                  {t.dashboard}
                 </Link>
               )}
               <Link href="/profile" className="text-ink hover:text-tenant dark:text-white">
                 {user.name}
               </Link>
               <button onClick={handleLogout} className="text-danger hover:underline">
-                ออกจากระบบ
+                {t.logout}
               </button>
             </>
           ) : (
@@ -111,7 +140,7 @@ export function Navbar() {
               href="/login"
               className="rounded-btn bg-tenant px-4 py-2 font-medium text-white hover:bg-tenant-dark"
             >
-              เข้าสู่ระบบ
+              {t.login}
             </Link>
           )}
         </nav>

@@ -24,7 +24,7 @@ export default function EditDormPage() {
     setSaved(true);
   }
 
-  if (!dorm) return <PageLoader fullScreen />;
+  if (!dorm) return <PageLoader />;
 
   return (
     <div className="max-w-lg">

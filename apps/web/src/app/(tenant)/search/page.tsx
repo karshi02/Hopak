@@ -14,6 +14,36 @@ import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { StarRating } from '@/components/StarRating';
 
+const ALL_THAI_PROVINCES = [
+  'กรุงเทพมหานคร', 'กระบี่', 'กาญจนบุรี', 'กาฬสินธุ์', 'กำแพงเพชร', 'ขอนแก่น', 'จันทบุรี', 'ฉะเชิงเทรา',
+  'ชลบุรี', 'ชัยนาท', 'ชัยภูมิ', 'ชุมพร', 'เชียงราย', 'เชียงใหม่', 'ตรัง', 'ตราด', 'ตาก', 'นครนายก',
+  'นครปฐม', 'นครพนม', 'นครราชสีมา', 'นครศรีธรรมราช', 'นครสวรรค์', 'นนทบุรี', 'นราธิวาส', 'น่าน',
+  'บึงกาฬ', 'บุรีรัมย์', 'ปทุมธานี', 'ประจวบคีรีขันธ์', 'ปราจีนบุรี', 'ปัตตานี', 'พระนครศรีอยุธยา',
+  'พะเยา', 'พังงา', 'พัทลุง', 'พิจิตร', 'พิษณุโลก', 'เพชรบุรี', 'เพชรบูรณ์', 'แพร่', 'ภูเก็ต',
+  'มหาสารคาม', 'มุกดาหาร', 'แม่ฮ่องสอน', 'ยโสธร', 'ยะลา', 'ร้อยเอ็ด', 'ระนอง', 'ระยอง', 'ราชบุรี',
+  'ลพบุรี', 'ลำปาง', 'ลำพูน', 'เลย', 'ศรีสะเกษ', 'สกลนคร', 'สงขลา', 'สตูล', 'สมุทรปราการ',
+  'สมุทรสงคราม', 'สมุทรสาคร', 'สระแก้ว', 'สระบุรี', 'สิงห์บุรี', 'สุโขทัย', 'สุพรรณบุรี', 'สุราษฎร์ธานี',
+  'สุรินทร์', 'หนองคาย', 'หนองบัวลำภู', 'อ่างทอง', 'อำนาจเจริญ', 'อุดรธานี', 'อุตรดิตถ์', 'อุทัยธานี',
+  'อุบลราชธานี',
+];
+
+// จังหวัดที่ยังไม่มีหอพักในระบบ ผูกกับจังหวัดที่รองรับจริงที่ใกล้เคียงที่สุด (ติดกันจริงหรือภูมิภาคเดียวกัน)
+// จังหวัดใต้/กลาง/ตะวันออก/ตะวันตกไม่มีจังหวัดที่รองรับอยู่ใกล้เลย จึงใช้ขอนแก่นเป็นค่าเริ่มต้น (ศูนย์กลางประเทศที่สุดในสามจังหวัด)
+const NEAREST_SUPPORTED_PROVINCE: Record<string, string> = {
+  // ติดกับมหาสารคามจริง
+  กาฬสินธุ์: 'มหาสารคาม', ร้อยเอ็ด: 'มหาสารคาม', สุรินทร์: 'มหาสารคาม', บุรีรัมย์: 'มหาสารคาม',
+  // ภาคอีสานที่เหลือ ใกล้ขอนแก่นสุด
+  นครราชสีมา: 'ขอนแก่น', ศรีสะเกษ: 'ขอนแก่น', อุบลราชธานี: 'ขอนแก่น', ยโสธร: 'ขอนแก่น',
+  ชัยภูมิ: 'ขอนแก่น', อำนาจเจริญ: 'ขอนแก่น', บึงกาฬ: 'ขอนแก่น', หนองบัวลำภู: 'ขอนแก่น',
+  อุดรธานี: 'ขอนแก่น', เลย: 'ขอนแก่น', หนองคาย: 'ขอนแก่น', สกลนคร: 'ขอนแก่น',
+  นครพนม: 'ขอนแก่น', มุกดาหาร: 'ขอนแก่น',
+  // ภาคเหนือ ใกล้เชียงใหม่สุด
+  เชียงราย: 'เชียงใหม่', แม่ฮ่องสอน: 'เชียงใหม่', ลำปาง: 'เชียงใหม่', ลำพูน: 'เชียงใหม่',
+  พะเยา: 'เชียงใหม่', แพร่: 'เชียงใหม่', น่าน: 'เชียงใหม่', อุตรดิตถ์: 'เชียงใหม่',
+  ตาก: 'เชียงใหม่', สุโขทัย: 'เชียงใหม่', กำแพงเพชร: 'เชียงใหม่', พิษณุโลก: 'เชียงใหม่',
+  พิจิตร: 'เชียงใหม่', เพชรบูรณ์: 'เชียงใหม่', นครสวรรค์: 'เชียงใหม่', อุทัยธานี: 'เชียงใหม่',
+};
+
 const PRICE_RANGES = [
   { value: 'all', label: 'ราคาทั้งหมด' },
   { value: 'under3000', label: 'ต่ำกว่า 3,000' },
@@ -35,9 +65,10 @@ const SORTS = [
 
 export default function SearchPage() {
   const params = useSearchParams();
-  const [province, setProvince] = useState<string>('');
-  const [priceRange, setPriceRange] = useState('all');
-  const [roomType, setRoomType] = useState('all');
+  const [province, setProvince] = useState<string>(() => params.get('province') ?? '');
+  const [pickedProvince, setPickedProvince] = useState('');
+  const [priceRange, setPriceRange] = useState(() => params.get('priceRange') ?? 'all');
+  const [roomType, setRoomType] = useState(() => params.get('roomType') ?? 'all');
   const [amenity, setAmenity] = useState('all');
   const [sortBy, setSortBy] = useState('recommended');
   const [sponsored, setSponsored] = useState<SponsoredCampaign[]>([]);
@@ -89,6 +120,21 @@ export default function SearchPage() {
     return list;
   }, [dorms, roomType, amenity, priceRange, sortBy]);
 
+  function handleProvincePick(value: string) {
+    if (!value) {
+      setProvince('');
+      setPickedProvince('');
+      return;
+    }
+    if ((PROVINCES as readonly string[]).includes(value)) {
+      setProvince(value);
+      setPickedProvince('');
+    } else {
+      setPickedProvince(value);
+      setProvince(NEAREST_SUPPORTED_PROVINCE[value] ?? PROVINCES[0]);
+    }
+  }
+
   const selectClass =
     'rounded-full border border-card-border bg-white px-4 py-2 text-sm font-medium text-ink outline-none dark:border-white/10 dark:bg-[#1a1a19] dark:text-white';
 
@@ -98,9 +144,9 @@ export default function SearchPage() {
 
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <button
-          onClick={() => setProvince('')}
+          onClick={() => handleProvincePick('')}
           className={`rounded-full px-4 py-2 text-sm font-semibold ${
-            province === '' ? 'bg-tenant text-white' : 'border border-card-border text-ink'
+            province === '' && !pickedProvince ? 'bg-tenant text-white' : 'border border-card-border text-ink'
           }`}
         >
           ทั้งหมด
@@ -108,14 +154,27 @@ export default function SearchPage() {
         {PROVINCES.map((p) => (
           <button
             key={p}
-            onClick={() => setProvince(p)}
+            onClick={() => handleProvincePick(p)}
             className={`rounded-full px-4 py-2 text-sm font-medium ${
-              province === p ? 'bg-tenant text-white' : 'border border-card-border text-ink'
+              province === p && !pickedProvince ? 'bg-tenant text-white' : 'border border-card-border text-ink'
             }`}
           >
             {p}
           </button>
         ))}
+
+        <select
+          value={pickedProvince || province}
+          onChange={(e) => handleProvincePick(e.target.value)}
+          className={selectClass}
+        >
+          <option value="">ทุกจังหวัด (77 จังหวัด)</option>
+          {ALL_THAI_PROVINCES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
 
         <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} className={selectClass}>
           {PRICE_RANGES.map((o) => (
@@ -148,8 +207,14 @@ export default function SearchPage() {
         </select>
       </div>
 
+      {pickedProvince && (
+        <p className="mt-3 rounded-btn bg-warning/10 px-4 py-2.5 text-sm text-warning-dark">
+          ยังไม่มีหอพักใน{pickedProvince}ตอนนี้ กำลังแสดงหอพักในจังหวัดใกล้เคียง ({province}) แทน
+        </p>
+      )}
+
       {loading ? (
-        <PageLoader fullScreen />
+        <PageLoader />
       ) : (
         <>
           {sponsored.length > 0 && (

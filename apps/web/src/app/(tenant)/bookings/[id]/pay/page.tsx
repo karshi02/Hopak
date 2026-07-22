@@ -34,7 +34,7 @@ export default function PayBookingPage() {
     }
   }
 
-  if (!booking) return <PageLoader fullScreen />;
+  if (!booking) return <PageLoader />;
 
   return (
     <main className="mx-auto max-w-sm p-6">
