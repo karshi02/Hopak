@@ -224,8 +224,8 @@ export default function HomePage() {
 
       {/* ===== HERO ===== */}
       <div
-        className="relative h-[400px]"
-        style={{ background: 'linear-gradient(120deg,#2F6FE0,#2456B8)' }}
+        className="relative h-[400px] bg-cover bg-center"
+        style={{ backgroundImage: `url('/hero-banner.jpg')` }}
       >
         <div className="pt-[52px] text-center">
           <div className="text-3xl font-bold tracking-tight text-white sm:text-[38px]">{t.heroTitle}</div>

@@ -250,6 +250,34 @@ setLang() อัปเดต localStorage แล้ว broadcast ให้ทุ
 เปลี่ยน state ทันที ไม่ต้อง reload/remount
 สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error (22/07/2026)
 
+[31] Google login callback ส่ง JSON ดิบกลับเบราว์เซอร์แทนที่จะพาเข้าเว็บจริง (เชื่อมต่อจริงไม่ได้)
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/auth/auth.controller.ts, google.strategy.ts,
+apps/web/src/app/(auth)/login/page.tsx, register/page.tsx
+อาการ: GET /auth/google/callback (@UseGuards(AuthGuard('google'))) return
+{accessToken, user} ตรงๆ เป็น response ของหน้าเว็บที่เบราว์เซอร์ navigate ไปจริง
+(ไม่ใช่ fetch จาก JS) ผู้ใช้เห็นแค่ JSON ดิบเต็มจอ ไม่มีการ setToken/login จริง
+ในเว็บเลย + callbackURL ใน GoogleStrategy เป็น path relative ('/auth/google/callback')
+ซึ่ง passport-google-oauth20 ต้องการ absolute URL ให้ตรงกับที่ตั้งไว้ใน Google Cloud
+Console เป๊ะ ถ้าไม่ตรง Google จะปฏิเสธทันที (redirect_uri_mismatch)
+แก้ไข:
+- callbackURL เปลี่ยนเป็น absolute ผ่าน env API_URL (${API_URL}/auth/google/callback)
+- googleAuthCallback() เปลี่ยนเป็น redirect (res.redirect) ไปหน้าเว็บจริงที่
+  ${FRONTEND_URL}/auth/google/callback?token=... (สำเร็จ) หรือ /login?error=...
+  (ล้มเหลว เช่น account suspended) แทนการ return JSON ตรงๆ
+- เพิ่มหน้าเว็บ apps/web/src/app/(auth)/auth/google/callback/page.tsx อ่าน token
+  จาก query, setToken() แล้ว redirect เข้า / (หรือ /login?error=... ถ้าไม่มี token)
+- login page เพิ่มอ่าน ?error= จาก query โชว์เป็น error message ให้ผู้ใช้เห็น
+- เพิ่ม env FRONTEND_URL, API_URL ใน apps/api/.env
+สถานะ: แก้โค้ดแล้ว (เชื่อมต่อจริงได้ทันทีที่ใส่ GOOGLE_CLIENT_ID/SECRET จริง)
+ยังต้องทำต่อ (นอกเหนือจากโค้ด): ผู้ใช้ต้องไปสร้าง OAuth Client ID จริงที่
+Google Cloud Console เอง (ต้องใช้บัญชี Google ของเจ้าของระบบ) แล้วใส่ค่าใน .env
+- GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (dev + prod .env คนละไฟล์)
+- Authorized redirect URI ใน Google Console ต้องตรงกับ API_URL/auth/google/callback
+  เป๊ะทุกตัวอักษร (เช่น http://203.170.190.188:4000/auth/google/callback ตอนนี้,
+  หรือ https://api.hopak.co.th/auth/google/callback หลัง DNS ใช้งานได้)
+tsc --noEmit ผ่าน 0 error ทั้ง apps/api และ apps/web (23/07/2026)
+
 [30] แผนที่ (MapPicker) พัง "Error: Map container is already initialized" ตอนกลับมาหน้าเดิม
 --------------------------------------------------------
 ไฟล์: apps/web/src/components/map/MapPicker.tsx
