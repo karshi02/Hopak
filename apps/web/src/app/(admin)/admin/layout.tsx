@@ -18,6 +18,7 @@ const NAV = {
     { href: '/admin/finance', label: 'การเงิน & รวมบิล' },
     { href: '/admin/campaigns', label: 'โฆษณา & แคมเปญ' },
     { href: '/admin/admins', label: 'ผู้ดูแล (Admins)' },
+    { href: '/admin/website', label: 'ตั้งค่าเว็บไซต์' },
   ],
   en: [
     { href: '/admin/dashboard', label: 'Dashboard' },
@@ -28,6 +29,7 @@ const NAV = {
     { href: '/admin/finance', label: 'Finance & Payouts' },
     { href: '/admin/campaigns', label: 'Ads & Campaigns' },
     { href: '/admin/admins', label: 'Admins' },
+    { href: '/admin/website', label: 'Website Settings' },
   ],
 };
 

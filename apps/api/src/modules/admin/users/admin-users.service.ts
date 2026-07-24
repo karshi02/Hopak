@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { MailService } from '../../mail/mail.service';
@@ -38,6 +38,27 @@ export class AdminUsersService {
       data: { suspended },
       select: { id: true, role: true, name: true, email: true, phone: true, suspended: true, createdAt: true },
     });
+  }
+
+  async remove(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { _count: { select: { bookings: true, dorms: true } } },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === 'ADMIN') throw new ForbiddenException('ลบบัญชีแอดมินไม่ได้');
+    if (user._count.bookings > 0 || user._count.dorms > 0) {
+      throw new ConflictException('ลบไม่ได้ เนื่องจากมีประวัติการจองหรือหอพักผูกอยู่ กรุณาระงับบัญชีแทน');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.favorite.deleteMany({ where: { userId: id } }),
+      this.prisma.notification.deleteMany({ where: { userId: id } }),
+      this.prisma.ownerRequest.deleteMany({ where: { userId: id } }),
+      this.prisma.review.deleteMany({ where: { tenantId: id } }),
+      this.prisma.user.delete({ where: { id } }),
+    ]);
+    return { success: true };
   }
 
   async sendWarning(id: string, title: string, message: string) {

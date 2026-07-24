@@ -13,6 +13,12 @@ enum Role {
   ADMIN
 }
 
+model SiteSettings {
+  id           String   @id
+  heroImageUrl String?
+  updatedAt    DateTime @updatedAt
+}
+
 enum AdminRole {
   SUPER_ADMIN
   ADMIN

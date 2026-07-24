@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PROVINCES } from '@hopak/shared';
@@ -10,6 +10,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { useLang, type Lang } from '@/hooks/useLang';
 import { clearToken } from '@/lib/auth';
 import { resetSocket } from '@/lib/ws';
+import { apiClient } from '@/lib/api-client';
 import { StarRating } from '@/components/StarRating';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { LangSwitch, ThaiFlagIcon, UkFlagIcon } from '@/components/LangSwitch';
@@ -138,6 +139,14 @@ export default function HomePage() {
   const [roomType, setRoomType] = useState('all');
   const [priceRange, setPriceRange] = useState('all');
   const [q, setQ] = useState('');
+  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiClient
+      .get<{ heroImageUrl: string | null }>('/settings/hero')
+      .then((data) => setHeroImageUrl(data.heroImageUrl))
+      .catch(() => setHeroImageUrl(null));
+  }, []);
 
   const t = TEXT[lang];
   const roomTypeOptions = ROOM_TYPE_OPTIONS[lang];
@@ -225,7 +234,7 @@ export default function HomePage() {
       {/* ===== HERO ===== */}
       <div
         className="relative h-[400px] bg-cover bg-center"
-        style={{ backgroundImage: `url('/hero-banner.jpg')` }}
+        style={{ backgroundImage: `url('${heroImageUrl ?? '/hero-banner.jpg'}')` }}
       >
         <div className="pt-[52px] text-center">
           <div className="text-3xl font-bold tracking-tight text-white sm:text-[38px]">{t.heroTitle}</div>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -19,6 +19,11 @@ export class AdminUsersController {
   @Patch(':id/suspend')
   suspend(@Param('id') id: string, @Body() body: { suspended: boolean }) {
     return this.adminUsersService.setSuspended(id, body.suspended);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.adminUsersService.remove(id);
   }
 
   @Post(':id/warning')

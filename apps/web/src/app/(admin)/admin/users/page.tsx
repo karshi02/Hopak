@@ -50,6 +50,11 @@ const TEXT = {
     sending: 'กำลังส่ง...',
     send: 'ส่ง',
     dateLocale: 'th-TH',
+    delete: 'ลบ',
+    deleteConfirmTitle: 'ลบบัญชีผู้ใช้',
+    deleteConfirmBody: (name: string) => `ยืนยันลบบัญชี "${name}" ถาวร? ข้อมูลจะไม่สามารถกู้คืนได้`,
+    deleting: 'กำลังลบ...',
+    deleteGenericError: 'ลบไม่สำเร็จ',
   },
   en: {
     title: 'Users',
@@ -88,6 +93,11 @@ const TEXT = {
     sending: 'Sending...',
     send: 'Send',
     dateLocale: 'en-US',
+    delete: 'Delete',
+    deleteConfirmTitle: 'Delete user account',
+    deleteConfirmBody: (name: string) => `Permanently delete "${name}"? This cannot be undone.`,
+    deleting: 'Deleting...',
+    deleteGenericError: 'Failed to delete',
   },
 };
 
@@ -103,6 +113,9 @@ export default function AdminUsersPage() {
   const [warningMessage, setWarningMessage] = useState('');
   const [sendingWarning, setSendingWarning] = useState(false);
   const [warningResult, setWarningResult] = useState<{ notified: boolean; emailSent: boolean } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function reload() {
     apiClient.get<User[]>('/admin/users').then(setUsers).catch(() => setUsers([]));
@@ -122,6 +135,26 @@ export default function AdminUsersPage() {
       reload();
     } finally {
       setBusyId(null);
+    }
+  }
+
+  function openDelete(user: User) {
+    setDeleteTarget(user);
+    setDeleteError(null);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await apiClient.delete(`/admin/users/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      reload();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : t.deleteGenericError);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -237,6 +270,14 @@ export default function AdminUsersPage() {
                           {u.suspended ? t.unsuspend : t.suspend}
                         </button>
                       )}
+                      {!isAdmin && (
+                        <button
+                          onClick={() => openDelete(u)}
+                          className="text-sm font-semibold text-danger hover:underline"
+                        >
+                          {t.delete}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -307,6 +348,33 @@ export default function AdminUsersPage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+          <div className="w-full max-w-sm rounded-card border border-card-border bg-white p-5 dark:border-white/10 dark:bg-[#1a1a19]">
+            <h2 className="font-bold text-ink-strong dark:text-white">{t.deleteConfirmTitle}</h2>
+            <p className="mt-2 text-sm text-ink-subtitle">{t.deleteConfirmBody(deleteTarget.name)}</p>
+            {deleteError && <p className="mt-3 text-sm text-danger">{deleteError}</p>}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 rounded-btn border border-card-border py-2.5 text-sm font-semibold text-ink-subtitle dark:border-white/10"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="flex-1 rounded-btn bg-danger py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {deleting ? t.deleting : t.delete}
+              </button>
+            </div>
           </div>
         </div>
       )}
