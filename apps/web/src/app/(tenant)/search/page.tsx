@@ -11,6 +11,7 @@ import { useDormSearch } from '@/hooks/useDormSearch';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useLang } from '@/hooks/useLang';
 import { apiClient } from '@/lib/api-client';
+import { haversineKm } from '@/lib/geo';
 import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { StarRating } from '@/components/StarRating';
@@ -102,6 +103,9 @@ const TEXT = {
       { value: 'price_asc', label: 'ราคา ต่ำ - สูง' },
       { value: 'price_desc', label: 'ราคา สูง - ต่ำ' },
     ],
+    distanceSort: 'ใกล้ที่สุด',
+    distanceFrom: (place: string) => `ระยะห่างจาก ${place}`,
+    kmAway: (km: number) => `${km.toFixed(1)} กม.`,
   },
   en: {
     title: 'Find Dorms',
@@ -137,6 +141,9 @@ const TEXT = {
       { value: 'price_asc', label: 'Price: low to high' },
       { value: 'price_desc', label: 'Price: high to low' },
     ],
+    distanceSort: 'Nearest first',
+    distanceFrom: (place: string) => `Distance from ${place}`,
+    kmAway: (km: number) => `${km.toFixed(1)} km`,
   },
 };
 
@@ -157,6 +164,16 @@ export default function SearchPage() {
   const { dorms, loading } = useDormSearch({ q, province: province || undefined });
   const { favoriteIds, toggle } = useFavorites();
 
+  const placeLat = params.get('lat') ? Number(params.get('lat')) : null;
+  const placeLng = params.get('lng') ? Number(params.get('lng')) : null;
+  const placeName = params.get('placeName');
+  const hasPlace = placeLat != null && placeLng != null && !Number.isNaN(placeLat) && !Number.isNaN(placeLng);
+
+  useEffect(() => {
+    if (hasPlace) setSortBy('distance_asc');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPlace]);
+
   useEffect(() => {
     apiClient
       .get<SponsoredCampaign[]>('/promotions/sponsored')
@@ -174,7 +191,8 @@ export default function SearchPage() {
     let list = dorms.map((dorm) => {
       const availableRooms = dorm.rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');
       const startingRoom = [...availableRooms].sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
-      return { dorm, availableRooms, startingRoom };
+      const distanceKm = hasPlace ? haversineKm(placeLat!, placeLng!, dorm.lat, dorm.lng) : null;
+      return { dorm, availableRooms, startingRoom, distanceKm };
     });
 
     if (roomType !== 'all') {
@@ -196,9 +214,11 @@ export default function SearchPage() {
       list = [...list].sort((a, b) => (a.startingRoom?.pricePerMonth ?? Infinity) - (b.startingRoom?.pricePerMonth ?? Infinity));
     } else if (sortBy === 'price_desc') {
       list = [...list].sort((a, b) => (b.startingRoom?.pricePerMonth ?? 0) - (a.startingRoom?.pricePerMonth ?? 0));
+    } else if (sortBy === 'distance_asc') {
+      list = [...list].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
     return list;
-  }, [dorms, roomType, amenity, priceRange, sortBy]);
+  }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng]);
 
   function handleProvincePick(value: string) {
     if (!value) {
@@ -279,6 +299,11 @@ export default function SearchPage() {
           ))}
         </select>
         <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`${selectClass} ml-auto`}>
+          {hasPlace && (
+            <option value="distance_asc">
+              {t.sortBy}: {t.distanceSort}
+            </option>
+          )}
           {t.sorts.map((o) => (
             <option key={o.value} value={o.value}>
               {t.sortBy}: {o.label}
@@ -286,6 +311,12 @@ export default function SearchPage() {
           ))}
         </select>
       </div>
+
+      {hasPlace && placeName && (
+        <p className="mt-3 rounded-btn bg-tenant-tint px-4 py-2.5 text-sm font-medium text-tenant">
+          {t.distanceFrom(placeName)}
+        </p>
+      )}
 
       {pickedProvince && (
         <p className="mt-3 rounded-btn bg-warning/10 px-4 py-2.5 text-sm text-warning-dark">
@@ -349,7 +380,7 @@ export default function SearchPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredDorms.map(({ dorm, availableRooms, startingRoom }) => {
+            {filteredDorms.map(({ dorm, availableRooms, startingRoom, distanceKm }) => {
               const isFavorited = favoriteIds.has(dorm.id);
               const isTopRated = (dorm.avgRating ?? 0) >= 4.5 && (dorm.reviewCount ?? 0) > 0;
               return (
@@ -381,7 +412,12 @@ export default function SearchPage() {
                       <h3 className="truncate font-semibold text-ink-strong dark:text-white">{dorm.name}</h3>
                       <StarRating rating={dorm.avgRating} count={dorm.reviewCount} />
                     </div>
-                    <p className="mt-0.5 text-sm text-ink-subtitle">{dorm.province}</p>
+                    <p className="mt-0.5 text-sm text-ink-subtitle">
+                      {dorm.province}
+                      {distanceKm != null && (
+                        <span className="ml-1.5 font-medium text-tenant">· {t.kmAway(distanceKm)}</span>
+                      )}
+                    </p>
                     {dorm.amenities.length > 0 && (
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
                         {dorm.amenities.slice(0, 3).map((a) => (

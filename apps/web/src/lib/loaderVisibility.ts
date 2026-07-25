@@ -1,7 +1,7 @@
 const SESSION_KEY = 'hopak_loader_shown';
 
 export function isAuthPage(pathname: string): boolean {
-  return pathname === '/register' || pathname.endsWith('/login');
+  return pathname === '/register' || pathname === '/partner-register' || pathname.endsWith('/login');
 }
 
 export function hasShownLoaderThisSession(): boolean {

@@ -38,7 +38,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
     if (!loading && !isOwner) router.replace('/login');
   }, [loading, isOwner, router]);
 
-  if (loading || !isOwner) return <PageLoader />;
+  if (loading || !isOwner) return <PageLoader theme="seller" />;
 
   return (
     <div className="flex min-h-screen">

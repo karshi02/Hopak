@@ -5,74 +5,65 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
+import type { User } from '@hopak/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 const TEXT = {
   th: {
-    welcome: 'ยินดีต้อนรับ',
-    welcomeBack: 'กลับมา 👋',
+    badge: 'Hopak Seller',
+    heroTitle1: 'จัดการหอพักของคุณ',
+    heroTitle2: 'ในที่เดียว',
     perks: [
-      'ดูการจองทั้งหมดของคุณ พร้อมสถานะล่าสุด',
-      'ค้นหาหอพักใหม่ๆ ทั่วมหาสารคาม ขอนแก่น เชียงใหม่',
-      'ข้อมูลส่วนตัวถูกปกป้อง เบอร์ซ่อนบางส่วน',
+      'รับคำขอจองแบบเรียลไทม์ กดยืนยันได้ทันที',
+      'แดชบอร์ดรายได้ ยอดจอง ห้องว่าง ครบในหน้าเดียว',
+      'จัดการห้องพัก ราคา และสิ่งอำนวยความสะดวกได้เอง',
     ],
-    footer: '© 2026 Hopak · แพลตฟอร์มจองหอพักออนไลน์',
-    title: 'เข้าสู่ระบบ',
-    subtitle: 'เข้าสู่บัญชี Hopak ของคุณ',
+    footer: '© 2026 Hopak Seller · คอนโซลสำหรับเจ้าของหอพัก',
+    title: 'เข้าสู่ระบบเจ้าของหอ',
+    subtitle: 'เข้าสู่บัญชี Owner Console ของคุณ',
     google: 'เข้าสู่ระบบด้วย Google',
     or: 'หรือ',
     emailLabel: 'อีเมล หรือ เบอร์โทร',
     passwordLabel: 'รหัสผ่าน',
-    forgotPassword: 'ลืมรหัสผ่าน?',
     fillRequired: 'กรุณากรอกอีเมลและรหัสผ่าน',
     genericError: 'เข้าสู่ระบบไม่สำเร็จ',
-    sessionExpired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+    notOwnerError: 'บัญชีนี้ยังไม่ได้เป็นเจ้าของหอ กรุณาสมัครเปิดหอพักก่อน',
     submitting: 'กำลังเข้าสู่ระบบ...',
     submit: 'เข้าสู่ระบบ',
-    noAccount: 'ยังไม่มีบัญชี?',
-    signUp: 'สมัครสมาชิก',
-    ownerLink: 'เป็นเจ้าของหอพัก? เข้าสู่ระบบที่นี่',
+    noAccount: 'ยังไม่มีหอพักกับ Hopak?',
+    signUp: 'สมัครเปิดหอพัก',
+    tenantLink: 'เป็นผู้เช่า? เข้าสู่ระบบที่นี่',
   },
   en: {
-    welcome: 'Welcome',
-    welcomeBack: 'back 👋',
+    badge: 'Hopak Seller',
+    heroTitle1: 'Manage your dorms',
+    heroTitle2: 'all in one place',
     perks: [
-      'See all your bookings with the latest status',
-      'Find new dorms across Mahasarakham, Khon Kaen, Chiang Mai',
-      'Your personal info is protected, phone numbers partly hidden',
+      'Get booking requests in real time, confirm instantly',
+      'Revenue, bookings, and vacancy — all in one dashboard',
+      'Manage rooms, pricing, and amenities yourself',
     ],
-    footer: '© 2026 Hopak · An online dorm-booking platform',
-    title: 'Log in',
-    subtitle: 'Log in to your Hopak account',
+    footer: '© 2026 Hopak Seller · Console for dorm owners',
+    title: 'Owner log in',
+    subtitle: 'Log in to your Owner Console',
     google: 'Log in with Google',
     or: 'or',
     emailLabel: 'Email or phone',
     passwordLabel: 'Password',
-    forgotPassword: 'Forgot password?',
     fillRequired: 'Please enter your email and password',
     genericError: 'Log in failed',
-    sessionExpired: 'Your session expired — please log in again',
+    notOwnerError: 'This account is not a dorm owner yet — please apply first',
     submitting: 'Logging in...',
     submit: 'Log in',
-    noAccount: "Don't have an account?",
-    signUp: 'Sign up',
-    ownerLink: 'A dorm owner? Log in here',
+    noAccount: "Don't have a dorm on Hopak yet?",
+    signUp: 'List your dorm',
+    tenantLink: 'A tenant? Log in here',
   },
 };
 
 const inputClass =
-  'h-12 rounded-lg border border-gray-200 px-3.5 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none bg-white';
-
-function Check() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white bg-opacity-20">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-        <path d="M5 12l5 5L20 6" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-  );
-}
+  'h-12 rounded-lg border border-gray-200 px-3.5 text-sm text-gray-800 placeholder-gray-400 focus:border-seller focus:ring-1 focus:ring-seller focus:outline-none bg-white';
 
 function GoogleIcon() {
   return (
@@ -85,7 +76,7 @@ function GoogleIcon() {
   );
 }
 
-export default function LoginPage() {
+export default function PartnerLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { lang } = useLang();
@@ -98,8 +89,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const queryError = searchParams.get('error');
-    if (queryError === 'session_expired') setError(t.sessionExpired);
-    else if (queryError) setError(queryError);
+    if (queryError) setError(queryError);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -113,7 +103,12 @@ export default function LoginPage() {
     try {
       const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/login', { email, password });
       setToken(accessToken);
-      router.push('/');
+      const user = await apiClient.get<User>('/users/me');
+      if (user.role.toLowerCase() === 'owner') {
+        router.push('/partner/dashboard');
+      } else {
+        router.push('/profile');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t.genericError);
     } finally {
@@ -123,29 +118,32 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen bg-gray-50">
-      {/* ฝั่งซ้าย: แบนเนอร์น้ำเงิน */}
       <div
         className="hidden w-2/5 shrink-0 flex-col justify-between p-10 text-white lg:flex"
-        style={{ background: 'linear-gradient(160deg, #3159d6 0%, #1e3a8a 100%)' }}
+        style={{ background: 'radial-gradient(120% 90% at 50% 15%, #2AB27C 0%, #178F5A 46%, #0F6B44 100%)' }}
       >
         <div>
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white bg-opacity-20 text-lg font-bold">
               H
             </div>
-            <span className="text-lg font-semibold">Hopak</span>
+            <span className="text-lg font-semibold">{t.badge}</span>
           </div>
 
           <h1 className="mt-10 text-3xl font-bold leading-snug">
-            {t.welcome}
+            {t.heroTitle1}
             <br />
-            {t.welcomeBack}
+            {t.heroTitle2}
           </h1>
 
           <ul className="mt-8 flex flex-col gap-4 text-sm leading-relaxed text-white text-opacity-90">
             {t.perks.map((perk) => (
               <li key={perk} className="flex gap-3">
-                <Check />
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white bg-opacity-20">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12l5 5L20 6" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
                 <span>{perk}</span>
               </li>
             ))}
@@ -155,7 +153,6 @@ export default function LoginPage() {
         <div className="text-xs text-white text-opacity-70">{t.footer}</div>
       </div>
 
-      {/* ฝั่งขวา: ฟอร์ม */}
       <div className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-bold text-gray-900">{t.title}</h2>
@@ -189,12 +186,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-xs font-medium text-gray-600">{t.passwordLabel}</label>
-                <a href="#" className="text-xs font-medium text-blue-600">
-                  {t.forgotPassword}
-                </a>
-              </div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">{t.passwordLabel}</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -220,7 +212,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className="mt-1 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+              className="mt-1 rounded-lg bg-seller py-3 text-sm font-semibold text-white shadow-sm hover:bg-seller-dark disabled:opacity-60"
             >
               {loading ? t.submitting : t.submit}
             </button>
@@ -228,13 +220,13 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-gray-500">
             {t.noAccount}{' '}
-            <a href="/register" className="font-semibold text-blue-600">
+            <a href="/partner-register" className="font-semibold text-seller">
               {t.signUp}
             </a>
           </p>
           <p className="mt-2 text-center text-xs text-gray-400">
-            <a href="/partner-login" className="underline">
-              {t.ownerLink}
+            <a href="/login" className="underline">
+              {t.tenantLink}
             </a>
           </p>
         </div>

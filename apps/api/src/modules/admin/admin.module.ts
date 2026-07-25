@@ -15,6 +15,7 @@ import { OwnerRequestsService } from './owner-requests/owner-requests.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
+import { UploadsService } from '../uploads/uploads.service';
 import { PrismaService } from '../../prisma.service';
 
 @Module({
@@ -37,6 +38,7 @@ import { PrismaService } from '../../prisma.service';
     OwnerRequestsService,
     NotificationsService,
     MailService,
+    UploadsService,
     PrismaService,
   ],
 })

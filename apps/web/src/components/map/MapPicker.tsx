@@ -1,16 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-
-const markerIcon = new L.Icon({
-  iconUrl: '/leaflet/marker-icon.png',
-  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-  shadowUrl: '/leaflet/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
+import { loadGoogleMaps } from '@/lib/googleMaps';
 
 interface MapPickerProps {
   lat: number;
@@ -21,45 +12,48 @@ interface MapPickerProps {
 
 export default function MapPicker({ lat, lng, onChange, readOnly }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    let cancelled = false;
 
-    // Next.js App Router can resume a hidden/cached page tree without an
-    // unmount in between, leaving the previous Leaflet instance's flag on
-    // this DOM node — clear it so re-init on the same node doesn't throw.
-    if ((container as unknown as { _leaflet_id?: number })._leaflet_id) {
-      delete (container as unknown as { _leaflet_id?: number })._leaflet_id;
-    }
+    loadGoogleMaps().then((g) => {
+      if (cancelled || !containerRef.current) return;
 
-    const map = L.map(container, { attributionControl: true }).setView([lat, lng], 14);
-    mapRef.current = map;
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
-
-    const marker = L.marker([lat, lng], { icon: markerIcon, draggable: !readOnly }).addTo(map);
-    markerRef.current = marker;
-
-    if (!readOnly && onChangeRef.current) {
-      marker.on('dragend', () => {
-        const pos = marker.getLatLng();
-        onChangeRef.current?.(pos.lat, pos.lng);
+      const map = new g.maps.Map(containerRef.current, {
+        center: { lat, lng },
+        zoom: 15,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
       });
-      map.on('click', (e: L.LeafletMouseEvent) => {
-        marker.setLatLng(e.latlng);
-        onChangeRef.current?.(e.latlng.lat, e.latlng.lng);
+      mapRef.current = map;
+
+      const marker = new g.maps.Marker({
+        position: { lat, lng },
+        map,
+        draggable: !readOnly,
       });
-    }
+      markerRef.current = marker;
+
+      if (!readOnly) {
+        marker.addListener('dragend', () => {
+          const pos = marker.getPosition();
+          if (pos) onChangeRef.current?.(pos.lat(), pos.lng());
+        });
+        map.addListener('click', (e: google.maps.MapMouseEvent) => {
+          if (!e.latLng) return;
+          marker.setPosition(e.latLng);
+          onChangeRef.current?.(e.latLng.lat(), e.latLng.lng());
+        });
+      }
+    });
 
     return () => {
-      map.remove();
+      cancelled = true;
       mapRef.current = null;
       markerRef.current = null;
     };
@@ -67,8 +61,8 @@ export default function MapPicker({ lat, lng, onChange, readOnly }: MapPickerPro
   }, []);
 
   useEffect(() => {
-    markerRef.current?.setLatLng([lat, lng]);
-    mapRef.current?.panTo([lat, lng]);
+    markerRef.current?.setPosition({ lat, lng });
+    mapRef.current?.panTo({ lat, lng });
   }, [lat, lng]);
 
   return (

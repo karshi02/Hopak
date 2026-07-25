@@ -7,6 +7,7 @@ export interface Dorm {
   ownerId: string;
   name: string;
   description: string;
+  address?: string | null;
   province: string;
   university?: string;
   lat: number;
@@ -16,6 +17,7 @@ export interface Dorm {
   deposit: number;
   amenities: string[];
   images: string[];
+  documents?: string[];
   status: DormStatus;
   avgRating?: number | null;
   reviewCount?: number;

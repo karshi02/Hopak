@@ -31,6 +31,7 @@ const TEXT = {
     submit: 'สมัครสมาชิก',
     haveAccount2: 'มีบัญชีแล้ว?',
     login: 'เข้าสู่ระบบ',
+    ownerLink: 'มีหอพักให้เช่า? สมัครเปิดหอพักกับ Hopak',
     step2Title: 'ตั้งค่าโปรไฟล์',
     step2Subtitle: 'เพิ่มรูปโปรไฟล์ (ข้ามได้)',
     photoLabel: 'รูป',
@@ -65,6 +66,7 @@ const TEXT = {
     submit: 'Sign up',
     haveAccount2: 'Already have an account?',
     login: 'Log in',
+    ownerLink: 'Have a dorm to rent? List it with Hopak',
     step2Title: 'Set up your profile',
     step2Subtitle: 'Add a profile photo (optional)',
     photoLabel: 'Photo',
@@ -304,6 +306,11 @@ export default function RegisterPage() {
                 {t.haveAccount2}{' '}
                 <a href="/login" className="font-medium text-tenant">
                   {t.login}
+                </a>
+              </p>
+              <p className="mt-2 text-center text-xs text-ink-faint">
+                <a href="/partner-register" className="underline">
+                  {t.ownerLink}
                 </a>
               </p>
             </div>

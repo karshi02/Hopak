@@ -292,3 +292,52 @@ react-leaflet แล้ว ใช้ Leaflet API ตรง (L.map, L.tileLayer, 
 เอง พร้อม guard ลบ _leaflet_id เก่าทิ้งก่อนสร้าง map ใหม่ทุกครั้ง (กันกรณี node
 ถูก reuse โดยไม่ cleanup) + cleanup จริงเรียก map.remove() ตอน unmount
 สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error (22/07/2026)
+
+[32] อัปโหลดรูป/เอกสารหอพักในหน้า partner-register ได้ "Internal server error" (S3 ไม่ได้ตั้งค่า)
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/uploads/uploads.service.ts
+อาการ: POST /owner-applications/:id/photos และ /:id/documents (ขั้นตอนอัปโหลด
+รูปหน้าปก/เอกสารยืนยันในหน้า partner-register wizard) คืน 500 ทุกครั้ง
+สาเหตุ: apps/api/.env มี S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY ว่างเปล่าทั้งหมด
+(ไม่เคยตั้งค่า S3 จริงในโปรเจกต์นี้เลย) แต่ UploadsService ทำ `new S3Client({})`
+ตรงๆ ไม่เช็คก่อน AWS SDK เลย throw "Error: Region is missing" ดิบๆ ขึ้นไป
+กลายเป็น 500 generic ไม่บอกสาเหตุจริง
+แก้ไข: UploadsService เช็คก่อนว่า S3_BUCKET+S3_ACCESS_KEY+S3_SECRET_KEY ครบ
+ทั้ง 3 ตัวมั้ย ถ้าครบค่อยสร้าง S3Client จริง (ใส่ region/credentials ชัดเจน
+แทนที่จะปล่อยว่างเหมือนเดิม) ถ้ายังไม่ตั้งค่า fallback เขียนไฟล์ลงดิสก์เครื่อง
+ที่ apps/api/uploads/ แทน แล้วคืน URL ที่ served อยู่แล้วผ่าน
+useStaticAssets(join(process.cwd(),'uploads'),{prefix:'/uploads/'}) ใน
+main.ts (เปิดไว้อยู่แล้วแต่ไม่เคยมีใครเขียนไฟล์ลงไปจริงจนตอนนี้)
+สถานะ: แก้แล้ว, ยืนยันด้วย curl: POST photos + documents คืน 200 พร้อม
+http://localhost:4000/uploads/... ที่โหลดได้จริง (200) ทั้งคู่
+หมายเหตุ: local-disk fallback ใช้ได้แค่ dev (ไฟล์ไม่ถูก commit, ไม่ persist
+ข้าม deploy) - ก่อนขึ้น production ต้องตั้งค่า S3/R2/B2 จริงใส่ .env
+
+[32b] ตามมาจาก [32]: เอกสารยืนยันตัวตน (บัตรประชาชน/โฉนด/ทะเบียนบ้าน) เดิม public URL ถาวร ไม่มี auth
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/uploads/uploads.service.ts, files.controller.ts (ใหม่),
+apps/api/src/common/file-signing.util.ts (ใหม่),
+apps/api/src/modules/owner-applications/owner-applications.service.ts,
+apps/api/src/modules/admin/approvals/approvals.service.ts
+อาการ: หลังแก้ [32] เอกสารอัปโหลดได้แล้วก็จริง แต่ URL ที่คืนกลับ (ทั้ง S3 จริง
+และ local fallback) เป็น URL ถาวรสาธารณะ ใครก็เปิดดูได้ถ้ารู้/เดา URL ได้ ไม่มี
+การเช็คสิทธิ์เลย - อันตรายเพราะเอกสารพวกนี้มีข้อมูลอ่อนไหว (เลขบัตรประชาชน ที่อยู่
+เจ้าของกรรมสิทธิ์) ตาม PDPA ต้องจำกัดการเข้าถึง
+แก้ไข: แยก visibility 'public' (รูปหอพัก - ต้องโชว์หน้าค้นหาให้ผู้เช่าเห็น ปล่อย
+เป็น URL ถาวรเหมือนเดิม) กับ 'private' (เอกสารยืนยันตัวตน):
+- private-uploads/ (แยกจาก uploads/ ที่ served แบบ static) เก็บไฟล์ private,
+  ไม่ผูกกับ useStaticAssets เลย เข้าไม่ได้ตรงๆ ผ่าน URL
+- DB (OwnerApplication.documents, Dorm.documents) เก็บเป็น storage key ไม่ใช่ URL
+- เพิ่ม signFileKey/verifyFileToken (HMAC-SHA256, timingSafeEqual กันจับเวลา)
+  สร้าง token หมดอายุ 15 นาที ผูก key+expiry+signature เข้าด้วยกัน
+- เพิ่ม GET /files/:token (FilesController) verify token แล้วค่อย stream ไฟล์
+  กลับ ไม่ผ่าน token ที่ถูกต้อง/ยังไม่หมดอายุ = 404 ทันที
+- ทุกจุดที่ return documents ให้ frontend (owner-applications ทุก endpoint,
+  admin/approvals listPending) แปลง key เป็นลิงก์ชั่วคราวใหม่ทุกครั้งที่เรียก
+  ไม่ cache/เก็บ URL ถาวรที่ไหนเลย
+สถานะ: แก้แล้ว, ยืนยันด้วย curl: token จริงเปิดได้ (200, content-type ถูกต้อง),
+token ปลอม/ต่อท้ายผิด = 404, เดา path เดิมใต้ /uploads/ ตรงๆ = 404 (ไม่มีไฟล์
+private หลุดออกไปทาง static route เก่าอีกแล้ว) tsc --noEmit ผ่าน 0 error
+หมายเหตุ: ถ้าใช้ S3 จริง (bucket ตั้ง private/ prefix) ก็ยังผ่าน token endpoint
+เดียวกัน (stream ผ่าน server แทนที่จะ presigned URL ตรง S3 - เพื่อความสม่ำเสมอ
+ของโค้ด ถ้าต้องการ scale จริงค่อยเปลี่ยนไปใช้ S3 presigned URL ทีหลังได้)

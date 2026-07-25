@@ -98,6 +98,7 @@ model Dorm {
   owner         User       @relation(fields: [ownerId], references: [id])
   name          String
   description   String
+  address       String?
   province      String
   university    String?
   lat           Float
@@ -107,6 +108,7 @@ model Dorm {
   deposit       Float
   amenities     Json
   images        String[]
+  documents     String[]   @default([])
   status        DormStatus @default(PENDING_APPROVAL)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -195,6 +197,44 @@ model OwnerRequest {
   status    OwnerRequestStatus @default(PENDING)
   createdAt DateTime           @default(now())
   decidedAt DateTime?
+}
+
+enum OwnerApplicationStatus {
+  DRAFT
+  EMAIL_VERIFIED
+  COMPLETED
+}
+
+// ใบสมัครเปิดหอพัก (ก่อนมีบัญชีจริง) — เก็บข้อมูลบัญชี+หอพักระหว่างกรอกฟอร์มหลายขั้นตอน
+// จนกว่าจะยืนยันอีเมลด้วย OTP และตั้งรหัสผ่านเสร็จ ถึงจะสร้าง User/Dorm จริงใน finish()
+model OwnerApplication {
+  id           String                  @id @default(cuid())
+  status       OwnerApplicationStatus  @default(DRAFT)
+  name         String?
+  email        String                  @unique
+  phone        String?
+
+  dormName     String?
+  address      String?
+  province     String?
+  lat          Float?
+  lng          Float?
+  waterRate    Float?
+  electricRate Float?
+  deposit      Float?
+  note         String?
+  images       String[]                @default([])
+  documents    String[]                @default([])
+  rooms        Json?
+
+  otpCodeHash  String?
+  otpExpiresAt DateTime?
+  otpSentAt    DateTime?
+  otpAttempts  Int                     @default(0)
+  verifiedAt   DateTime?
+
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
 }
 
 model Review {

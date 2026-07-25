@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PROVINCES } from '@hopak/shared';
@@ -11,6 +11,7 @@ import { useLang, type Lang } from '@/hooks/useLang';
 import { clearToken } from '@/lib/auth';
 import { resetSocket } from '@/lib/ws';
 import { apiClient } from '@/lib/api-client';
+import { loadGoogleMaps } from '@/lib/googleMaps';
 import { StarRating } from '@/components/StarRating';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { LangSwitch, ThaiFlagIcon, UkFlagIcon } from '@/components/LangSwitch';
@@ -140,12 +141,45 @@ export default function HomePage() {
   const [priceRange, setPriceRange] = useState('all');
   const [q, setQ] = useState('');
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiClient
       .get<{ heroImageUrl: string | null }>('/settings/hero')
       .then((data) => setHeroImageUrl(data.heroImageUrl))
       .catch(() => setHeroImageUrl(null));
+  }, []);
+
+  // ผูก Google Places autocomplete กับช่องค้นหาเดิม — เลือกสถานที่/มหาวิทยาลัยแล้วได้ lat/lng
+  // เอาไปคำนวณระยะทางไปหอพักแต่ละที่ในหน้า /search (แบบ Agoda ค้นหาสถานที่แล้วโชว์ระยะห่าง)
+  useEffect(() => {
+    let cancelled = false;
+    let autocomplete: google.maps.places.Autocomplete | null = null;
+
+    loadGoogleMaps()
+      .then((g) => {
+        if (cancelled || !searchInputRef.current) return;
+        autocomplete = new g.maps.places.Autocomplete(searchInputRef.current, {
+          fields: ['geometry', 'formatted_address', 'name'],
+          componentRestrictions: { country: 'th' },
+        });
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete!.getPlace();
+          const loc = place.geometry?.location;
+          if (!loc) return;
+          const name = place.name || place.formatted_address || '';
+          setQ(name);
+          setSelectedPlace({ lat: loc.lat(), lng: loc.lng(), name });
+        });
+      })
+      .catch(() => {
+        // Google Maps โหลดไม่ได้ (เช่น API key ไม่ตั้งค่า) — เหลือแค่ค้นหาข้อความปกติ ไม่พังทั้งหน้า
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const t = TEXT[lang];
@@ -173,7 +207,13 @@ export default function HomePage() {
 
   function handleSearch() {
     const params = new URLSearchParams();
-    if (q.trim()) params.set('q', q.trim());
+    if (selectedPlace && selectedPlace.name === q.trim()) {
+      params.set('lat', String(selectedPlace.lat));
+      params.set('lng', String(selectedPlace.lng));
+      params.set('placeName', selectedPlace.name);
+    } else if (q.trim()) {
+      params.set('q', q.trim());
+    }
     params.set('province', province);
     if (roomType !== 'all') params.set('roomType', roomType);
     if (priceRange !== 'all') params.set('priceRange', priceRange);
@@ -196,7 +236,7 @@ export default function HomePage() {
           <Link href="/search" className="hidden hover:text-white md:inline">
             {t.navSearch}
           </Link>
-          <Link href="/register" className="hidden hover:text-white md:inline">
+          <Link href="/partner-register" className="hidden hover:text-white md:inline">
             {t.navOwner}
           </Link>
 
@@ -267,8 +307,12 @@ export default function HomePage() {
             <div className="flex-1 overflow-hidden">
               <div className="text-xs text-ink-muted">{t.fieldLabel}</div>
               <input
+                ref={searchInputRef}
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setSelectedPlace(null);
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder={`${provinceLabel(province)} · ${currentDorms.length} ${t.dormsUnit}`}
                 className="w-full truncate bg-transparent text-lg font-semibold text-ink-strong outline-none placeholder:text-ink-strong"
@@ -478,10 +522,10 @@ export default function HomePage() {
           <div>
             <div className="mb-4 text-[15px] font-bold">{t.footerOwner}</div>
             <div className="flex flex-col gap-3 text-sm text-ink-body">
-              <Link href="/register" className="text-left hover:text-tenant">
+              <Link href="/partner-register" className="text-left hover:text-tenant">
                 {t.listDorm}
               </Link>
-              <Link href="/login" className="text-left hover:text-tenant">
+              <Link href="/partner-login" className="text-left hover:text-tenant">
                 {t.ownerLogin}
               </Link>
               {t.ownerLinksExtra.map((s) => (

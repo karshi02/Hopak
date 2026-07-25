@@ -14,6 +14,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { OwnerApplicationsModule } from './modules/owner-applications/owner-applications.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ReviewsModule,
     FavoritesModule,
     SettingsModule,
+    OwnerApplicationsModule,
   ],
 })
 export class AppModule {}
