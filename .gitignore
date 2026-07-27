@@ -3,6 +3,9 @@ dist
 .next
 .turbo
 .env
+.env.production
+.env.*.local
+docker/.env
 *.log
 .expo
 apps/api/uploads/*

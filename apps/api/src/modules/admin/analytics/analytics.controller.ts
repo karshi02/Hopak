@@ -19,4 +19,9 @@ export class AnalyticsController {
   summary() {
     return this.analyticsService.summary();
   }
+
+  @Get('monthly-revenue')
+  monthlyRevenue() {
+    return this.analyticsService.monthlyRevenue();
+  }
 }

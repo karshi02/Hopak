@@ -1,0 +1,36 @@
+[2026-07-26] Debug check ก่อนเริ่ม phase ถัดไป (Hopak Admin UI redesign)
+==========================================================
+
+ขอบเขตที่เช็ค: งานทั้งหมดที่ทำไปก่อนหน้านี้ในเซสชันนี้
+- S3 upload fallback (local disk) — apps/api/src/modules/uploads/uploads.service.ts
+- Private document storage + signed URL (/files/:token) — files.controller.ts, file-signing.util.ts,
+  owner-applications.service.ts, approvals.service.ts
+- Field suggestions (datalist) ในหน้า partner-register — useFieldSuggestions.ts
+- หน้าแรก + /search: ค้นหาสถานที่ผ่าน Google Places แล้วโชว์ระยะทาง — page.tsx, search/page.tsx, lib/geo.ts
+
+วิธีเช็ค
+--------
+1. npx tsc --noEmit ทั้ง apps/api และ apps/web — ผลลัพธ์: 0 error ทั้งคู่
+2. Smoke test หน้าเว็บหลักด้วย curl (GET แล้วเช็ค status code):
+   - / → 200
+   - /search?lat=..&lng=..&placeName=.. → 200
+   - /partner-register → 200
+   - /partner-login → 200
+   - /admin/dashboard → 307 (redirect ไป /login เพราะไม่มี token — ถูกต้องตามที่ตั้งใจ ไม่ใช่บั๊ก)
+3. Smoke test API:
+   - GET /dorms → 200
+   - GET /settings/hero → 200
+4. Regression test private document upload แบบครบวงจร (สร้าง owner-application ใหม่ →
+   อัปโหลดเอกสาร → เช็ค signed URL ที่ได้กลับมา):
+   - เปิดด้วย signed token จริง → 200 (ไฟล์เปิดได้)
+   - ต่อท้าย token ผิด (tampered) → 404 (ถูกปฏิเสธถูกต้อง)
+   - ลบข้อมูลทดสอบหลังเช็คเสร็จ (ownerApplication row + ไฟล์ใน private-uploads/)
+
+ผลสรุป
+-------
+ไม่พบข้อผิดพลาดใดๆ จากงานที่ทำไปก่อนหน้า — type-check ผ่านหมด, ระบบยังทำงานถูกต้องตามที่ตั้งใจไว้ทุกจุด
+ไม่มีอะไรต้องแก้ก่อนเริ่ม phase ถัดไป
+
+หมายเหตุ: พบ log เก่าใน background task (bdhsn7wvq.output) มี error EADDRINUSE (port 4000 ถูกใช้ซ้ำ)
+จากการรัน dev server ซ้อนกันหลายรอบ — ไม่ใช่บั๊กโค้ด เป็นแค่ log ค้างจาก process เก่าที่ตายไปแล้ว
+เช็คด้วย netstat แล้วว่า process ที่ listen อยู่จริงตอนนี้ (port 3001, 4000) เป็นตัวที่ถูกต้อง ทำงานปกติดี

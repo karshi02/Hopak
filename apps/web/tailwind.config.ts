@@ -51,7 +51,17 @@ const config: Config = {
         // ── App themes ──
         tenant: { DEFAULT: '#2F6FE0', dark: '#1E4FB0', tint: '#EAF1FD' },
         seller: { DEFAULT: '#0E9F8E', dark: '#0F3D38', muted: '#AECFC9', dot: '#2E5F58', tint: '#E9F7F4' },
-        admin: { DEFAULT: '#6D5AE0', dark: '#4B3FBF', tint: '#F1EEFD', sidebar: '#111827', sidebarmuted: '#AEB4C0', sidebardot: '#4B5563' },
+        admin: {
+          DEFAULT: '#6D5AE0',
+          dark: '#4B3FBF',
+          tint: '#F1EEFD',
+          sidebar: '#0E1220',
+          sidebarborder: '#1C2138',
+          sidebarmuted: '#AEB4C0',
+          sidebardot: '#4B5563',
+          sidebarlabel: '#4A5169',
+        },
+        accent: { DEFAULT: '#E0902F', tint: '#FEF3E2', dark: '#B4791A' },
 
         // ── Text ──
         ink: {

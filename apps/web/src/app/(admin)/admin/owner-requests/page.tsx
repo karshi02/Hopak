@@ -33,36 +33,41 @@ export default function AdminOwnerRequestsPage() {
   const [pending, setPending] = useState<OwnerRequest[]>([]);
 
   function reload() {
-    apiClient.get<OwnerRequest[]>('/admin/owner-requests').then(setPending);
+    apiClient.get<OwnerRequest[]>('/admin/owner-requests').then(setPending).catch(() => setPending([]));
   }
 
   useEffect(reload, []);
 
   async function approve(id: string) {
-    await apiClient.patch(`/admin/owner-requests/${id}/approve`);
-    reload();
+    try {
+      await apiClient.patch(`/admin/owner-requests/${id}/approve`);
+      reload();
+    } catch {
+      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
+    }
   }
 
   async function reject(id: string) {
-    await apiClient.patch(`/admin/owner-requests/${id}/reject`);
-    reload();
+    try {
+      await apiClient.patch(`/admin/owner-requests/${id}/reject`);
+      reload();
+    } catch {
+      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
+    }
   }
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
-      <div className="mt-3">
-        <Badge label={t.pendingCount(pending.length)} variant="warning" />
-      </div>
+      <Badge label={t.pendingCount(pending.length)} variant="warning" />
 
       <div className="mt-4 flex flex-col gap-3">
         {pending.map((req) => (
           <div
             key={req.id}
-            className="flex items-center justify-between rounded-card border border-card-border bg-white p-4 dark:border-white/10 dark:bg-[#1a1a19]"
+            className="flex items-center justify-between rounded-card-lg border border-card-border bg-white p-4 shadow-card"
           >
             <div>
-              <p className="font-semibold text-ink-strong dark:text-white">{req.user?.name}</p>
+              <p className="font-semibold text-ink-strong">{req.user?.name}</p>
               <p className="mt-0.5 text-sm text-ink-subtitle">
                 {req.user?.email}
                 {req.user?.phone && ` · ${req.user.phone}`}
@@ -80,7 +85,7 @@ export default function AdminOwnerRequestsPage() {
               </button>
               <button
                 onClick={() => reject(req.id)}
-                className="rounded-lg border border-card-border px-4 py-2 text-sm font-semibold text-danger dark:border-white/10"
+                className="rounded-lg border border-card-border px-4 py-2 text-sm font-semibold text-danger"
               >
                 {t.reject}
               </button>

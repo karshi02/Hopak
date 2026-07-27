@@ -275,7 +275,7 @@ Google Cloud Console เอง (ต้องใช้บัญชี Google ข�
 - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (dev + prod .env คนละไฟล์)
 - Authorized redirect URI ใน Google Console ต้องตรงกับ API_URL/auth/google/callback
   เป๊ะทุกตัวอักษร (เช่น http://203.170.190.188:4000/auth/google/callback ตอนนี้,
-  หรือ https://api.hopak.co.th/auth/google/callback หลัง DNS ใช้งานได้)
+  หรือ https://api.hoprak.com/auth/google/callback หลัง DNS ใช้งานได้)
 tsc --noEmit ผ่าน 0 error ทั้ง apps/api และ apps/web (23/07/2026)
 
 [30] แผนที่ (MapPicker) พัง "Error: Map container is already initialized" ตอนกลับมาหน้าเดิม
@@ -341,3 +341,142 @@ private หลุดออกไปทาง static route เก่าอีก�
 หมายเหตุ: ถ้าใช้ S3 จริง (bucket ตั้ง private/ prefix) ก็ยังผ่าน token endpoint
 เดียวกัน (stream ผ่าน server แทนที่จะ presigned URL ตรง S3 - เพื่อความสม่ำเสมอ
 ของโค้ด ถ้าต้องการ scale จริงค่อยเปลี่ยนไปใช้ S3 presigned URL ทีหลังได้)
+
+[33] หน้า admin/finance และหน้าใหม่ที่เพิ่งเพิ่มพัง "Unhandled Runtime Error: Forbidden resource" — apiClient.get ไม่มี .catch()
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(admin)/admin/finance/page.tsx,
+apps/web/src/app/(admin)/admin/finance/owners/[ownerId]/page.tsx,
+apps/web/src/app/(admin)/admin/dashboard/page.tsx,
+apps/web/src/app/(admin)/admin/bookings/page.tsx,
+apps/web/src/app/(partner)/partner/settings/page.tsx,
+apps/web/src/app/(partner)/partner/dashboard/page.tsx
+อาการ: user เจอ "Unhandled Runtime Error: Forbidden resource" มาจาก
+src/lib/api-client.ts request() throw Error ตรงๆ เวลา response ไม่ ok
+(401/403/400 ฯลฯ) — หน้า/component ที่เรียก apiClient.get(...).then(setState)
+โดยไม่มี .catch() เลย พอ request พัง (เช่น token ผิด role, session หมดอายุ,
+network hiccup) กลายเป็น unhandled promise rejection ทำ Next dev โชว์ error
+overlay เต็มจอแทนที่จะ degrade แบบเงียบๆ — บั๊กรูปแบบเดียวกับที่เคยแก้ไปแล้วใน
+bugs.txt [24] (หน้าฝั่ง tenant) แต่รอบนี้เกิดซ้ำในหน้าใหม่ที่เพิ่งเขียนเพิ่ม
+(admin/finance ระบบ payout, admin/dashboard, admin/bookings cancel/restore,
+partner/settings บันทึกบัญชีธนาคาร, partner/dashboard) เพราะเขียนไล่เลี่ยกัน
+หลายไฟล์ในรอบเดียวแล้วลืมใส่ .catch() ให้ครบทุกจุดเหมือน pattern เดิมที่เคยแก้
+แก้ไข: เพิ่ม .catch() ทุก apiClient.get/patch call ที่ขาด (ตั้ง state fallback
+เป็น [] หรือ noop ตามความเหมาะสมของแต่ละหน้า) รวมถึง handleCancel/handleRestore
+ใน admin/bookings ที่มี await ไม่มี catch (ห่อ try/catch เงียบไว้ ไม่ให้พังทั้งหน้า)
+สถานะ: แก้แล้ว, tsc --noEmit ผ่าน 0 error ทั้ง apps/web และ apps/api
+บทเรียน: ทุกครั้งที่เขียนหน้าใหม่ที่ยิง apiClient.get/post/patch ต้องเช็ค .catch()
+ให้ครบทันทีตอนเขียน ไม่ใช่รอ user เจอ error ก่อนแล้วค่อยไล่แก้ทีหลัง
+
+ตามมา: user เจอ error เดิมซ้ำอีกครั้งหลังแก้รอบแรก — ไล่เช็คเพิ่มแล้วพบว่าบั๊กนี้
+เป็น pattern เดิมที่มีอยู่ทั่วทั้งฝั่ง admin/partner อยู่แล้วก่อนหน้านี้ (ไม่ใช่แค่
+ไฟล์ที่เพิ่งเขียนใหม่รอบนี้) ไฟล์เพิ่มเติมที่แก้ในรอบตามมา:
+apps/web/src/app/(admin)/admin/approvals/page.tsx (reload + approve/reject),
+apps/web/src/app/(admin)/admin/owner-requests/page.tsx (reload + approve/reject),
+apps/web/src/app/(admin)/admin/admins/page.tsx (reload),
+apps/web/src/app/(admin)/admin/users/page.tsx (toggleSuspend, submitWarning),
+apps/web/src/app/(partner)/partner/requests/page.tsx (reload + confirm/reject),
+apps/web/src/app/(partner)/partner/rooms/page.tsx (reload + toggleStatus),
+apps/web/src/app/(partner)/partner/slips/page.tsx (reload)
+เช็คแล้วว่า admin/campaigns, admin/website, admin/dorms/new มี catch/try-catch
+อยู่แล้วตั้งแต่ต้น ไม่ต้องแก้เพิ่ม
+สถานะ: แก้ครบทั้งหมดแล้ว, tsc --noEmit ผ่าน 0 error ทั้งสอง apps (26/07/2026)
+
+[34] Sidebar admin/partner: มองไม่เห็นปุ่ม logout กับสลับภาษา ต้องเลื่อนจอลงไปหา
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(admin)/admin/layout.tsx, apps/web/src/app/(partner)/partner/layout.tsx
+อาการ: container นอกสุดใช้ `min-h-screen` (flex row) — พอเนื้อหาในหน้า main
+(เช่น partner/dashboard ที่มี KPI+กราฟ+donut+ตาราง เยอะ) สูงเกิน 1 หน้าจอ
+ทั้ง container เลยถูกดันให้สูงตาม แล้ว `<aside>` (sidebar) ที่เป็น flex child
+ปกติ align-items:stretch จะยืดตามความสูง container ด้วย — sidebar เลยสูงเกิน
+จอไปด้วย ผลคือปุ่ม "ออกจากระบบ" กับตัวสลับภาษาที่อยู่ท้ายสุดของ sidebar (หลัง nav
+ที่มี flex-1) โดนดันลงไปไกลเกินขอบจอ ต้องเลื่อน scroll ทั้งหน้าลงไปถึงจะเห็น
+(ทั้งที่โค้ด render ปุ่มไว้ปกติ ไม่ได้หายไปจริง — เป็นบั๊ก CSS ไม่ใช่ logic)
+แก้ไข: เปลี่ยน container นอกสุดจาก `min-h-screen` เป็น `h-screen overflow-hidden`
+(fixed เท่าจอเป๊ะ ไม่ยืดตามเนื้อหา) ฝั่ง `<main>` มี `overflow-auto` อยู่แล้ว
+เลยสกรอลตัวเองอิสระได้โดยไม่กระทบความสูง sidebar — sidebar คงที่เท่าจอเสมอ
+ปุ่ม logout/lang switch เห็นตลอดไม่ต้องเลื่อน (nav เองมี overflow-y-auto อยู่แล้ว
+รองรับกรณีเมนูยาวเกินจนต้อง scroll เฉพาะส่วน nav แทน)
+สถานะ: แก้แล้วทั้ง 2 layout (เจอ pattern เดียวกันทั้งคู่ แก้พร้อมกัน แม้ user จะ
+รายงานแค่ฝั่ง partner) tsc --noEmit ผ่าน 0 error (26/07/2026)
+
+[35] Admin approvals/dashboard ไม่มี realtime, ไม่มี audit trail, ปฏิเสธห้อง = ลบทิ้งถาวรไม่เหลือร่องรอย
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/realtime/realtime.gateway.ts, apps/api/src/modules/admin/approvals/approvals.service.ts,
+apps/api/src/modules/dorms/dorms.service.ts, apps/api/src/modules/rooms/rooms.service.ts,
+apps/web/src/app/(admin)/admin/approvals/page.tsx, apps/web/src/app/(admin)/admin/dashboard/page.tsx
+อาการ: (1) หน้า /admin/approvals และ dashboard ดึงข้อมูลครั้งเดียวตอน mount ไม่มี
+polling/websocket เลย — เจ้าของหอส่งหอ/ห้องใหม่มา แอดมินไม่เห็นจนกว่าจะรีเฟรชเอง
+(2) ไม่มี table เก็บประวัติการอนุมัติ/ปฏิเสธเลยในระบบ ปฏิเสธห้อง = `prisma.room.delete`
+ตรงๆ ไม่เหลือร่องรอยอะไรให้ตรวจสอบย้อนหลังได้ (3) ปุ่ม "อนุมัติ" บนหน้า dashboard
+เป็นแค่ `<Link href="/admin/approvals">` — กดแล้วไม่อนุมัติจริง แค่พาไปหน้าเดียวกับ
+ปุ่ม "ดูเอกสาร" (สองปุ่มพาไปที่เดียวกันเป๊ะ)
+แก้ไข: เพิ่ม `RealtimeGateway.emitToRole()` (JWT มี role อยู่แล้วแต่เดิมไม่เคยใช้
+จอย room ตาม role เลย) ให้ dorm/room ใหม่ broadcast ไปห้อง `role:admin` แบบ
+เรียลไทม์ผ่าน socket.io, เพิ่ม Prisma model `ApprovalLog` เก็บทุก action
+(APPROVED/REJECTED/EDITED/SUSPENDED/UNSUSPENDED) พร้อม snapshot เต็มก่อนลบ
+ห้องที่ถูกปฏิเสธ, แก้ปุ่มปลอมบน dashboard ให้เรียก API approve จริง
+สถานะ: แก้แล้ว + ทดสอบผ่าน curl ครบ (สร้างหอทดสอบ→approve→suspend→เช็คหาย
+จากหน้าค้นหา→unsuspend→เช็คกลับมา→reject ห้อง→เช็ค log มี snapshot ก่อนถูกลบ)
+tsc --noEmit ผ่าน 0 error ทั้ง 2 app (26/07/2026)
+
+[36] GET /dorms/:dormId/rooms รั่วห้องที่ยังไม่อนุมัติออกสู่สาธารณะ
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/rooms/rooms.service.ts (listByDorm)
+อาการ: endpoint นี้เปิดสาธารณะ ไม่มี guard และไม่กรอง `approved: true` เลย —
+ใครก็ยิง GET ตรงๆ เห็นห้องที่ยังไม่ผ่านตรวจ (approved:false) ได้หมด แม้หน้า
+ค้นหาจริงจะไม่ได้เรียก endpoint นี้ (ใช้ dorm.rooms ที่กรองแล้วจาก GET /dorms/:id
+แทน) แต่ endpoint เองยังเป็นช่องโหว่ที่เรียกตรงได้
+แก้ไข: เพิ่ม `approved: true` ใน where clause
+สถานะ: แก้แล้ว + ทดสอบผ่าน curl ยืนยันห้อง approved:false ไม่โผล่ใน endpoint นี้แล้ว
+(26/07/2026)
+
+[37] หน้าค้นหา/หน้ารายละเอียดหอพัก (ฝั่งผู้เช่า) ไม่โชว์รูปจริงเลย — render placeholder text แทนตลอด
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(tenant)/search/page.tsx, apps/web/src/app/(tenant)/dorms/[id]/page.tsx
+อาการ: การ์ดผลลัพธ์ค้นหา (ทั้ง sponsored และปกติ) กับ gallery หน้ารายละเอียดหอพัก
+render ข้อความ placeholder ("ไม่มีรูปหอพัก"/"รูปหลัก" ฯลฯ) ตรงๆ ไม่เคยอ้างอิง
+`dorm.images` เลยแม้แต่ตัวเดียว — เป็นสาเหตุจริงที่ผู้ใช้รายงานว่า "รูปที่อัปโหลด
+เข้ามาไม่ขึ้นเลย" (ไม่ใช่บั๊ก upload/URL — หน้า admin/partner ใช้ URL เดียวกัน
+render `<img>` ได้ปกติอยู่แล้ว เป็นแค่หน้าฝั่งผู้เช่าลืมใส่ `<img>` เข้าไปจริงๆ)
+แก้ไข: เพิ่ม `<img src={dorm.images[n]}>` จริงในทั้ง 2 หน้า โดย fallback เป็น
+placeholder เดิมเฉพาะตอนไม่มีรูป
+สถานะ: แก้แล้ว tsc --noEmit ผ่าน 0 error, ทดสอบเปิดหน้าจริงผ่าน dev server
+คอมไพล์สำเร็จไม่มี error (26/07/2026)
+
+[38] Admin console: ค้นหา/กระดิ่งแจ้งเตือน/ปุ่มเพิ่มผู้ใช้ เป็นแค่ UI ตกแต่ง ไม่ทำงานจริงสักอย่าง
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(admin)/admin/layout.tsx, apps/web/src/app/(admin)/admin/users/page.tsx
+อาการ: ช่องค้นหาที่ header เป็น `<div>` ธรรมดา ไม่ใช่ `<input>` เลย (มี
+title="เร็วๆ นี้"/"Coming soon" ยืนยันว่าตั้งใจไม่ทำ), กระดิ่งเป็นแค่ icon
+คงที่ ไม่มี onClick, ปุ่ม "+เพิ่มผู้ใช้" เป็น `disabled` hardcode พร้อม tooltip
+บอกตรงๆ ว่ายังไม่เปิดใช้งาน — และฝั่ง backend ไม่มี `POST /admin/users`
+เลยด้วย (สร้างผู้ใช้ทำได้แค่ผ่านหน้าสมัครสมาชิกจริง)
+แก้ไข: เพิ่ม `POST /admin/users` (แอดมินสร้างบัญชีตรงได้ ไม่ต้องรอสมัคร/
+อนุมัติ), เพิ่ม `GET /admin/users/:id/documents` (ดูเอกสารเจ้าของหอกันทุจริต),
+ทำช่องค้นหาจริง (debounce 300ms, ค้นหอ/ผู้ใช้/การจอง), ทำกระดิ่งเป็น dropdown
+จริงแสดงรายการรออนุมัติ + อัปเดตเรียลไทม์ผ่าน socket
+สถานะ: แก้แล้ว + ทดสอบผ่าน curl (สร้าง user จริงผ่าน endpoint ใหม่, ค้นหาเจอ
+หอ/user/booking จริง) tsc --noEmit ผ่าน 0 error (26/07/2026)
+
+[39] Production: DNS ใช้งานได้แล้ว แต่ nginx บน server จริงไม่แยก server_name + HTTPS ยังไม่พร้อม
+--------------------------------------------------------
+ไฟล์: docker/nginx-hopak.conf (ไฟล์ในโปรเจกต์ vs config จริงบน server ไม่ตรงกัน)
+อาการ: เช็ค DNS ผ่านหมดแล้ว — NS ชี้ th13/th14.hostatom.com ถูกต้อง, A record
+hoprak.com/www.hoprak.com/app.hoprak.com/api.hoprak.com ทุกตัวชี้ 203.170.190.188
+ถูกต้องหมด, HTTP (port 80) ตอบ 200 จริง — แต่ทดสอบด้วย curl -H "Host: ..."
+ตรงไป IP พบว่า hoprak.com, app.hoprak.com, api.hoprak.com ทั้ง 3 โดเมนตอบ
+เนื้อหาเดียวกันเป๊ะ (หน้า Next.js frontend) — api.hoprak.com ควรเป็น backend
+NestJS (port 4000) แต่กลับเจอหน้าเว็บแทน แปลว่า nginx บน server จริงไม่ได้แยก
+server_name ตาม docker/nginx-hopak.conf ที่ทำไว้ในโปรเจกต์ (ไฟล์นั้นตั้งให้
+hoprak.com redirect 301 ไป app.hoprak.com, api.hoprak.com proxy ไป :4000 —
+แต่พฤติกรรมจริงไม่ตรงเลย ไม่มี redirect ด้วยซ้ำ) น่าจะเป็นเพราะ config บน
+server จริงยังเป็นค่า default (proxy ทุกอย่างไป :3001) ไม่ได้ apply ไฟล์นี้
+เพิ่มเติม: port 443 (HTTPS) closed/filtered จาก server — ยังไม่ได้ตั้ง SSL
+(certbot) เลย เข้า https://hoprak.com ไม่ได้เลยตอนนี้
+สถานะ: ยังไม่แก้ (ต้องทำบน server จริงผ่าน SSH ไม่ใช่แก้โค้ดในโปรเจกต์) —
+ต้องทำ: (1) copy docker/nginx-hopak.conf ไปที่ /etc/nginx/sites-available/
+บน server จริง แล้ว symlink เข้า sites-enabled + nginx -t + reload (2) รัน
+certbot --nginx -d hoprak.com -d www.hoprak.com -d app.hoprak.com -d api.hoprak.com
+เพื่อเปิด HTTPS (3) เช็ค GOOGLE_CLIENT callback URL ต้องเปลี่ยนเป็น
+https://api.hoprak.com/auth/google/callback ให้ตรง (เกี่ยวโยงกับ [31])
+(27/07/2026)

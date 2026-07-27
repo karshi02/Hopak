@@ -14,6 +14,9 @@ export interface User {
   suspended?: boolean;
   createdAt?: string;
   bookingCount?: number;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  promptpayId?: string | null;
 }
 
 export type OwnerRequestStatus = 'pending' | 'approved' | 'rejected';

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 
@@ -38,6 +38,17 @@ export class ReviewsService {
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
       : null;
     return { reviews, avgRating, count: reviews.length };
+  }
+
+  // เจ้าของหอตอบกลับรีวิวผู้เช่าได้ (รีวิวยังเป็นของผู้เช่าคนเดิม แค่มีคำตอบกลับติดไว้ ไม่ใช่การเขียนรีวิวปลอมให้ตัวเอง)
+  async reply(ownerId: string, reviewId: string, replyText: string) {
+    const review = await this.prisma.review.findUnique({ where: { id: reviewId }, include: { dorm: true } });
+    if (!review) throw new NotFoundException('ไม่พบรีวิว');
+    if (review.dorm.ownerId !== ownerId) throw new ForbiddenException('ไม่ใช่หอพักของคุณ');
+    return this.prisma.review.update({
+      where: { id: reviewId },
+      data: { reply: replyText, repliedAt: new Date() },
+    });
   }
 
   async summaryForDorms(dormIds: string[]) {

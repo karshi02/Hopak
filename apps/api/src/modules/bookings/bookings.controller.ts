@@ -49,4 +49,18 @@ export class BookingsController {
   cancel(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.bookingsService.cancel(user.id, id);
   }
+
+  @Patch(':id/admin-cancel')
+  @Roles('admin')
+  @UseGuards(RolesGuard)
+  adminCancel(@Param('id') id: string) {
+    return this.bookingsService.adminCancel(id);
+  }
+
+  @Patch(':id/admin-restore')
+  @Roles('admin')
+  @UseGuards(RolesGuard)
+  adminRestore(@Param('id') id: string) {
+    return this.bookingsService.adminRestore(id);
+  }
 }

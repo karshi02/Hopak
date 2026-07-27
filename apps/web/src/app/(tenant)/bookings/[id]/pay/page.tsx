@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
 import type { Booking } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 const TEXT = {
   th: {
@@ -15,6 +17,8 @@ const TEXT = {
     qrLine2: '(สแกนเพื่อชำระเงิน)',
     transferTo: 'โอนเข้าบัญชีส่วนกลาง Hopak',
     cutoffNote: 'ตัดยอดภายในเที่ยงคืน หลังชำระเงินระบบจะออกใบจองอัตโนมัติ',
+    slipLabel: 'แนบสลิปโอนเงิน',
+    needSlip: 'กรุณาแนบสลิปโอนเงินก่อนยืนยัน',
     confirming: 'กำลังยืนยัน...',
     confirm: 'ฉันชำระเงินแล้ว',
     error: 'ชำระเงินไม่สำเร็จ',
@@ -25,6 +29,8 @@ const TEXT = {
     qrLine2: '(scan to pay)',
     transferTo: 'Transfer to Hopak central account',
     cutoffNote: 'Cutoff at midnight — a booking slip is issued automatically after payment',
+    slipLabel: 'Attach transfer slip',
+    needSlip: 'Please attach your transfer slip before confirming',
     confirming: 'Confirming...',
     confirm: "I've paid",
     error: 'Payment failed',
@@ -37,8 +43,10 @@ export default function PayBookingPage() {
   const { lang } = useLang();
   const t = TEXT[lang];
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [slip, setSlip] = useState<File | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!getToken()) {
@@ -49,10 +57,25 @@ export default function PayBookingPage() {
   }, [id, router]);
 
   async function handleConfirmPayment() {
+    if (!slip) {
+      setError(t.needSlip);
+      return;
+    }
     setPaying(true);
     setError(null);
     try {
-      await apiClient.post(`/bookings/${id}/payment`, { method: 'promptpay' });
+      const formData = new FormData();
+      formData.append('method', 'promptpay');
+      formData.append('slip', slip);
+      const res = await fetch(`${API_URL}/bookings/${id}/payment`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? t.error);
+      }
       router.push(`/bookings/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.error);
@@ -81,11 +104,25 @@ export default function PayBookingPage() {
 
       <p className="mt-4 text-center text-xs text-[#898781]">{t.cutoffNote}</p>
 
+      <div className="mt-5">
+        <label className="mb-1.5 block text-sm font-medium text-[#0b0b0b] dark:text-white">{t.slipLabel}</label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            setSlip(e.target.files?.[0] ?? null);
+            setError(null);
+          }}
+          className="w-full text-sm text-[#0b0b0b] dark:text-white"
+        />
+      </div>
+
       {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
 
       <button
         onClick={handleConfirmPayment}
-        disabled={paying}
+        disabled={paying || !slip}
         className="mt-6 w-full rounded-lg bg-green-600 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
       >
         {paying ? t.confirming : t.confirm}

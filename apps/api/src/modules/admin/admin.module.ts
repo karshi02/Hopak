@@ -12,13 +12,17 @@ import { AdminUsersService } from './users/admin-users.service';
 import { AdminCampaignsController } from './campaigns/admin-campaigns.controller';
 import { OwnerRequestsController } from './owner-requests/owner-requests.controller';
 import { OwnerRequestsService } from './owner-requests/owner-requests.service';
+import { AdminSearchController } from './search/admin-search.controller';
+import { AdminSearchService } from './search/admin-search.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
 import { UploadsService } from '../uploads/uploads.service';
+import { RealtimeModule } from '../realtime/realtime.module';
 import { PrismaService } from '../../prisma.service';
 
 @Module({
+  imports: [RealtimeModule],
   controllers: [
     ApprovalsController,
     FinanceController,
@@ -27,6 +31,7 @@ import { PrismaService } from '../../prisma.service';
     AdminUsersController,
     AdminCampaignsController,
     OwnerRequestsController,
+    AdminSearchController,
   ],
   providers: [
     ApprovalsService,
@@ -40,6 +45,7 @@ import { PrismaService } from '../../prisma.service';
     MailService,
     UploadsService,
     PrismaService,
+    AdminSearchService,
   ],
 })
 export class AdminModule {}

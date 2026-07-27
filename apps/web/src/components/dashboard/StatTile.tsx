@@ -16,7 +16,7 @@ export function StatTile({ label, value, hint, trend, accent }: StatTileProps) {
   const filled = accent ? ACCENT_BG[accent] : 'bg-white dark:bg-[#1a1a19] text-ink-strong dark:text-white';
 
   return (
-    <div className={`rounded-card border border-card-border p-4 dark:border-white/10 ${filled}`}>
+    <div className={`rounded-card-lg border border-card-border p-4 shadow-card dark:border-white/10 ${filled}`}>
       <p className={`text-sm ${accent ? 'text-white/85' : 'text-ink-faint'}`}>{label}</p>
       <p className={`mt-1.5 font-sans text-2xl font-bold tabular-nums ${accent ? 'text-white' : ''}`}>{value}</p>
       {trend && (

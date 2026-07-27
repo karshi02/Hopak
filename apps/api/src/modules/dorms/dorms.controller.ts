@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -41,5 +42,24 @@ export class DormsController {
   @Roles('owner')
   update(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: UpdateDormDto) {
     return this.dormsService.update(user.id, id, dto);
+  }
+
+  @Post(':id/images')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('owner')
+  @UseInterceptors(FilesInterceptor('photos', 8))
+  addImages(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.dormsService.addImagesOwner(user.id, id, files ?? []);
+  }
+
+  @Delete(':id/images/:index')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('owner')
+  removeImage(@CurrentUser() user: { id: string }, @Param('id') id: string, @Param('index') index: string) {
+    return this.dormsService.removeImageOwner(user.id, id, Number(index));
   }
 }

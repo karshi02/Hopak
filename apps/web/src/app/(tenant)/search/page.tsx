@@ -106,6 +106,19 @@ const TEXT = {
     distanceSort: 'ใกล้ที่สุด',
     distanceFrom: (place: string) => `ระยะห่างจาก ${place}`,
     kmAway: (km: number) => `${km.toFixed(1)} กม.`,
+
+    heroTitleIn: (p: string) => `หอพักใกล้มหาวิทยาลัยใน${p}`,
+    heroTitleAll: 'หอพักใกล้มหาวิทยาลัยทั่วประเทศ',
+    heroFound: (n: number) => `พบ ${n} หอพัก`,
+    heroSub: 'ราคาโปร่งใส เห็นค่าน้ำค่าไฟชัดเจน ไม่มีค่าหน้าหอ',
+    statDorms: 'หอพัก',
+    statFrom: 'เริ่มต้น/เดือน',
+    statRating: 'คะแนนเฉลี่ย',
+    noData: '—',
+    priceFilterLabel: 'ราคา',
+    roomTypeFilterLabel: 'ประเภทห้อง',
+    amenityFilterLabel: 'สิ่งอำนวยความสะดวก',
+    bookNow: 'จองเลย',
   },
   en: {
     title: 'Find Dorms',
@@ -144,6 +157,19 @@ const TEXT = {
     distanceSort: 'Nearest first',
     distanceFrom: (place: string) => `Distance from ${place}`,
     kmAway: (km: number) => `${km.toFixed(1)} km`,
+
+    heroTitleIn: (p: string) => `Dorms near universities in ${p}`,
+    heroTitleAll: 'Dorms near universities nationwide',
+    heroFound: (n: number) => `${n} dorms found`,
+    heroSub: 'Transparent pricing, clear water & electric rates, no hidden fees',
+    statDorms: 'Dorms',
+    statFrom: 'From/month',
+    statRating: 'Avg. rating',
+    noData: '—',
+    priceFilterLabel: 'Price',
+    roomTypeFilterLabel: 'Room type',
+    amenityFilterLabel: 'Amenities',
+    bookNow: 'Book now',
   },
 };
 
@@ -220,6 +246,26 @@ export default function SearchPage() {
     return list;
   }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng]);
 
+  const heroStats = useMemo(() => {
+    let cheapest: number | null = null;
+    let ratingSum = 0;
+    let ratingCount = 0;
+    for (const { startingRoom, dorm } of filteredDorms) {
+      if (startingRoom && (cheapest === null || startingRoom.pricePerMonth < cheapest)) {
+        cheapest = startingRoom.pricePerMonth;
+      }
+      if ((dorm.reviewCount ?? 0) > 0 && dorm.avgRating != null) {
+        ratingSum += dorm.avgRating;
+        ratingCount += 1;
+      }
+    }
+    return {
+      count: filteredDorms.length,
+      cheapest,
+      avgRating: ratingCount > 0 ? ratingSum / ratingCount : null,
+    };
+  }, [filteredDorms]);
+
   function handleProvincePick(value: string) {
     if (!value) {
       setProvince('');
@@ -235,18 +281,63 @@ export default function SearchPage() {
     }
   }
 
-  const selectClass =
-    'rounded-full border border-card-border bg-white px-4 py-2 text-sm font-medium text-ink outline-none dark:border-white/10 dark:bg-[#1a1a19] dark:text-white';
+  const pillSelectClass =
+    'w-full appearance-none bg-transparent text-[14px] font-semibold text-[#2A303C] outline-none';
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
+    <main className="mx-auto max-w-[1360px] px-6 py-6">
+      {/* ===== HERO BAND ===== */}
+      <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(135deg,#1E4FB0_0%,#2F6FE0_55%,#173A87_120%)] p-8 shadow-[0_16px_40px_rgba(30,79,176,0.28)]">
+        <div className="pointer-events-none absolute -top-12 right-28 h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.28),transparent_66%)] blur-lg" />
+        <div className="pointer-events-none absolute -bottom-16 left-64 h-[190px] w-[190px] rounded-full bg-[radial-gradient(circle,rgba(23,143,90,0.4),transparent_66%)] blur-lg" />
 
-      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <div className="relative flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
+          <div>
+            {province && (
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/28 bg-white/16 px-3.5 py-1.5 text-[12.5px] font-semibold text-[#EAF1FF]">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#EAF1FF" strokeWidth="1.8" />
+                  <circle cx="12" cy="10" r="3" stroke="#EAF1FF" strokeWidth="1.8" />
+                </svg>
+                {provinceLabel(province)}
+              </div>
+            )}
+            <div className="mt-3.5 text-[28px] font-bold leading-tight tracking-tight text-white sm:text-[34px]">
+              {province ? t.heroTitleIn(provinceLabel(province)) : t.heroTitleAll}
+            </div>
+            <div className="mt-2.5 text-[15px] text-[#D3E0F5]">
+              <span className="font-bold text-white">{t.heroFound(heroStats.count)}</span> · {t.heroSub}
+            </div>
+          </div>
+          <div className="flex gap-6">
+            <div className="text-left sm:text-right">
+              <div className="text-[24px] font-bold tracking-tight text-white">{heroStats.count}</div>
+              <div className="mt-0.5 text-[12.5px] text-[#BFD1EE]">{t.statDorms}</div>
+            </div>
+            <div className="text-left sm:text-right">
+              <div className="text-[24px] font-bold tracking-tight text-white">
+                {heroStats.cheapest != null ? `฿${heroStats.cheapest.toLocaleString()}` : t.noData}
+              </div>
+              <div className="mt-0.5 text-[12.5px] text-[#BFD1EE]">{t.statFrom}</div>
+            </div>
+            <div className="text-left sm:text-right">
+              <div className="text-[24px] font-bold tracking-tight text-white">
+                {heroStats.avgRating != null ? heroStats.avgRating.toFixed(1) : t.noData}
+              </div>
+              <div className="mt-0.5 text-[12.5px] text-[#BFD1EE]">{t.statRating}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== FILTER BAR ===== */}
+      <div className="mt-6 flex flex-wrap items-center gap-2.5">
         <button
           onClick={() => handleProvincePick('')}
-          className={`rounded-full px-4 py-2 text-sm font-semibold ${
-            province === '' && !pickedProvince ? 'bg-tenant text-white' : 'border border-card-border text-ink'
+          className={`h-[42px] rounded-full px-5 text-[14px] font-semibold ${
+            province === '' && !pickedProvince
+              ? 'bg-[linear-gradient(135deg,#2F6FE0,#5B9DFF)] text-white shadow-[0_8px_20px_rgba(47,111,224,0.4)]'
+              : 'border border-card-border bg-white text-ink'
           }`}
         >
           {t.all}
@@ -255,8 +346,10 @@ export default function SearchPage() {
           <button
             key={p}
             onClick={() => handleProvincePick(p)}
-            className={`rounded-full px-4 py-2 text-sm font-medium ${
-              province === p && !pickedProvince ? 'bg-tenant text-white' : 'border border-card-border text-ink'
+            className={`h-[42px] rounded-full px-5 text-[14px] font-semibold ${
+              province === p && !pickedProvince
+                ? 'bg-[linear-gradient(135deg,#2F6FE0,#5B9DFF)] text-white shadow-[0_8px_20px_rgba(47,111,224,0.4)]'
+                : 'border border-card-border bg-white text-ink'
             }`}
           >
             {provinceLabel(p)}
@@ -266,7 +359,7 @@ export default function SearchPage() {
         <select
           value={pickedProvince || province}
           onChange={(e) => handleProvincePick(e.target.value)}
-          className={selectClass}
+          className="h-[42px] rounded-full border border-card-border bg-white px-4 text-sm font-medium text-ink outline-none"
         >
           <option value="">{t.allProvinces77}</option>
           {ALL_THAI_PROVINCES.map((p) => (
@@ -275,41 +368,101 @@ export default function SearchPage() {
             </option>
           ))}
         </select>
+      </div>
 
-        <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} className={selectClass}>
-          {t.priceRanges.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select value={roomType} onChange={(e) => setRoomType(e.target.value)} className={selectClass}>
-          {t.roomTypes.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select value={amenity} onChange={(e) => setAmenity(e.target.value)} className={selectClass}>
-          <option value="all">{t.amenity}</option>
-          {amenityOptions.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`${selectClass} ml-auto`}>
-          {hasPlace && (
-            <option value="distance_asc">
-              {t.sortBy}: {t.distanceSort}
-            </option>
-          )}
-          {t.sorts.map((o) => (
-            <option key={o.value} value={o.value}>
-              {t.sortBy}: {o.label}
-            </option>
-          ))}
-        </select>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="flex h-[46px] items-center gap-2.5 rounded-xl border border-card-border bg-white px-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-[#EAF1FF]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6" stroke="#2F6FE0" strokeWidth="1.9" strokeLinecap="round" />
+            </svg>
+          </span>
+          <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} className={pillSelectClass}>
+            {t.priceRanges.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <path d="M6 9l6 6 6-6" stroke="#9AA0AB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        <div className="flex h-[46px] items-center gap-2.5 rounded-xl border border-card-border bg-white px-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-[#E7F7EF]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"
+                stroke="#178F5A"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <select value={roomType} onChange={(e) => setRoomType(e.target.value)} className={pillSelectClass}>
+            {t.roomTypes.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <path d="M6 9l6 6 6-6" stroke="#9AA0AB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        {amenityOptions.length > 0 && (
+          <div className="flex h-[46px] items-center gap-2.5 rounded-xl border border-card-border bg-white px-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-[#F3ECFF]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M4 9h16M4 9a2 2 0 012-2h12a2 2 0 012 2M7 13h.01M11 13h6M7 17c0 1.5 1.5 1.5 1.5 0"
+                  stroke="#7C4DE0"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+            <select value={amenity} onChange={(e) => setAmenity(e.target.value)} className={pillSelectClass}>
+              <option value="all">{t.amenity}</option>
+              {amenityOptions.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
+              <path d="M6 9l6 6 6-6" stroke="#9AA0AB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        )}
+
+        <div className="ml-auto flex h-[46px] items-center gap-2.5 rounded-xl border border-card-border bg-white px-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <path
+              d="M4 6h13M4 12h9M4 18h5M17 15v5m0 0l3-3m-3 3l-3-3"
+              stroke="#8A909F"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={pillSelectClass}>
+            {hasPlace && (
+              <option value="distance_asc">
+                {t.sortBy}: {t.distanceSort}
+              </option>
+            )}
+            {t.sorts.map((o) => (
+              <option key={o.value} value={o.value}>
+                {t.sortBy}: {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {hasPlace && placeName && (
@@ -329,9 +482,9 @@ export default function SearchPage() {
       ) : (
         <>
           {sponsored.length > 0 && (
-            <div className="mt-6">
-              <h2 className="font-semibold text-ink-strong dark:text-white">{t.sponsored}</h2>
-              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-8">
+              <h2 className="font-semibold text-ink-strong">{t.sponsored}</h2>
+              <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {sponsored.map((c) => {
                   const dorm = c.dorm;
                   const cheapest = dorm.rooms
@@ -341,21 +494,26 @@ export default function SearchPage() {
                     <Link
                       key={c.id}
                       href={`/dorms/${dorm.id}`}
-                      className="relative block overflow-hidden rounded-card border border-card-border bg-white hover:shadow-md dark:border-white/10 dark:bg-[#1a1a19]"
+                      className="relative block overflow-hidden rounded-[22px] border border-[#EAEDF2] bg-white shadow-[0_2px_8px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1.5 hover:shadow-[0_24px_48px_rgba(16,24,40,0.16)]"
                     >
-                      <div className="relative flex h-36 items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
-                        {t.photoPlaceholder}
-                        <span className="absolute left-3 top-3 rounded-full bg-ink-strong px-2.5 py-1 text-xs font-semibold text-white">
+                      <div className="relative flex h-[180px] items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint">
+                        {dorm.images?.[0] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={dorm.images[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                        ) : (
+                          t.photoPlaceholder
+                        )}
+                        <span className="absolute left-3.5 top-3.5 rounded-full bg-ink-strong px-2.5 py-1 text-xs font-semibold text-white">
                           {t.ad}
                         </span>
                       </div>
-                      <div className="p-4">
-                        <h3 className="truncate font-semibold text-ink-strong dark:text-white">{dorm.name}</h3>
-                        <p className="mt-0.5 text-sm text-ink-subtitle">{dorm.province}</p>
-                        <p className="mt-3 text-sm">
+                      <div className="p-[18px]">
+                        <h3 className="truncate text-[17px] font-bold tracking-tight">{dorm.name}</h3>
+                        <p className="mt-1 text-[13px] text-ink-subtitle">{dorm.province}</p>
+                        <p className="mt-3 border-t border-[#F0F2F6] pt-3 text-sm">
                           {cheapest ? (
                             <>
-                              <span className="font-sans text-lg font-bold text-ink-strong dark:text-white">
+                              <span className="font-sans text-lg font-bold text-tenant">
                                 ฿{cheapest.pricePerMonth.toLocaleString()}
                               </span>
                               <span className="text-ink-faint"> {t.perMonth}</span>
@@ -372,73 +530,92 @@ export default function SearchPage() {
             </div>
           )}
 
-          <div className="mt-6 flex items-baseline justify-between">
-            <h2 className="font-semibold text-ink-strong dark:text-white">
+          <div className="mt-8 flex items-baseline justify-between">
+            <h2 className="text-lg font-bold tracking-tight">
               {t.allDormsIn(province ? provinceLabel(province) : '')}
             </h2>
             <span className="text-sm text-ink-faint">{t.count(filteredDorms.length)}</span>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {filteredDorms.map(({ dorm, availableRooms, startingRoom, distanceKm }) => {
               const isFavorited = favoriteIds.has(dorm.id);
-              const isTopRated = (dorm.avgRating ?? 0) >= 4.5 && (dorm.reviewCount ?? 0) > 0;
+              const hasRating = (dorm.reviewCount ?? 0) > 0 && dorm.avgRating != null;
               return (
                 <Link
                   key={dorm.id}
                   href={`/dorms/${dorm.id}`}
-                  className="relative block overflow-hidden rounded-card border border-card-border bg-white hover:shadow-md dark:border-white/10 dark:bg-[#1a1a19]"
+                  className="group relative block overflow-hidden rounded-[22px] border border-[#EAEDF2] bg-white shadow-[0_2px_8px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1.5 hover:shadow-[0_24px_48px_rgba(16,24,40,0.16)]"
                 >
-                  <div className="relative flex h-36 items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
-                    {t.photoPlaceholder}
-                    {isTopRated && (
-                      <span className="absolute left-3 top-3 rounded-full bg-warning px-2.5 py-1 text-xs font-semibold text-white">
-                        {t.recommended}
-                      </span>
+                  <div className="relative h-[210px] bg-surface-canvas">
+                    {dorm.images?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={dorm.images[0]} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center font-mono text-xs text-ink-faint">
+                        {t.photoPlaceholder}
+                      </div>
                     )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+
+                    <FavoriteButton active={isFavorited} onToggle={() => toggle(dorm.id)} className="absolute right-3.5 top-3.5" />
+
                     {availableRooms.length > 0 && (
-                      <span className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-success">
+                      <div className="absolute bottom-3.5 left-3.5 flex items-center gap-1.5 rounded-full bg-[linear-gradient(135deg,#178F5A,#1FB56E)] px-3 py-1.5 text-xs font-bold text-white shadow-[0_6px_14px_rgba(23,143,90,0.45)]">
+                        <span className="h-[7px] w-[7px] rounded-full bg-[#BFF5D8]" />
                         {t.available(availableRooms.length)}
-                      </span>
+                      </div>
                     )}
-                    <FavoriteButton
-                      active={isFavorited}
-                      onToggle={() => toggle(dorm.id)}
-                      className={`absolute right-3 ${availableRooms.length > 0 ? 'top-12' : 'top-3'}`}
-                    />
+                    {hasRating && (
+                      <div className="absolute bottom-3.5 right-3.5 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1.5 text-xs font-bold text-white">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="#F5B860">
+                          <path d="M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z" />
+                        </svg>
+                        {dorm.avgRating!.toFixed(1)}
+                      </div>
+                    )}
                   </div>
-                  <div className="p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="truncate font-semibold text-ink-strong dark:text-white">{dorm.name}</h3>
-                      <StarRating rating={dorm.avgRating} count={dorm.reviewCount} />
+                  <div className="p-[18px]">
+                    <div className="truncate text-[17px] font-bold tracking-tight">{dorm.name}</div>
+                    <div className="mt-1 flex items-center gap-1.5 text-[13px] text-ink-faint">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#9AA0AB" strokeWidth="1.8" />
+                        <circle cx="12" cy="10" r="3" stroke="#9AA0AB" strokeWidth="1.8" />
+                      </svg>
+                      {dorm.university || dorm.province}
+                      {distanceKm != null && <span className="font-semibold text-tenant"> · {t.kmAway(distanceKm)}</span>}
                     </div>
-                    <p className="mt-0.5 text-sm text-ink-subtitle">
-                      {dorm.province}
-                      {distanceKm != null && (
-                        <span className="ml-1.5 font-medium text-tenant">· {t.kmAway(distanceKm)}</span>
-                      )}
-                    </p>
                     {dorm.amenities.length > 0 && (
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      <div className="mt-3 flex flex-wrap gap-1.5">
                         {dorm.amenities.slice(0, 3).map((a) => (
-                          <span key={a} className="rounded-md bg-surface-canvas px-2 py-1 text-xs text-ink-subtitle">
+                          <span
+                            key={a}
+                            className="rounded-lg border border-[#EDF0F4] bg-[#F4F6FA] px-2.5 py-1 text-[11.5px] font-medium text-[#5B616C]"
+                          >
                             {a}
                           </span>
                         ))}
                       </div>
                     )}
-                    <p className="mt-3 text-sm">
-                      {startingRoom ? (
-                        <>
-                          <span className="font-sans text-lg font-bold text-ink-strong dark:text-white">
-                            ฿{startingRoom.pricePerMonth.toLocaleString()}
-                          </span>
-                          <span className="text-ink-faint"> {t.perMonth}</span>
-                        </>
-                      ) : (
-                        <span className="text-ink-faint">{t.full}</span>
+                    <div className="mt-4 flex items-end justify-between border-t border-[#F0F2F6] pt-3.5">
+                      <div>
+                        {startingRoom ? (
+                          <div>
+                            <span className="font-sans text-[22px] font-bold text-tenant">
+                              ฿{startingRoom.pricePerMonth.toLocaleString()}
+                            </span>
+                            <span className="text-xs text-ink-faint"> {t.perMonth}</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-ink-faint">{t.full}</span>
+                        )}
+                      </div>
+                      {startingRoom && (
+                        <span className="rounded-[11px] bg-[linear-gradient(135deg,#2F6FE0,#5B9DFF)] px-4 py-2 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(47,111,224,0.35)]">
+                          {t.bookNow}
+                        </span>
                       )}
-                    </p>
+                    </div>
                   </div>
                 </Link>
               );

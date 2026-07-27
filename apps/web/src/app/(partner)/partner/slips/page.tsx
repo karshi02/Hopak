@@ -46,31 +46,29 @@ export default function PartnerSlipsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    apiClient.get<Booking[]>('/bookings').then((data) =>
-      setBookings(data.filter((b) => ['paid', 'completed'].includes(normalizeStatus(b.status)))),
-    );
+    apiClient
+      .get<Booking[]>('/bookings')
+      .then((data) => setBookings(data.filter((b) => ['paid', 'completed'].includes(normalizeStatus(b.status)))))
+      .catch(() => setBookings([]));
   }, []);
 
   return (
     <div>
       <div className="flex items-center gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
-          <p className="mt-0.5 text-sm text-ink-faint">{t.countLabel(bookings.length)}</p>
-        </div>
+        <p className="text-sm text-ink-faint">{t.countLabel(bookings.length)}</p>
         <button
           disabled
           title={t.printTooltip}
-          className="ml-auto flex items-center gap-2 rounded-btn bg-[#111827] px-4 py-2 text-sm font-semibold text-white opacity-50"
+          className="ml-auto flex items-center gap-2 rounded-btn border border-card-border bg-white px-4 py-2 text-sm font-semibold opacity-50"
         >
           {t.print}
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-card border border-card-border dark:border-white/10">
+      <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-card-border text-xs text-ink-faint dark:border-white/10">
+            <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.id}</th>
               <th className="p-3 font-normal">{t.booker}</th>
               <th className="p-3 font-normal">{t.checkIn}</th>
@@ -83,9 +81,9 @@ export default function PartnerSlipsPage() {
             {bookings.map((b) => {
               const badge = bookingStatusBadge(normalizeStatus(b.status), lang);
               return (
-                <tr key={b.id} className="border-t border-card-border dark:border-white/10">
+                <tr key={b.id} className="border-b border-hairline last:border-0">
                   <td className="p-3 font-sans text-ink-subtitle">#{b.id.slice(0, 8).toUpperCase()}</td>
-                  <td className="p-3 font-medium text-ink-strong dark:text-white">{b.contactName}</td>
+                  <td className="p-3 font-medium text-ink-strong">{b.contactName}</td>
                   <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</td>
                   <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
                   <td className="p-3">
@@ -95,7 +93,7 @@ export default function PartnerSlipsPage() {
                     <button
                       disabled
                       title={t.printTooltip}
-                      className="rounded-btn border border-card-border px-3 py-1.5 text-xs font-semibold opacity-50 dark:border-white/10"
+                      className="rounded-btn border border-card-border px-3 py-1.5 text-xs font-semibold opacity-50"
                     >
                       {t.download}
                     </button>

@@ -109,8 +109,7 @@ export default function AdminCampaignsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
+      <div className="flex items-center justify-end">
         <button
           onClick={() => setShowForm((v) => !v)}
           className="rounded-btn bg-admin px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
@@ -128,19 +127,19 @@ export default function AdminCampaignsPage() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="mt-4 flex flex-col gap-3 rounded-lg border border-card-border p-4 dark:border-white/10"
+          className="mt-4 flex flex-col gap-3 rounded-card-lg border border-card-border bg-white p-4 shadow-card"
         >
           <input
             placeholder={t.dormId}
             value={form.dormId}
             onChange={(e) => setForm({ ...form, dormId: e.target.value })}
-            className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
+            className="rounded-lg border border-card-border px-3 py-2"
             required
           />
           <select
             value={form.kind}
             onChange={(e) => setForm({ ...form, kind: e.target.value as Campaign['kind'] })}
-            className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
+            className="rounded-lg border border-card-border px-3 py-2"
           >
             <option value="BOOST">{t.kindLabel.BOOST}</option>
             <option value="BANNER">{t.kindLabel.BANNER}</option>
@@ -151,14 +150,14 @@ export default function AdminCampaignsPage() {
               type="date"
               value={form.startAt}
               onChange={(e) => setForm({ ...form, startAt: e.target.value })}
-              className="w-1/2 rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
+              className="w-1/2 rounded-lg border border-card-border px-3 py-2"
               required
             />
             <input
               type="date"
               value={form.endAt}
               onChange={(e) => setForm({ ...form, endAt: e.target.value })}
-              className="w-1/2 rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
+              className="w-1/2 rounded-lg border border-card-border px-3 py-2"
               required
             />
           </div>
@@ -167,19 +166,19 @@ export default function AdminCampaignsPage() {
             placeholder={t.price}
             value={form.price}
             onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-            className="rounded-lg border border-card-border px-3 py-2 dark:border-white/10 dark:bg-[#1a1a19]"
+            className="rounded-lg border border-card-border px-3 py-2"
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
           <button type="submit" className="rounded-lg bg-tenant py-2 text-sm font-medium text-white hover:bg-tenant-dark">
             {t.save}
           </button>
         </form>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-card border border-card-border dark:border-white/10">
+      <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-card-border text-xs text-ink-faint dark:border-white/10">
+            <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.dorm}</th>
               <th className="p-3 font-normal">{t.type}</th>
               <th className="p-3 font-normal">{t.budget}</th>
@@ -191,8 +190,8 @@ export default function AdminCampaignsPage() {
             {campaigns.map((c) => {
               const status = campaignStatus(c);
               return (
-                <tr key={c.id} className="border-t border-card-border dark:border-white/10">
-                  <td className="p-3 font-medium text-ink-strong dark:text-white">{c.dorm.name}</td>
+                <tr key={c.id} className="border-b border-hairline last:border-0">
+                  <td className="p-3 font-medium text-ink-strong">{c.dorm.name}</td>
                   <td className="p-3">
                     <Badge label={t.kindLabel[c.kind]} variant={KIND_VARIANT[c.kind]} />
                   </td>

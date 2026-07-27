@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Payment" ADD COLUMN     "chamberShare" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "platformShare" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "slipKey" TEXT;

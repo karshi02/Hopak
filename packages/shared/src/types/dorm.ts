@@ -21,6 +21,8 @@ export interface Dorm {
   status: DormStatus;
   avgRating?: number | null;
   reviewCount?: number;
+  autoApproveRooms?: boolean;
+  owner?: { name: string };
 }
 
 export interface Review {
@@ -29,6 +31,8 @@ export interface Review {
   tenantId: string;
   rating: number;
   comment?: string | null;
+  reply?: string | null;
+  repliedAt?: string | null;
   createdAt: string;
   tenant?: { name: string; avatarUrl?: string | null };
 }
@@ -49,4 +53,12 @@ export interface Room {
   type: RoomType;
   pricePerMonth: number;
   status: RoomStatus;
+  name?: string | null;
+  description?: string | null;
+  deposit?: number;
+  waterRate?: number;
+  electricRate?: number;
+  amenities?: string[];
+  images?: string[];
+  approved?: boolean;
 }

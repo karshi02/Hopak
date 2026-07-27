@@ -46,7 +46,7 @@ const TEXT = {
     perks: [
       'สมัครฟรี ไม่มีค่าใช้จ่ายล่วงหน้า',
       'หอใหม่ต้องผ่านแอดมินอนุมัติครั้งแรกเท่านั้น หลังจากนั้นแก้ไขข้อมูลได้เองทันที',
-      'หักค่าบริการ 10% เฉพาะยอดจองที่สำเร็จผ่านระบบ',
+      'หักค่าบริการ 20% เฉพาะยอดจองที่สำเร็จผ่านระบบ (แบ่งหอการค้ามหาสารคาม 10% + แพลตฟอร์ม 10%)',
     ],
     footer: '© 2026 Hopak Seller · เปิดหอพักกับเรา',
     haveAccount: 'มีบัญชีเจ้าของหอแล้ว? เข้าสู่ระบบ',
@@ -124,7 +124,7 @@ const TEXT = {
     perks: [
       'Free to sign up, no upfront cost',
       'A new dorm needs admin approval only once — after that you can edit it yourself instantly',
-      '10% service fee, only on bookings completed through the platform',
+      '20% service fee on bookings completed through the platform (10% Mahasarakham Chamber of Commerce + 10% platform)',
     ],
     footer: '© 2026 Hopak Seller · List your dorm with us',
     haveAccount: 'Already have an owner account? Log in',
@@ -191,31 +191,43 @@ const TEXT = {
   },
 };
 
-const inputClass =
-  'rounded-btn border border-card-border px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-seller focus:outline-none dark:border-white/10 dark:bg-[#1a1a19] dark:text-white';
+const boxClass = 'flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-card-border bg-white px-3.5';
+const boxFocusClass =
+  'flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-seller bg-white px-3.5 shadow-[0_0_0_3px_rgba(23,143,90,0.12)]';
+const boxInputClass = 'w-full min-w-0 bg-transparent font-sans text-[15px] text-ink outline-none placeholder:font-sans placeholder:text-ink-faint';
+const plainBoxClass =
+  'rounded-xl border-[1.5px] border-card-border px-3.5 py-3 text-[15px] text-ink placeholder:text-ink-faint focus:border-seller focus:outline-none';
 
 function BrandPanel({ t }: { t: (typeof TEXT)['th'] }) {
   return (
-    <div
-      className="hidden w-[38%] shrink-0 flex-col justify-between p-10 text-white lg:flex"
-      style={{ background: 'radial-gradient(120% 90% at 50% 15%, #2AB27C 0%, #178F5A 46%, #0F6B44 100%)' }}
-    >
-      <div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 font-sans text-xl font-bold">
-          H
+    <div className="relative hidden w-[38%] shrink-0 flex-col justify-between overflow-hidden bg-[linear-gradient(165deg,#2AB27C_0%,#178F5A_55%,#0B3D28_130%)] p-10 text-white lg:flex">
+      <div className="pointer-events-none absolute -right-10 -top-14 h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(42,178,124,0.55),transparent_68%)] blur-xl" />
+      <div className="pointer-events-none absolute -bottom-20 -left-10 h-[260px] w-[260px] rounded-full bg-[radial-gradient(circle,rgba(47,111,224,0.3),transparent_66%)] blur-lg" />
+
+      <div className="relative">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[10px] bg-seller font-sans text-xl font-extrabold leading-none text-white">
+            H
+          </span>
+          <span className="text-lg font-bold tracking-tight text-white">
+            Hopak<span className="text-[#8FE0BE]">.com</span>
+          </span>
         </div>
-        <p className="mt-2 text-sm font-medium text-white/80">{t.badge}</p>
-        <h1 className="mt-6 text-2xl font-semibold leading-snug">
+
+        <p className="mt-7 text-sm font-semibold text-white/80">{t.badge}</p>
+        <h1 className="mt-2.5 text-[26px] font-bold leading-snug tracking-tight">
           {t.heroTitle1}
           <br />
           {t.heroTitle2}
         </h1>
 
-        <ul className="mt-8 flex flex-col gap-4">
+        <ul className="mt-7 flex flex-col gap-3.5">
           {t.perks.map((perk) => (
-            <li key={perk} className="flex items-start gap-2 text-sm text-white/90">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 font-sans text-xs">
-                ✓
+            <li key={perk} className="flex items-center gap-3 text-[14.5px] font-medium text-white/90">
+              <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-white/12">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12l5 5 9-11" stroke="#B8F0D6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </span>
               {perk}
             </li>
@@ -223,7 +235,7 @@ function BrandPanel({ t }: { t: (typeof TEXT)['th'] }) {
         </ul>
       </div>
 
-      <div className="font-sans text-xs text-white/70">
+      <div className="relative font-sans text-xs text-white/70">
         {t.footer}
         <br />
         <a href="/partner-login" className="underline">
@@ -468,46 +480,69 @@ export default function PartnerRegisterPage() {
 
           {step === 'account' && (
             <div>
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.accountTitle}</h2>
+              <h2 className="text-xl font-semibold text-ink-strong">{t.accountTitle}</h2>
               <p className="mt-1 text-sm text-ink-subtitle">{t.accountSubtitle}</p>
 
               <form onSubmit={handleAccountSubmit} className="mt-6 flex flex-col gap-3">
-                <input
-                  type="text"
-                  placeholder={t.namePlaceholder}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={(e) => nameSuggestions.remember(e.target.value)}
-                  list="suggest-owner-name"
-                  className={inputClass}
-                  required
-                />
+                <div className={boxClass}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <circle cx="12" cy="8" r="4" stroke="#9AA0AB" strokeWidth="1.8" />
+                    <path d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1" stroke="#9AA0AB" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder={t.namePlaceholder}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onBlur={(e) => nameSuggestions.remember(e.target.value)}
+                    list="suggest-owner-name"
+                    className={boxInputClass}
+                    required
+                  />
+                </div>
                 <datalist id="suggest-owner-name">
                   {nameSuggestions.items.map((v) => (
                     <option key={v} value={v} />
                   ))}
                 </datalist>
-                <div className="flex gap-3">
+
+                <div className={boxFocusClass}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <rect x="3" y="5" width="18" height="14" rx="2" stroke="#178F5A" strokeWidth="1.8" />
+                    <path d="M4 7l8 6 8-6" stroke="#178F5A" strokeWidth="1.8" />
+                  </svg>
                   <input
                     type="email"
                     placeholder={t.emailPlaceholder}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`${inputClass} flex-1 font-sans`}
+                    className={boxInputClass}
                     required
                   />
+                </div>
+
+                <div className={boxClass}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <path
+                      d="M5 4h4l2 5-3 2a12 12 0 005 5l2-3 5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"
+                      stroke="#9AA0AB"
+                      strokeWidth="1.8"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                   <input
                     type="tel"
                     placeholder={t.phonePlaceholder}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className={`${inputClass} flex-1 font-sans`}
+                    className={boxInputClass}
                   />
                 </div>
+
                 {error && <p className="text-sm text-danger">{error}</p>}
                 <button
                   type="submit"
-                  className="mt-1 rounded-btn bg-seller py-2.5 text-sm font-medium text-white shadow-sm hover:bg-seller-dark"
+                  className="mt-1 rounded-xl bg-seller py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(23,143,90,0.35)] hover:bg-seller-dark"
                 >
                   {t.accountNext}
                 </button>
@@ -529,7 +564,7 @@ export default function PartnerRegisterPage() {
 
           {step === 'dorm' && (
             <div>
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.dormTitle}</h2>
+              <h2 className="text-xl font-semibold text-ink-strong">{t.dormTitle}</h2>
               <p className="mt-1 text-sm text-ink-subtitle">{t.dormSubtitle}</p>
 
               <form onSubmit={handleDormSubmit} className="mt-6 flex flex-col gap-3">
@@ -539,7 +574,7 @@ export default function PartnerRegisterPage() {
                   onChange={(e) => setDormName(e.target.value)}
                   onBlur={(e) => dormNameSuggestions.remember(e.target.value)}
                   list="suggest-dorm-name"
-                  className={inputClass}
+                  className={plainBoxClass}
                   required
                 />
                 <datalist id="suggest-dorm-name">
@@ -554,7 +589,7 @@ export default function PartnerRegisterPage() {
                   onChange={(e) => setAddress(e.target.value)}
                   onBlur={(e) => addressSuggestions.remember(e.target.value)}
                   list="suggest-dorm-address"
-                  className={inputClass}
+                  className={plainBoxClass}
                   required
                 />
                 <datalist id="suggest-dorm-address">
@@ -565,7 +600,7 @@ export default function PartnerRegisterPage() {
 
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.provinceLabel}</label>
-                  <select value={province} onChange={(e) => setProvince(e.target.value)} className={`${inputClass} w-full`}>
+                  <select value={province} onChange={(e) => setProvince(e.target.value)} className={`${plainBoxClass} w-full`}>
                     {PROVINCES.map((p) => (
                       <option key={p} value={p}>
                         {PROVINCE_LABEL[lang][p] ?? p}
@@ -579,7 +614,7 @@ export default function PartnerRegisterPage() {
                   <PlacesAutocompleteInput
                     placeholder={t.searchLocationPlaceholder}
                     onSelect={handlePlaceSelect}
-                    className={`${inputClass} mb-2 w-full`}
+                    className={`${plainBoxClass} mb-2 w-full`}
                   />
                   <MapPicker
                     lat={lat}
@@ -657,14 +692,14 @@ export default function PartnerRegisterPage() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
-                  className={`${inputClass} resize-none`}
+                  className={`${plainBoxClass} resize-none`}
                 />
 
                 {error && <p className="text-sm text-danger">{error}</p>}
                 <button
                   type="submit"
                   disabled={images.length === 0 || documents.length === 0}
-                  className="mt-1 rounded-btn bg-seller py-2.5 text-sm font-medium text-white shadow-sm hover:bg-seller-dark disabled:opacity-60"
+                  className="mt-1 rounded-xl bg-seller py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(23,143,90,0.35)] hover:bg-seller-dark disabled:opacity-60"
                 >
                   {t.dormNext}
                 </button>
@@ -677,7 +712,7 @@ export default function PartnerRegisterPage() {
 
           {step === 'otp' && (
             <div>
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.otpTitle}</h2>
+              <h2 className="text-xl font-semibold text-ink-strong">{t.otpTitle}</h2>
               <p className="mt-1 text-sm text-ink-subtitle">{t.otpSubtitle(email)}</p>
 
               <form onSubmit={handleVerifyOtp} className="mt-6 flex flex-col gap-3">
@@ -687,7 +722,7 @@ export default function PartnerRegisterPage() {
                   placeholder={t.otpPlaceholder}
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className={`${inputClass} text-center text-lg tracking-[0.3em]`}
+                  className={`${plainBoxClass} text-center text-lg tracking-[0.3em]`}
                   required
                   maxLength={6}
                 />
@@ -695,7 +730,7 @@ export default function PartnerRegisterPage() {
                 <button
                   type="submit"
                   disabled={otpVerifying || otpCode.length !== 6}
-                  className="rounded-btn bg-seller py-2.5 text-sm font-medium text-white shadow-sm hover:bg-seller-dark disabled:opacity-60"
+                  className="rounded-xl bg-seller py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(23,143,90,0.35)] hover:bg-seller-dark disabled:opacity-60"
                 >
                   {t.otpVerify}
                 </button>
@@ -713,33 +748,45 @@ export default function PartnerRegisterPage() {
 
           {step === 'password' && (
             <div>
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.passwordTitle}</h2>
+              <h2 className="text-xl font-semibold text-ink-strong">{t.passwordTitle}</h2>
               <p className="mt-1 text-sm text-ink-subtitle">{t.passwordSubtitle}</p>
 
               <form onSubmit={handleFinish} className="mt-6 flex flex-col gap-3">
-                <input
-                  type="password"
-                  placeholder={t.passwordPlaceholder}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`${inputClass} font-sans`}
-                  required
-                  minLength={6}
-                />
-                <input
-                  type="password"
-                  placeholder={t.confirmPasswordPlaceholder}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={`${inputClass} font-sans`}
-                  required
-                  minLength={6}
-                />
+                <div className={boxClass}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <rect x="4" y="10" width="16" height="10" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
+                    <path d="M8 10V7a4 4 0 018 0v3" stroke="#9AA0AB" strokeWidth="1.8" />
+                  </svg>
+                  <input
+                    type="password"
+                    placeholder={t.passwordPlaceholder}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={boxInputClass}
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div className={boxClass}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <rect x="4" y="10" width="16" height="10" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
+                    <path d="M8 10V7a4 4 0 018 0v3" stroke="#9AA0AB" strokeWidth="1.8" />
+                  </svg>
+                  <input
+                    type="password"
+                    placeholder={t.confirmPasswordPlaceholder}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={boxInputClass}
+                    required
+                    minLength={6}
+                  />
+                </div>
                 {error && <p className="text-sm text-danger">{error}</p>}
                 <button
                   type="submit"
                   disabled={finishing}
-                  className="rounded-btn bg-seller py-2.5 text-sm font-medium text-white shadow-sm hover:bg-seller-dark disabled:opacity-60"
+                  className="rounded-xl bg-seller py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(23,143,90,0.35)] hover:bg-seller-dark disabled:opacity-60"
                 >
                   {t.finish}
                 </button>
@@ -752,11 +799,11 @@ export default function PartnerRegisterPage() {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-seller-tint text-2xl text-seller">
                 ✓
               </div>
-              <h2 className="mt-4 text-xl font-semibold text-ink-strong dark:text-white">{t.pendingTitle}</h2>
+              <h2 className="mt-4 text-xl font-semibold text-ink-strong">{t.pendingTitle}</h2>
               <p className="mt-2 text-sm text-ink-subtitle">{t.pendingBody}</p>
               <a
                 href="/"
-                className="mt-6 inline-block rounded-btn bg-seller px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-seller-dark"
+                className="mt-6 inline-block rounded-xl bg-seller px-5 py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(23,143,90,0.35)] hover:bg-seller-dark"
               >
                 {t.backHome}
               </a>
@@ -765,11 +812,11 @@ export default function PartnerRegisterPage() {
 
           {step === 'already-logged-in' && (
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-ink-strong dark:text-white">{t.alreadyTitle}</h2>
+              <h2 className="text-xl font-semibold text-ink-strong">{t.alreadyTitle}</h2>
               <p className="mt-2 text-sm text-ink-subtitle">{t.alreadyBody}</p>
               <a
                 href="/profile"
-                className="mt-6 inline-block rounded-btn bg-seller px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-seller-dark"
+                className="mt-6 inline-block rounded-xl bg-seller px-5 py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(23,143,90,0.35)] hover:bg-seller-dark"
               >
                 {t.goProfile}
               </a>

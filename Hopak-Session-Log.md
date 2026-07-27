@@ -59,9 +59,9 @@
 
 ## 3. เรื่อง Deploy / Hosting
 
-- เช็คแล้ว: **HostAtom Web Hosting Max DA** (ที่ซื้อไปแล้ว, โดเมน `hopak.co.th`) เป็น shared hosting (DirectAdmin) — **deploy Hopak ไม่ได้เลย** (ไม่มี SSH, ไม่มี PostgreSQL มีแต่ MySQL, ไม่มี Docker/Node.js)
+- เช็คแล้ว: **HostAtom Web Hosting Max DA** (ที่ซื้อไปแล้ว, โดเมน `hoprak.com`) เป็น shared hosting (DirectAdmin) — **deploy Hopak ไม่ได้เลย** (ไม่มี SSH, ไม่มี PostgreSQL มีแต่ MySQL, ไม่มี Docker/Node.js)
 - HostAtom มี **Cloud VPS SSD** แยกขาย (SSD2 590บาท/ด. หรือ SSD3 1,190บาท/ด.) มี root/SSH จริง ใช้ได้
-- แผนที่ตกลงกัน: ใช้ Max DA เดิมสำหรับ domain/DNS/email ต่อไป + ซื้อ Cloud VPS (หรือ Railway) แยกสำหรับรันแอปจริง เชื่อมกันด้วย DNS subdomain (`app.hopak.co.th`, `api.hopak.co.th`)
+- แผนที่ตกลงกัน: ใช้ Max DA เดิมสำหรับ domain/DNS/email ต่อไป + ซื้อ Cloud VPS (หรือ Railway) แยกสำหรับรันแอปจริง เชื่อมกันด้วย DNS subdomain (`app.hoprak.com`, `api.hoprak.com`)
 - Railway ก็เตรียมไว้แล้ว (`railway 5.27.0` ติดตั้งพร้อมใช้) — ยังไม่ได้ตัดสินใจเลือกทางไหนสุดท้าย, ยังไม่ได้ deploy จริง
 
 ---

@@ -133,7 +133,7 @@ function SellerLoader() {
         </div>
       </div>
 
-      <div className="absolute bottom-7 left-0 right-0 text-center text-[12.5px] text-white/55">© 2026 Hopak.co.th</div>
+      <div className="absolute bottom-7 left-0 right-0 text-center text-[12.5px] text-white/55">© 2026 Hoprak.com</div>
     </div>
   );
 }

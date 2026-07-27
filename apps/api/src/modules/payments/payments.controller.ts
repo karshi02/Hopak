@@ -1,4 +1,5 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaymentsService } from './payments.service';
 
@@ -8,7 +9,12 @@ export class PaymentsController {
   constructor(private paymentsService: PaymentsService) {}
 
   @Post()
-  pay(@Param('bookingId') bookingId: string, @Body() body: { method: string }) {
-    return this.paymentsService.pay(bookingId, body.method);
+  @UseInterceptors(FileInterceptor('slip'))
+  pay(
+    @Param('bookingId') bookingId: string,
+    @Body() body: { method: string },
+    @UploadedFile() slip: Express.Multer.File,
+  ) {
+    return this.paymentsService.pay(bookingId, body.method, slip);
   }
 }

@@ -28,4 +28,22 @@ export class AnalyticsService {
 
     return { totalUsers, totalDorms, totalBookings, totalRevenue };
   }
+
+  // ค่าคอมมิชชันแยกตามเดือน ปีปัจจุบัน (12 เดือน) — ใช้วาดกราฟรายได้ในแดชบอร์ด
+  async monthlyRevenue() {
+    const year = new Date().getFullYear();
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        status: { in: ['SETTLED', 'TRANSFERRED'] },
+        createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) },
+      },
+      select: { commission: true, createdAt: true },
+    });
+
+    const months = Array.from({ length: 12 }, () => 0);
+    for (const p of payments) {
+      months[p.createdAt.getMonth()] += p.commission;
+    }
+    return { year, months };
+  }
 }

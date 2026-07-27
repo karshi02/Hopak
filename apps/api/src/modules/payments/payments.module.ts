@@ -5,12 +5,13 @@ import { PaymentsService } from './payments.service';
 import { PaymentsCron } from './payments.cron';
 import { PromptPayGateway } from './gateway/promptpay.gateway';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { UploadsService } from '../uploads/uploads.service';
 import { PrismaService } from '../../prisma.service';
 
 @Module({
   imports: [ScheduleModule.forRoot(), RealtimeModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService, PaymentsCron, PromptPayGateway, PrismaService],
+  providers: [PaymentsService, PaymentsCron, PromptPayGateway, UploadsService, PrismaService],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

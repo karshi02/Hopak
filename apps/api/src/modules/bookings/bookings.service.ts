@@ -85,6 +85,29 @@ export class BookingsService {
     return updated;
   }
 
+  // admin ยกเลิก booking ไหนก็ได้ ไม่เช็ค ownership และไม่เช็ค 24h window (คนละสิทธิ์กับ cancel ของผู้เช่า)
+  async adminCancel(id: string) {
+    const booking = await this.findOne(id);
+    assertTransition(booking.status.toLowerCase() as any, 'cancelled');
+    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+    this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    this.realtime.emitToUser(booking.room.dorm.ownerId, 'booking:updated', updated);
+    return updated;
+  }
+
+  // กู้คืน booking ที่ถูกยกเลิกกลับมาเป็น pending (เผื่อลูกค้าเปลี่ยนใจ) — คนละกรณีกับ ALLOWED_TRANSITIONS
+  // ปกติเพราะ cancelled เป็น terminal state ตาม state machine ทั่วไป จึงเช็ค/เปลี่ยนสถานะเองตรงนี้แทน assertTransition
+  async adminRestore(id: string) {
+    const booking = await this.findOne(id);
+    if (booking.status !== 'CANCELLED') {
+      throw new BadRequestException('กู้คืนได้เฉพาะ booking ที่ถูกยกเลิกแล้วเท่านั้น');
+    }
+    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'PENDING' } });
+    this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    this.realtime.emitToUser(booking.room.dorm.ownerId, 'booking:updated', updated);
+    return updated;
+  }
+
   async cancel(tenantId: string, id: string) {
     const booking = await this.findOne(id);
     if (booking.tenantId !== tenantId) throw new ForbiddenException('Not your booking');

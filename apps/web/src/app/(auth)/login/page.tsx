@@ -17,7 +17,7 @@ const TEXT = {
       'ค้นหาหอพักใหม่ๆ ทั่วมหาสารคาม ขอนแก่น เชียงใหม่',
       'ข้อมูลส่วนตัวถูกปกป้อง เบอร์ซ่อนบางส่วน',
     ],
-    footer: '© 2026 Hopak · แพลตฟอร์มจองหอพักออนไลน์',
+    haveAccount: 'ยังไม่มีบัญชี? สมัครสมาชิก',
     title: 'เข้าสู่ระบบ',
     subtitle: 'เข้าสู่บัญชี Hopak ของคุณ',
     google: 'เข้าสู่ระบบด้วย Google',
@@ -42,7 +42,7 @@ const TEXT = {
       'Find new dorms across Mahasarakham, Khon Kaen, Chiang Mai',
       'Your personal info is protected, phone numbers partly hidden',
     ],
-    footer: '© 2026 Hopak · An online dorm-booking platform',
+    haveAccount: "Don't have an account? Sign up",
     title: 'Log in',
     subtitle: 'Log in to your Hopak account',
     google: 'Log in with Google',
@@ -61,18 +61,7 @@ const TEXT = {
   },
 };
 
-const inputClass =
-  'h-12 rounded-lg border border-gray-200 px-3.5 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none bg-white';
-
-function Check() {
-  return (
-    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white bg-opacity-20">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-        <path d="M5 12l5 5L20 6" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-  );
-}
+const inputClass = 'w-full bg-transparent font-sans text-[15px] text-ink outline-none placeholder:font-sans placeholder:text-ink-faint';
 
 function GoogleIcon() {
   return (
@@ -82,6 +71,52 @@ function GoogleIcon() {
       <path fill="#FBBC05" d="M5.7 14.1a6.6 6.6 0 010-4.2V7.1H2a11 11 0 000 9.8l3.7-2.8z" />
       <path fill="#EA4335" d="M12 5.4c1.6 0 3 .6 4.1 1.6l3.1-3.1A11 11 0 002 7.1l3.7 2.8C6.6 7.3 9.1 5.4 12 5.4z" />
     </svg>
+  );
+}
+
+function BrandPanel({ t }: { t: (typeof TEXT)['th'] }) {
+  return (
+    <div className="relative hidden w-[38%] shrink-0 flex-col justify-between overflow-hidden bg-[linear-gradient(165deg,#1E4FB0_0%,#173A87_55%,#0E1220_130%)] p-10 text-white lg:flex">
+      <div className="pointer-events-none absolute -right-10 -top-14 h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(47,111,224,0.55),transparent_68%)] blur-xl" />
+      <div className="pointer-events-none absolute -bottom-20 -left-10 h-[260px] w-[260px] rounded-full bg-[radial-gradient(circle,rgba(23,143,90,0.35),transparent_66%)] blur-lg" />
+
+      <div className="relative">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[10px] bg-tenant font-sans text-xl font-extrabold leading-none text-white">
+            H
+          </span>
+          <span className="text-lg font-bold tracking-tight text-white">
+            Hopak<span className="text-[#6BA0F5]">.com</span>
+          </span>
+        </div>
+
+        <h1 className="mt-10 text-[26px] font-bold leading-snug tracking-tight">
+          {t.welcome}
+          <br />
+          {t.welcomeBack}
+        </h1>
+
+        <ul className="mt-7 flex flex-col gap-3.5">
+          {t.perks.map((perk) => (
+            <li key={perk} className="flex items-center gap-3 text-[14.5px] font-medium text-[#E4EBF7]">
+              <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-white/12">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12l5 5 9-11" stroke="#7FE0A8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              {perk}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="relative font-sans text-xs text-[#BFCDE6]">
+        © 2026 Hopak ·{' '}
+        <a href="/register" className="underline">
+          {t.haveAccount}
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -122,117 +157,92 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
-      {/* ฝั่งซ้าย: แบนเนอร์น้ำเงิน */}
-      <div
-        className="hidden w-2/5 shrink-0 flex-col justify-between p-10 text-white lg:flex"
-        style={{ background: 'linear-gradient(160deg, #3159d6 0%, #1e3a8a 100%)' }}
-      >
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white bg-opacity-20 text-lg font-bold">
-              H
-            </div>
-            <span className="text-lg font-semibold">Hopak</span>
-          </div>
+    <main className="flex min-h-[calc(100vh-65px)] bg-surface-web">
+      <BrandPanel t={t} />
 
-          <h1 className="mt-10 text-3xl font-bold leading-snug">
-            {t.welcome}
-            <br />
-            {t.welcomeBack}
-          </h1>
-
-          <ul className="mt-8 flex flex-col gap-4 text-sm leading-relaxed text-white text-opacity-90">
-            {t.perks.map((perk) => (
-              <li key={perk} className="flex gap-3">
-                <Check />
-                <span>{perk}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="text-xs text-white text-opacity-70">{t.footer}</div>
-      </div>
-
-      {/* ฝั่งขวา: ฟอร์ม */}
       <div className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-gray-900">{t.title}</h2>
-          <p className="mt-1 text-sm text-gray-500">{t.subtitle}</p>
+          <h2 className="text-xl font-semibold text-ink-strong">{t.title}</h2>
+          <p className="mt-1 text-sm text-ink-subtitle">{t.subtitle}</p>
 
           <a
             href={`${API_URL}/auth/google`}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-3 text-sm font-medium text-gray-800 hover:bg-gray-50"
+            className="mt-6 flex items-center justify-center gap-2 rounded-btn border border-card-border py-2.5 text-sm font-medium text-ink hover:bg-black/[0.02]"
           >
             <GoogleIcon />
             {t.google}
           </a>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" />
+          <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
+            <span className="h-px flex-1 bg-card-border" />
             {t.or}
-            <span className="h-px flex-1 bg-gray-200" />
+            <span className="h-px flex-1 bg-card-border" />
           </div>
 
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-600">{t.emailLabel}</label>
+          <div className="flex flex-col gap-3">
+            <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-tenant bg-white px-3.5 shadow-[0_0_0_3px_rgba(47,111,224,0.12)]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                <rect x="3" y="5" width="18" height="14" rx="2" stroke="#2F6FE0" strokeWidth="1.8" />
+                <path d="M4 7l8 6 8-6" stroke="#2F6FE0" strokeWidth="1.8" />
+              </svg>
               <input
-                type="email"
-                placeholder="you@email.com"
+                type="text"
+                placeholder={t.emailLabel}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                className={`${inputClass} w-full`}
+                className={inputClass}
               />
             </div>
 
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-xs font-medium text-gray-600">{t.passwordLabel}</label>
-                <a href="#" className="text-xs font-medium text-blue-600">
-                  {t.forgotPassword}
-                </a>
-              </div>
-              <div className="relative">
+              <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-card-border bg-white px-3.5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <rect x="4" y="10" width="16" height="10" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
+                  <path d="M8 10V7a4 4 0 018 0v3" stroke="#9AA0AB" strokeWidth="1.8" />
+                </svg>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder={t.passwordLabel}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  className={`${inputClass} w-full pr-10`}
+                  className={inputClass}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="shrink-0 text-ink-faint"
                 >
                   {showPassword ? '🙈' : '👁'}
                 </button>
               </div>
+              <div className="mt-1.5 text-right">
+                <a href="#" className="text-xs font-semibold text-tenant">
+                  {t.forgotPassword}
+                </a>
+              </div>
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
 
             <button
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className="mt-1 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+              className="mt-1 rounded-xl bg-tenant py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.35)] hover:bg-tenant-dark disabled:opacity-60"
             >
               {loading ? t.submitting : t.submit}
             </button>
           </div>
 
-          <p className="mt-6 text-center text-sm text-gray-500">
+          <p className="mt-5 text-center text-sm text-ink-subtitle lg:hidden">
             {t.noAccount}{' '}
-            <a href="/register" className="font-semibold text-blue-600">
+            <a href="/register" className="font-medium text-tenant">
               {t.signUp}
             </a>
           </p>
-          <p className="mt-2 text-center text-xs text-gray-400">
+          <p className="mt-2 text-center text-xs text-ink-faint">
             <a href="/partner-login" className="underline">
               {t.ownerLink}
             </a>

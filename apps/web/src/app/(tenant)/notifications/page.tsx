@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
+import { getSocket } from '@/lib/ws';
 
 interface NotificationItem {
   id: string;
@@ -31,6 +32,16 @@ export default function NotificationsPage() {
       return;
     }
     apiClient.get<NotificationItem[]>('/notifications').then(setItems).catch(() => {});
+
+    // ฟัง event เรียลไทม์จาก server — แจ้งเตือนใหม่โผล่ทันทีไม่ต้องรีเฟรชหน้า
+    const socket = getSocket();
+    function onNew(notification: NotificationItem) {
+      setItems((prev) => (prev.some((n) => n.id === notification.id) ? prev : [notification, ...prev]));
+    }
+    socket.on('notification:new', onNew);
+    return () => {
+      socket.off('notification:new', onNew);
+    };
   }, [router]);
 
   async function markRead(id: string) {

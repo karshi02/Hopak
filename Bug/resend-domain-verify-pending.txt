@@ -3,14 +3,14 @@
 
 สถานะตอนนี้
 -----------
-- โดเมน hopak.co.th ถูกเพิ่มใน Resend แล้ว (resend.com/domains) — status: pending
+- โดเมน hoprak.com ถูกเพิ่มใน Resend แล้ว (resend.com/domains) — status: pending
 - Resend เช็ค DNS แล้วไม่เจอ record เลยสักตัว: "Domain not found: This domain wasn't found in any DNS servers yet"
-- DNS ของ hopak.co.th จัดการอยู่ที่ Hostatom (cPanel) — ยังไม่ได้เพิ่ม record ที่ฝั่งนั้นเลย
+- DNS ของ hoprak.com จัดการอยู่ที่ Hostatom (cPanel) — ยังไม่ได้เพิ่ม record ที่ฝั่งนั้นเลย
 - ระหว่างนี้ระบบยังใช้ dev fallback ได้ปกติ: ส่งอีเมลจริงไม่ได้เมื่อไหร่ (SMTP reject/ไม่ตั้งค่า)
   MailService.send() คืน false แล้ว OwnerApplicationsService log รหัส OTP ไว้ใน server console แทน
   (ดู Bug/bugs.txt [27][28] ประกอบ) — ทดสอบ flow partner-register ได้ครบไม่ติดอะไร
 
-DNS record ที่ต้องเพิ่มที่ Hostatom (cPanel > Zone Editor > hopak.co.th)
+DNS record ที่ต้องเพิ่มที่ Hostatom (cPanel > Zone Editor > hoprak.com)
 -----------------------------------------------------------------------
 1. TXT   Name: resend._domainkey   Content: p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDPvh+gnDJplIPqVHBKhK/Q2sfQ2jCzkPcKJpviHccmsMK4aNKrCQjniJXLL3aHoZuwtKJLD6mkzq/jk5d8aaauMSJJdrb8Zm3s5Rz2r+Ze3kgSCVgiljMIntUHObAx1NUkhpCnVhPsfbrWc64/FGOQGm3FhoSifnk/4drZPhYp+wIDAQAB
 2. MX    Name: send   Content: feedback-smtp.ap-northeast-1.amazonses.com   Priority: 10
@@ -18,18 +18,18 @@ DNS record ที่ต้องเพิ่มที่ Hostatom (cPanel > Zone
 4. TXT (optional)   Name: _dmarc   Content: v=DMARC1; p=none;
 
 หมายเหตุ: record ทั้งหมดอยู่ใต้ subdomain "send"/"resend._domainkey" ไม่แตะ root
-(hopak.co.th) เลย — เว็บหลักไม่กระทบ ไม่ต้องซื้อโดเมนเพิ่มสำหรับเรื่องนี้
+(hoprak.com) เลย — เว็บหลักไม่กระทบ ไม่ต้องซื้อโดเมนเพิ่มสำหรับเรื่องนี้
 (user เคยถามเรื่องซื้อโดเมนเพิ่ม — ตอบไปแล้วว่าไม่จำเป็น)
 
 ขั้นตอนตอนกลับมาทำต่อ
 ----------------------
-1. เข้า cPanel ของ hopak.co.th ผ่าน Hostatom client area
+1. เข้า cPanel ของ hoprak.com ผ่าน Hostatom client area
 2. หาเมนู Zone Editor (หมวด Domains) > Manage > Add Record
-3. ใส่ 3-4 record ตามตารางข้างบน (ระวังช่อง Name บาง panel เติม .hopak.co.th ให้อัตโนมัติ
+3. ใส่ 3-4 record ตามตารางข้างบน (ระวังช่อง Name บาง panel เติม .hoprak.com ให้อัตโนมัติ
    — ถ้าเติมซ้ำให้ลบส่วนท้ายออก, DKIM TXT ยาวมากบาง panel ตัดที่ 255 ตัวอักษร ถ้าใส่ไม่ผ่านต้องแก้)
 4. กลับไป resend.com/domains กด Verify
 5. Verify ผ่านแล้ว แก้ apps/api/.env: เปลี่ยน SMTP_FROM จาก onboarding@resend.dev
-   เป็นอีเมลในโดเมนตัวเอง เช่น noreply@hopak.co.th แล้ว restart API server
+   เป็นอีเมลในโดเมนตัวเอง เช่น noreply@hoprak.com แล้ว restart API server
 6. ทดสอบส่ง OTP ไปอีเมลที่ไม่ใช่ karshi0234@gmail.com จริง ยืนยันว่าไม่ใช่ 550 sandbox error อีก
 
 สถานะ: ยังไม่แก้ — รอ user เข้า Hostatom เพิ่ม DNS record เอง (ผมทำแทนไม่ได้ ไม่มีสิทธิ์เข้า DNS panel)

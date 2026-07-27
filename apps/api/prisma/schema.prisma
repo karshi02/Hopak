@@ -16,6 +16,9 @@ enum Role {
 model SiteSettings {
   id           String   @id
   heroImageUrl String?
+  posterUrls   String[] @default([])
+  // รูปพื้นหลังการ์ด "ทำเลยอดนิยม" หน้าแรก ผูกกับชื่อจังหวัด — { "มหาสารคาม": "https://..." }
+  areaImages   Json     @default("{}")
   updatedAt    DateTime @updatedAt
 }
 
@@ -80,6 +83,14 @@ model User {
   address   String?
   googleId  String?  @unique
   suspended Boolean  @default(false)
+
+  // ข้อมูลบัญชีรับเงินของเจ้าของหอ — ใช้ตอนแอดมินโอนยอด payout ให้
+  bankName          String?
+  bankAccountNumber String?
+  promptpayId       String?
+  // เอกสารยืนยันตัวตนระดับบัญชี (ไม่ผูกกับหอพักใดหอพักหนึ่ง) — เก็บเป็น storage key ส่วนตัว
+  // ใช้เมื่อแอดมินสร้างบัญชีเจ้าของหอให้เองโดยตรง เพิ่ม/เปลี่ยนได้ตลอดหลังสร้างบัญชีแล้ว
+  documents String[] @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -90,6 +101,7 @@ model User {
   reviews       Review[]
   favorites     Favorite[]
   ownerRequests OwnerRequest[]
+  approvalLogs  ApprovalLog[]
 }
 
 model Dorm {
@@ -110,6 +122,8 @@ model Dorm {
   images        String[]
   documents     String[]   @default([])
   status        DormStatus @default(PENDING_APPROVAL)
+  // ถ้า true ห้องใหม่ที่เจ้าของหอนี้เพิ่มจะโชว์ให้ผู้เช่าเห็นทันทีไม่ต้องรอแอดมินตรวจ (แอดมินปรับได้ทุกเมื่อ)
+  autoApproveRooms Boolean @default(false)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -126,6 +140,16 @@ model Room {
   type          RoomType
   pricePerMonth Float
   status        RoomStatus @default(AVAILABLE)
+
+  name          String?
+  description   String?
+  deposit       Float      @default(0)
+  waterRate     Float      @default(0)
+  electricRate  Float      @default(0)
+  amenities     String[]   @default([])
+  images        String[]   @default([])
+  // false = รอแอดมินตรวจสอบก่อนโชว์ให้ผู้เช่าเห็น (ตามค่า dorm.autoApproveRooms ตอนสร้าง)
+  approved      Boolean    @default(true)
 
   bookings Booking[]
 }
@@ -150,16 +174,23 @@ model Booking {
 }
 
 model Payment {
-  id          String        @id @default(cuid())
-  bookingId   String        @unique
-  booking     Booking       @relation(fields: [bookingId], references: [id])
-  amount      Float
-  commission  Float
-  ownerPayout Float
-  method      String
-  status      PaymentStatus @default(PENDING)
-  settledAt   DateTime?
-  createdAt   DateTime      @default(now())
+  id            String        @id @default(cuid())
+  bookingId     String        @unique
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  amount        Float
+  commission    Float
+  chamberShare  Float         @default(0)
+  platformShare Float         @default(0)
+  ownerPayout   Float
+  method        String
+  status        PaymentStatus @default(PENDING)
+  slipKey       String?
+  settledAt     DateTime?
+  createdAt     DateTime      @default(now())
+
+  // สลิปที่แอดมินโอนเงิน payout ให้เจ้าของหอ (คนละสลิปกับ slipKey ของลูกค้า)
+  transferSlipKey String?
+  transferredAt   DateTime?
 }
 
 model Notification {
@@ -245,6 +276,9 @@ model Review {
   tenant    User     @relation(fields: [tenantId], references: [id])
   rating    Int
   comment   String?
+  // เจ้าของหอตอบกลับรีวิวผู้เช่าได้ (ไม่ใช่การเขียนรีวิวปลอมให้ตัวเอง — รีวิวยังเป็นของผู้เช่าคนเดิม แค่มีคำตอบกลับติดไว้)
+  reply     String?
+  repliedAt DateTime?
   createdAt DateTime @default(now())
 
   @@unique([dormId, tenantId])
@@ -259,4 +293,18 @@ model Favorite {
   createdAt DateTime @default(now())
 
   @@unique([userId, dormId])
+}
+
+// ประวัติการอนุมัติ/ปฏิเสธ/แก้ไข/ระงับ ของแอดมิน — ใช้ตรวจสอบย้อนหลังกันทุจริต
+// snapshot เก็บข้อมูล entity ทั้งก้อน ณ ตอนนั้น จำเป็นมากสำหรับ ROOM เพราะแถวจริงถูกลบทิ้งหลัง reject
+model ApprovalLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  adminId    String
+  admin      User     @relation(fields: [adminId], references: [id])
+  snapshot   Json?
+  note       String?
+  createdAt  DateTime @default(now())
 }

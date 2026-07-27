@@ -15,6 +15,9 @@ const SELECT_SAFE = {
   avatarUrl: true,
   address: true,
   googleId: true,
+  bankName: true,
+  bankAccountNumber: true,
+  promptpayId: true,
   createdAt: true,
   updatedAt: true,
 } as const;

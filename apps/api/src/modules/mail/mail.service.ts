@@ -18,7 +18,12 @@ export class MailService {
     }
   }
 
-  async send(to: string, subject: string, html: string): Promise<boolean> {
+  async send(
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: { filename: string; content: Buffer; contentType?: string }[],
+  ): Promise<boolean> {
     if (!this.transporter) {
       this.logger.warn(`SMTP ยังไม่ตั้งค่า (.env) — ข้ามการส่งอีเมลถึง ${to}: ${subject}`);
       return false;
@@ -29,6 +34,7 @@ export class MailService {
         to,
         subject,
         html,
+        attachments,
       });
       return true;
     } catch (err) {

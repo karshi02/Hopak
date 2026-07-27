@@ -16,8 +16,9 @@ export class RealtimeGateway implements OnGatewayConnection {
     try {
       const token = client.handshake.auth?.token as string | undefined;
       if (!token) throw new Error('no token');
-      const payload = this.jwt.verify(token) as { sub: string };
+      const payload = this.jwt.verify(token) as { sub: string; role?: string };
       client.join(`user:${payload.sub}`);
+      if (payload.role) client.join(`role:${payload.role}`);
     } catch {
       this.logger.warn(`Socket ${client.id} ปฏิเสธการเชื่อมต่อ (token ไม่ถูกต้อง)`);
       client.disconnect();
@@ -26,5 +27,9 @@ export class RealtimeGateway implements OnGatewayConnection {
 
   emitToUser(userId: string, event: string, payload: unknown) {
     this.server.to(`user:${userId}`).emit(event, payload);
+  }
+
+  emitToRole(role: string, event: string, payload: unknown) {
+    this.server.to(`role:${role}`).emit(event, payload);
   }
 }

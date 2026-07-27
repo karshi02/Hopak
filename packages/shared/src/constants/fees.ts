@@ -1,2 +1,5 @@
-export const COMMISSION_RATE = 0.1;
+// ค่าคอมมิชชันรวมที่หักจากเจ้าของหอ (20% ของยอดจอง) — เจ้าของหอได้ 80%
+export const COMMISSION_RATE = 0.2;
+// ส่วนแบ่งหอการค้าจังหวัดมหาสารคาม (10% ของยอดจอง — ครึ่งหนึ่งของค่าคอมทั้งหมด) ที่เหลือ 10% เป็นรายได้แพลตฟอร์ม
+export const CHAMBER_RATE = 0.1;
 export const CANCEL_WINDOW_HOURS = 24;

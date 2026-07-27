@@ -42,7 +42,7 @@ export default function PartnerRequestsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
 
   function reload() {
-    apiClient.get<Booking[]>('/bookings').then(setBookings);
+    apiClient.get<Booking[]>('/bookings').then(setBookings).catch(() => setBookings([]));
   }
 
   useEffect(() => {
@@ -62,26 +62,33 @@ export default function PartnerRequestsPage() {
   }, []);
 
   async function confirm(id: string) {
-    await apiClient.patch(`/bookings/${id}/confirm`);
-    reload();
+    try {
+      await apiClient.patch(`/bookings/${id}/confirm`);
+      reload();
+    } catch {
+      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
+    }
   }
 
   async function reject(id: string) {
-    await apiClient.patch(`/bookings/${id}/reject`);
-    reload();
+    try {
+      await apiClient.patch(`/bookings/${id}/reject`);
+      reload();
+    } catch {
+      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
+    }
   }
 
   const pending = bookings.filter((b) => normalizeStatus(b.status) === 'pending');
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
-      <p className="mt-1 text-sm text-ink-faint">{t.pendingCount(pending.length)}</p>
+      <p className="text-sm text-ink-faint">{t.pendingCount(pending.length)}</p>
 
-      <div className="mt-4 overflow-x-auto rounded-card border border-card-border dark:border-white/10">
+      <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-card-border text-xs text-ink-faint dark:border-white/10">
+            <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.booker}</th>
               <th className="p-3 font-normal">{t.phone}</th>
               <th className="p-3 font-normal">{t.checkIn}</th>
@@ -91,8 +98,8 @@ export default function PartnerRequestsPage() {
           </thead>
           <tbody>
             {pending.map((b) => (
-              <tr key={b.id} className="border-t border-card-border dark:border-white/10">
-                <td className="p-3 font-medium text-ink-strong dark:text-white">{b.contactName}</td>
+              <tr key={b.id} className="border-b border-hairline last:border-0">
+                <td className="p-3 font-medium text-ink-strong">{b.contactName}</td>
                 <td className="p-3 font-sans tabular-nums text-ink-subtitle">{b.contactPhone.slice(0, 8)}**-*</td>
                 <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</td>
                 <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
@@ -100,13 +107,13 @@ export default function PartnerRequestsPage() {
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => confirm(b.id)}
-                      className="rounded-lg bg-seller px-3 py-1.5 text-xs font-semibold text-white hover:bg-seller-dark"
+                      className="rounded-lg bg-tenant px-3 py-1.5 text-xs font-semibold text-white hover:bg-tenant-dark"
                     >
                       {t.confirm}
                     </button>
                     <button
                       onClick={() => reject(b.id)}
-                      className="rounded-lg bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger"
+                      className="rounded-lg bg-danger-tint px-3 py-1.5 text-xs font-semibold text-danger"
                     >
                       {t.reject}
                     </button>
