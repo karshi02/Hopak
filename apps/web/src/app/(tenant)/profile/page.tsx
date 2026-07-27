@@ -8,29 +8,46 @@ import { getToken, clearToken } from '@/lib/auth';
 import { resetSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang, type Lang } from '@/hooks/useLang';
+import { useBookings } from '@/hooks/useBookings';
+import { useFavorites } from '@/hooks/useFavorites';
+import { StarRating } from '@/components/StarRating';
 import type { OwnerRequest, User } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
-
-const inputClass =
-  'h-11 w-full rounded-btn border border-card-border px-3.5 text-sm text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none dark:border-white/10 dark:bg-[#1a1a19] dark:text-white';
-
-type Tab = 'profile' | 'security';
 
 const TEXT = {
   th: {
     disabledTitle: 'ยังไม่เปิดให้ใช้งาน',
-    profileTitle: 'ข้อมูลส่วนตัว',
-    profileSubtitle: 'จัดการชื่อ อีเมล และเบอร์โทรของบัญชีคุณ',
+    comingSoon: 'เร็วๆ นี้',
+    editProfile: 'แก้ไขโปรไฟล์',
+    memberSince: (d: string) => `สมาชิกตั้งแต่ ${d}`,
+    statActive: 'การจองที่ใช้งาน',
+    statSaved: 'หอที่บันทึกไว้',
+    statReviews: 'รีวิวที่เขียน',
+    statTotal: 'การจองทั้งหมด',
+    navOverview: 'ภาพรวม',
+    navBookings: 'การจองของฉัน',
+    navSaved: 'หอที่บันทึกไว้',
+    navReviews: 'รีวิวของฉัน',
+    navSettings: 'ตั้งค่าบัญชี',
+    navOwnerDashboard: 'แดชบอร์ดเจ้าของหอ',
+    navAdminDashboard: 'แดชบอร์ดแอดมิน',
+    navNotifications: 'การแจ้งเตือน',
+    logout: 'ออกจากระบบ',
     becomeOwnerTitle: 'เปิดหอพักกับ Hopak',
     ownerPending: 'ส่งคำขอแล้ว รอแอดมินอนุมัติ',
     ownerRejected: 'คำขอก่อนหน้าถูกปฏิเสธ ลองส่งคำขอใหม่ได้',
     ownerPitch: 'มีหอให้เช่า? ลงประกาศและรับการจอง',
     sendingRequest: 'กำลังส่ง...',
     requestOwner: 'ขอเป็นเจ้าของหอ',
-    avatarLabel: 'รูป',
-    profilePhoto: 'รูปโปรไฟล์',
-    profilePhotoHint: 'รองรับลิงก์รูปภาพ แก้ไขได้ในโปรไฟล์ตอนสมัครสมาชิก',
-    usernameLabel: 'ชื่อผู้ใช้งาน',
+    bookingsTitle: 'การจองของฉัน',
+    viewDetail: 'ดูรายละเอียด',
+    checkIn: 'เข้าอยู่',
+    noBookings: 'ยังไม่มีการจอง',
+    savedTitle: 'หอพักที่บันทึกไว้',
+    noSaved: 'ยังไม่มีหอพักที่บันทึกไว้',
+    perMonth: '/เดือน',
+    fieldsTitle: 'ข้อมูลส่วนตัว',
+    nameLabel: 'ชื่อ-นามสกุล',
     emailLabel: 'อีเมล',
     phoneLabel: 'เบอร์โทรศัพท์',
     phoneNotSet: 'ยังไม่ระบุ',
@@ -42,9 +59,7 @@ const TEXT = {
     savedProfile: 'บันทึกข้อมูลแล้ว',
     saving: 'กำลังบันทึก...',
     saveInfo: 'บันทึกข้อมูล',
-    securityTitle: 'ความปลอดภัย',
-    securitySubtitle: 'รหัสผ่านและการเข้าสู่ระบบ',
-    changePassword: 'เปลี่ยนรหัสผ่าน',
+    passwordTitle: 'รหัสผ่าน',
     googleOnlyNote: 'บัญชีนี้ล็อกอินผ่าน Google ไม่มีรหัสผ่านให้เปลี่ยน',
     currentPassword: 'รหัสผ่านปัจจุบัน',
     newPassword: 'รหัสผ่านใหม่',
@@ -55,34 +70,64 @@ const TEXT = {
     updating: 'กำลังอัปเดต...',
     updatePassword: 'อัปเดตรหัสผ่าน',
     twoFactor: 'ยืนยันตัวตนสองชั้น (2FA)',
-    twoFactorHint: 'รับรหัส OTP ทาง SMS ทุกครั้งที่เข้าสู่ระบบ',
-    comingSoon: 'เร็วๆ นี้',
     loginDevices: 'อุปกรณ์ที่เข้าสู่ระบบ',
-    loginDevicesHint: 'ยังไม่รองรับการดูรายการอุปกรณ์',
-    navProfile: 'ข้อมูลส่วนตัว',
-    navSecurity: 'ความปลอดภัย',
-    navOwnerDashboard: 'แดชบอร์ดเจ้าของหอ',
-    navAdminDashboard: 'แดชบอร์ดแอดมิน',
-    navRewards: 'Hopak Rewards',
-    navPaymentMethods: 'วิธีการชำระเงิน',
-    navSaved: 'หอที่บันทึก',
-    navNotifications: 'การแจ้งเตือน',
-    logout: 'ออกจากระบบ',
+    verifiedBadge: 'ยืนยันอีเมลแล้ว',
+    verifyTitle: 'ยืนยันตัวตนด้วย OTP',
+    verifyDescIdle: 'เพิ่มความปลอดภัยให้บัญชี ด้วยการยืนยันอีเมลผ่านรหัส OTP',
+    verifyDescDone: 'บัญชีนี้ยืนยันอีเมลเรียบร้อยแล้ว',
+    verifyNoEmail: 'บัญชีนี้ไม่มีอีเมลผูกไว้ ยืนยันตัวตนด้วย OTP ไม่ได้',
+    verifiedTag: 'ยืนยันแล้ว',
+    unverifiedTag: 'ยังไม่ยืนยัน',
+    sendOtp: 'ส่งรหัส OTP',
+    sendingOtp: 'กำลังส่ง...',
+    otpSentTo: (email: string) => `กรอกรหัส 6 หลักที่ส่งไปยัง ${email}`,
+    verifyCode: 'ยืนยันรหัส',
+    verifying: 'กำลังยืนยัน...',
+    resendIn: (s: string) => `ไม่ได้รับรหัส? ส่งอีกครั้ง (${s})`,
+    resend: 'ไม่ได้รับรหัส? ส่งอีกครั้ง',
+    verifySuccess: 'ยืนยันตัวตนสำเร็จ! บัญชีของคุณได้รับการยืนยันด้วย OTP แล้ว',
+    otpError: 'เกิดข้อผิดพลาด',
+    statusLabel: {
+      pending: 'รอเจ้าของหอยืนยัน',
+      confirmed: 'ยืนยันแล้ว รอชำระเงิน',
+      paid: 'ชำระเงินแล้ว',
+      cancelled: 'ยกเลิกแล้ว',
+      completed: 'เสร็จสิ้น',
+    } as Record<string, string>,
   },
   en: {
     disabledTitle: 'Not enabled yet',
-    profileTitle: 'Profile',
-    profileSubtitle: 'Manage your name, email, and phone number',
+    comingSoon: 'Coming soon',
+    editProfile: 'Edit profile',
+    memberSince: (d: string) => `Member since ${d}`,
+    statActive: 'Active bookings',
+    statSaved: 'Saved dorms',
+    statReviews: 'Reviews written',
+    statTotal: 'Total bookings',
+    navOverview: 'Overview',
+    navBookings: 'My bookings',
+    navSaved: 'Saved dorms',
+    navReviews: 'My reviews',
+    navSettings: 'Account settings',
+    navOwnerDashboard: 'Owner dashboard',
+    navAdminDashboard: 'Admin dashboard',
+    navNotifications: 'Notifications',
+    logout: 'Log out',
     becomeOwnerTitle: 'List your dorm with Hopak',
     ownerPending: 'Request sent, awaiting admin approval',
     ownerRejected: 'Your previous request was rejected — you can try again',
     ownerPitch: 'Have a dorm to rent? List it and start receiving bookings',
     sendingRequest: 'Sending...',
     requestOwner: 'Request to become an owner',
-    avatarLabel: 'Photo',
-    profilePhoto: 'Profile photo',
-    profilePhotoHint: 'Supports an image link, editable from the sign-up profile step',
-    usernameLabel: 'Username',
+    bookingsTitle: 'My bookings',
+    viewDetail: 'View details',
+    checkIn: 'Check-in',
+    noBookings: 'No bookings yet',
+    savedTitle: 'Saved dorms',
+    noSaved: 'No saved dorms yet',
+    perMonth: '/mo',
+    fieldsTitle: 'Personal information',
+    nameLabel: 'Full name',
     emailLabel: 'Email',
     phoneLabel: 'Phone number',
     phoneNotSet: 'Not set',
@@ -94,9 +139,7 @@ const TEXT = {
     savedProfile: 'Saved',
     saving: 'Saving...',
     saveInfo: 'Save',
-    securityTitle: 'Security',
-    securitySubtitle: 'Password and login',
-    changePassword: 'Change password',
+    passwordTitle: 'Password',
     googleOnlyNote: 'This account logs in via Google, no password to change',
     currentPassword: 'Current password',
     newPassword: 'New password',
@@ -107,50 +150,87 @@ const TEXT = {
     updating: 'Updating...',
     updatePassword: 'Update password',
     twoFactor: 'Two-factor authentication (2FA)',
-    twoFactorHint: 'Get an OTP via SMS every time you log in',
-    comingSoon: 'Coming soon',
     loginDevices: 'Logged-in devices',
-    loginDevicesHint: 'Viewing device list is not supported yet',
-    navProfile: 'Profile',
-    navSecurity: 'Security',
-    navOwnerDashboard: 'Owner dashboard',
-    navAdminDashboard: 'Admin dashboard',
-    navRewards: 'Hopak Rewards',
-    navPaymentMethods: 'Payment methods',
-    navSaved: 'Saved dorms',
-    navNotifications: 'Notifications',
-    logout: 'Log out',
+    verifiedBadge: 'Email verified',
+    verifyTitle: 'Verify identity with OTP',
+    verifyDescIdle: 'Add security to your account by verifying your email via OTP',
+    verifyDescDone: 'This account has verified its email',
+    verifyNoEmail: "This account has no email on file, can't verify via OTP",
+    verifiedTag: 'Verified',
+    unverifiedTag: 'Not verified',
+    sendOtp: 'Send OTP code',
+    sendingOtp: 'Sending...',
+    otpSentTo: (email: string) => `Enter the 6-digit code sent to ${email}`,
+    verifyCode: 'Verify code',
+    verifying: 'Verifying...',
+    resendIn: (s: string) => `Didn't get a code? Resend (${s})`,
+    resend: "Didn't get a code? Resend",
+    verifySuccess: 'Verified! Your account email is now confirmed.',
+    otpError: 'Something went wrong',
+    statusLabel: {
+      pending: 'Awaiting owner confirmation',
+      confirmed: 'Confirmed, awaiting payment',
+      paid: 'Paid',
+      cancelled: 'Cancelled',
+      completed: 'Completed',
+    } as Record<string, string>,
   },
 };
 type T = (typeof TEXT)['th'];
 
-function NavItem({
+function iconSvg(d: string, opts: { stroke?: string; w?: number; fill?: string } = {}) {
+  const { stroke = 'currentColor', w = 1.8, fill = 'none' } = opts;
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill={fill}>
+      <path d={d} stroke={stroke} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const NAV_ICONS = {
+  overview: 'M4 13h7V4H4v9zM13 20h7v-9h-7v9zM13 4v5h7V4h-7zM4 20h7v-5H4v5z',
+  bookings: 'M8 4h13M8 12h13M8 20h13M3 4h.01M3 12h.01M3 20h.01',
+  saved: 'M12 21s-8-4.5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6.5-8 11-8 11z',
+  reviews: 'M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z',
+  settings:
+    'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1L14.5 3h-5l-.3 2.6a7 7 0 00-1.7 1l-2.4-1-2 3.4L3.1 11a7 7 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.3 2.4h5l.3-2.6a7 7 0 001.7-1l2.4 1 2-3.4-2-1.6a7 7 0 00.1-1z',
+};
+
+function scrollToId(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function NavRow({
   label,
-  active,
   disabled,
   disabledTitle,
   onClick,
   href,
+  d,
 }: {
   label: string;
-  active?: boolean;
   disabled?: boolean;
   disabledTitle?: string;
   onClick?: () => void;
   href?: string;
+  d: string;
 }) {
-  const className = `flex items-center rounded-lg px-3.5 py-2.5 text-sm ${
-    active
-      ? 'bg-tenant/10 font-semibold text-tenant'
-      : disabled
-        ? 'cursor-not-allowed text-ink-faint'
-        : 'text-ink-subtitle hover:bg-black/[0.03] dark:hover:bg-white/5'
-  }`;
+  const inner = (
+    <>
+      <span className="flex w-[22px] justify-center">
+        {iconSvg(d, { stroke: disabled ? '#C7CBD3' : '#8A909F' })}
+      </span>
+      <span className={`flex-1 text-[14.5px] font-semibold ${disabled ? 'text-ink-faint' : 'text-[#3A4050]'}`}>
+        {label}
+      </span>
+    </>
+  );
+  const className = `mb-0.5 flex items-center gap-3 rounded-xl px-3.5 py-3 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-[#F4F6FA]'}`;
 
   if (href && !disabled) {
     return (
       <Link href={href} className={className}>
-        {label}
+        {inner}
       </Link>
     );
   }
@@ -162,252 +242,65 @@ function NavItem({
       title={disabled ? disabledTitle : undefined}
       className={`${className} w-full text-left`}
     >
-      {label}
+      {inner}
     </button>
   );
 }
 
-function ProfileTab({ user, onSaved, t }: { user: User; onSaved: (u: User) => void; t: T }) {
-  const [name, setName] = useState(user.name);
-  const [phone, setPhone] = useState(user.phone ?? '');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ownerRequest, setOwnerRequest] = useState<OwnerRequest | null>(null);
-  const [requesting, setRequesting] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    setSaved(false);
-    try {
-      const updated = await apiClient.patch<User>('/users/me', { name, phone: phone || undefined });
-      onSaved(updated);
-      setSaved(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.saveError);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  useEffect(() => {
-    apiClient.get<OwnerRequest | null>('/users/me/owner-request').then(setOwnerRequest).catch(() => {});
-  }, []);
-
-  async function requestOwner() {
-    setRequesting(true);
-    try {
-      const req = await apiClient.post<OwnerRequest>('/users/me/become-owner');
-      setOwnerRequest(req);
-    } finally {
-      setRequesting(false);
-    }
-  }
-
-  const requestStatus = ownerRequest ? normalizeStatus(ownerRequest.status) : null;
-
+function StatBox({ value, label, last }: { value: string | number; label: string; last?: boolean }) {
   return (
-    <div>
-      <h2 className="text-xl font-bold text-ink-strong dark:text-white">{t.profileTitle}</h2>
-      <p className="mt-1 text-sm text-ink-subtitle">{t.profileSubtitle}</p>
-
-      {user.role.toLowerCase() === 'tenant' && (
-        <div className="mt-5 flex items-center gap-4 rounded-card bg-seller p-4 text-white">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 font-bold">H</div>
-          <div className="flex-1">
-            <p className="font-semibold">{t.becomeOwnerTitle}</p>
-            {requestStatus === 'pending' ? (
-              <p className="text-sm text-white/85">{t.ownerPending}</p>
-            ) : requestStatus === 'rejected' ? (
-              <p className="text-sm text-white/85">{t.ownerRejected}</p>
-            ) : (
-              <p className="text-sm text-white/85">{t.ownerPitch}</p>
-            )}
-          </div>
-          {requestStatus !== 'pending' && (
-            <button
-              onClick={requestOwner}
-              disabled={requesting}
-              className="rounded-btn bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25 disabled:opacity-60"
-            >
-              {requesting ? t.sendingRequest : t.requestOwner}
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="mt-5 flex items-center gap-5 rounded-card border border-card-border bg-white p-5 dark:border-white/10 dark:bg-[#1a1a19]">
-        <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-full bg-surface-canvas font-mono text-xs text-ink-faint">
-          {t.avatarLabel}
-        </div>
-        <div className="flex-1">
-          <p className="font-semibold text-ink-strong dark:text-white">{t.profilePhoto}</p>
-          <p className="mt-0.5 text-xs text-ink-faint">{t.profilePhotoHint}</p>
-        </div>
-      </div>
-
-      <div className="mt-5 rounded-card border border-card-border bg-white p-5 dark:border-white/10 dark:bg-[#1a1a19]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.usernameLabel}</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.emailLabel}</label>
-            <div className={`${inputClass} flex items-center bg-surface-canvas font-sans text-ink-subtitle`}>
-              {user.email ?? '—'}
-            </div>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.phoneLabel}</label>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className={`${inputClass} font-sans`}
-              placeholder={t.phoneNotSet}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.roleLabel}</label>
-            <div className={`${inputClass} flex items-center bg-surface-canvas text-ink-subtitle`}>
-              {user.role.toLowerCase() === 'owner' ? t.roleOwner : user.role.toLowerCase() === 'admin' ? t.roleAdmin : t.roleTenant}
-            </div>
-          </div>
-        </div>
-
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-        {saved && <p className="mt-3 text-sm text-success">{t.savedProfile}</p>}
-
-        <div className="mt-5 flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="rounded-btn bg-tenant px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-tenant-dark disabled:opacity-60"
-          >
-            {saving ? t.saving : t.saveInfo}
-          </button>
-        </div>
-      </div>
+    <div className={`px-6 py-4 text-center ${last ? '' : 'border-r border-white/15'}`}>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="mt-0.5 text-[12.5px] text-[#C6D5EE]">{label}</div>
     </div>
   );
 }
 
-function SecurityTab({ hasPassword, t }: { hasPassword: boolean; t: T }) {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaved(false);
-    if (newPassword !== confirmPassword) {
-      setError(t.passwordMismatch);
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiClient.patch('/users/me/password', { currentPassword, newPassword });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setSaved(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.passwordChangeError);
-    } finally {
-      setSaving(false);
-    }
-  }
-
+function fieldBox(icon: React.ReactNode, value: string) {
   return (
-    <div>
-      <h2 className="text-xl font-bold text-ink-strong dark:text-white">{t.securityTitle}</h2>
-      <p className="mt-1 text-sm text-ink-subtitle">{t.securitySubtitle}</p>
-
-      <div className="mt-5 rounded-card border border-card-border bg-white p-5 dark:border-white/10 dark:bg-[#1a1a19]">
-        <p className="font-semibold text-ink-strong dark:text-white">{t.changePassword}</p>
-
-        {!hasPassword ? (
-          <p className="mt-3 text-sm text-ink-faint">{t.googleOnlyNote}</p>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-3 flex max-w-md flex-col gap-3.5">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.currentPassword}</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.newPassword}</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className={inputClass}
-                minLength={6}
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.confirmPassword}</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className={inputClass}
-                minLength={6}
-                required
-              />
-            </div>
-            {error && <p className="text-sm text-danger">{error}</p>}
-            {saved && <p className="text-sm text-success">{t.passwordChanged}</p>}
-            <button
-              type="submit"
-              disabled={saving}
-              className="self-start rounded-btn bg-tenant px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-tenant-dark disabled:opacity-60"
-            >
-              {saving ? t.updating : t.updatePassword}
-            </button>
-          </form>
-        )}
-      </div>
-
-      <div className="mt-5 rounded-card border border-card-border bg-white p-5 dark:border-white/10 dark:bg-[#1a1a19]">
-        <div className="flex items-center justify-between border-b border-card-border py-3.5 dark:border-white/10">
-          <div>
-            <p className="text-sm font-semibold text-ink-strong dark:text-white">{t.twoFactor}</p>
-            <p className="mt-0.5 text-xs text-ink-faint">{t.twoFactorHint}</p>
-          </div>
-          <span
-            title={t.disabledTitle}
-            className="cursor-not-allowed rounded-full bg-surface-canvas px-3 py-1 text-xs font-medium text-ink-faint"
-          >
-            {t.comingSoon}
-          </span>
-        </div>
-        <div className="flex items-center justify-between pt-3.5">
-          <div>
-            <p className="text-sm font-semibold text-ink-strong dark:text-white">{t.loginDevices}</p>
-            <p className="mt-0.5 text-xs text-ink-faint">{t.loginDevicesHint}</p>
-          </div>
-          <span
-            title={t.disabledTitle}
-            className="cursor-not-allowed rounded-full bg-surface-canvas px-3 py-1 text-xs font-medium text-ink-faint"
-          >
-            {t.comingSoon}
-          </span>
-        </div>
-      </div>
+    <div className="flex h-12 items-center gap-2.5 rounded-xl border border-[#E4E7EC] bg-[#F7F9FC] px-4">
+      {icon}
+      <span className="truncate text-[14.5px] font-semibold text-[#2A303C]">{value}</span>
     </div>
   );
+}
+
+function formatMemberSince(dateStr: string | undefined, lang: Lang) {
+  if (!dateStr) return '—';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString(lang === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US', {
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatDate(dateStr: string, lang: Lang) {
+  return new Date(dateStr).toLocaleDateString(lang === 'th' ? 'th-TH-u-ca-buddhist' : 'en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function roomTypeLabel(type: string | undefined, lang: Lang) {
+  const key = (type ?? '').toLowerCase();
+  if (key === 'air') return lang === 'th' ? 'ห้องแอร์' : 'AC room';
+  if (key === 'fan') return lang === 'th' ? 'ห้องพัดลม' : 'Fan room';
+  return type ?? '—';
+}
+
+function statusBadgeStyle(status: string) {
+  switch (status) {
+    case 'paid':
+    case 'completed':
+      return 'bg-[#E7F7EF] text-[#12704A]';
+    case 'confirmed':
+      return 'bg-[#EAF1FF] text-tenant';
+    case 'cancelled':
+      return 'bg-[#FEF0F0] text-danger';
+    default:
+      return 'bg-[#FFF3E0] text-[#C77B14]';
+  }
 }
 
 export default function ProfilePage() {
@@ -416,7 +309,6 @@ export default function ProfilePage() {
   const t = TEXT[lang];
   const [user, setUser] = useState<User | null>(null);
   const [hasPassword, setHasPassword] = useState(true);
-  const [tab, setTab] = useState<Tab>('profile');
 
   useEffect(() => {
     if (!getToken()) {
@@ -441,50 +333,601 @@ export default function ProfilePage() {
   if (!user) return <PageLoader />;
 
   const role = user.role.toLowerCase();
+  const isTenant = role === 'tenant';
 
   return (
     <main className="mx-auto max-w-6xl p-6">
-      <div className="flex items-start gap-7">
-        <aside className="w-64 shrink-0 rounded-card border border-card-border bg-white p-3 dark:border-white/10 dark:bg-[#1a1a19]">
-          <div className="flex items-center gap-3 px-2.5 py-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-canvas font-mono text-xs text-ink-faint">
-              {t.avatarLabel}
+      {/* HEADER */}
+      <div
+        id="top"
+        className="relative overflow-hidden rounded-card-lg shadow-lg scroll-mt-24"
+        style={{
+          background: 'linear-gradient(135deg,#1E4FB0 0%,#2F6FE0 55%,#173A87 120%)',
+          boxShadow: '0 16px 40px rgba(30,79,176,0.28)',
+        }}
+      >
+        <div
+          className="pointer-events-none absolute -right-16 -top-16 h-60 w-60 rounded-full blur-2xl"
+          style={{ background: 'radial-gradient(circle,rgba(255,255,255,0.24),transparent 66%)' }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-16 left-52 h-56 w-56 rounded-full blur-2xl"
+          style={{ background: 'radial-gradient(circle,rgba(23,143,90,0.4),transparent 66%)' }}
+        />
+        <div className="relative flex flex-col gap-5 p-7 sm:flex-row sm:items-center">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white/50 bg-gradient-to-br from-[#EAF1FF] to-[#B9CEF5] text-4xl font-bold text-tenant shadow-lg">
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              user.name.charAt(0)
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="text-[26px] font-bold text-white">{user.name}</div>
+              {user.emailVerified && (
+                <span className="flex items-center gap-1.5 rounded-pill border border-white/30 bg-white/[0.18] px-2.5 py-1 text-xs font-bold text-white">
+                  {iconSvg('M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4zM9 12l2 2 4-4', { stroke: '#7FE0A8', w: 2 })}
+                  {t.verifiedBadge}
+                </span>
+              )}
             </div>
-            <div>
-              <p className="font-semibold text-ink-strong dark:text-white">{user.name}</p>
-              <p className="mt-0.5 text-xs text-ink-faint">
-                {role === 'owner' ? t.roleOwner : role === 'admin' ? t.roleAdmin : t.roleTenant}
-              </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13.5px] text-[#D3E0F5]">
+              {user.email && (
+                <span className="flex items-center gap-1.5">
+                  {iconSvg('M3 5h18v14H3zM4 7l8 6 8-6', { stroke: '#D3E0F5', w: 1.7 })}
+                  {user.email}
+                </span>
+              )}
+              {user.phone && (
+                <span className="flex items-center gap-1.5">
+                  {iconSvg('M5 4h4l2 5-3 2a12 12 0 005 5l2-3 5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z', {
+                    stroke: '#D3E0F5',
+                    w: 1.7,
+                  })}
+                  {user.phone}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                {iconSvg('M12 7v5l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z', { stroke: '#D3E0F5', w: 1.7 })}
+                {t.memberSince(formatMemberSince(user.createdAt, lang))}
+              </span>
             </div>
           </div>
-          <div className="my-2 h-px bg-card-border dark:bg-white/10" />
-          <nav className="flex flex-col gap-1">
-            <NavItem label={t.navProfile} active={tab === 'profile'} onClick={() => setTab('profile')} />
-            <NavItem label={t.navSecurity} active={tab === 'security'} onClick={() => setTab('security')} />
-            {role === 'owner' && <NavItem label={t.navOwnerDashboard} href="/partner/dashboard" />}
-            {role === 'admin' && <NavItem label={t.navAdminDashboard} href="/admin/dashboard" />}
-            {role === 'tenant' && (
-              <>
-                <NavItem label={t.navRewards} disabled disabledTitle={t.disabledTitle} />
-                <NavItem label={t.navPaymentMethods} disabled disabledTitle={t.disabledTitle} />
-                <NavItem label={t.navSaved} href="/saved" />
-              </>
-            )}
-            <NavItem label={t.navNotifications} href="/notifications" />
-          </nav>
-          <div className="my-2 h-px bg-card-border dark:bg-white/10" />
           <button
-            onClick={handleLogout}
-            className="w-full rounded-lg px-3.5 py-2.5 text-left text-sm font-medium text-danger hover:bg-danger/5"
+            type="button"
+            onClick={() => scrollToId('settings')}
+            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-white/95 px-5 text-sm font-bold text-[#1E4FB0] shadow-lg"
           >
-            {t.logout}
+            {iconSvg('M4 20h4l10-10-4-4L4 16v4zM14 6l4 4', { stroke: '#1E4FB0', w: 1.9 })}
+            {t.editProfile}
+          </button>
+        </div>
+        {isTenant && (
+          <div className="relative grid grid-cols-2 border-t border-white/15 bg-white/10 sm:grid-cols-4">
+            <ProfileStats user={user} t={t} />
+          </div>
+        )}
+      </div>
+
+      {/* BODY */}
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[260px_1fr]">
+        <aside className="rounded-card-lg border border-card-border bg-white p-3 shadow-sm lg:sticky lg:top-[88px]">
+          {isTenant && <NavRow label={t.navOverview} d={NAV_ICONS.overview} onClick={() => scrollToId('top')} />}
+          {isTenant && <NavRow label={t.navBookings} d={NAV_ICONS.bookings} onClick={() => scrollToId('bookings')} />}
+          {isTenant && <NavRow label={t.navSaved} d={NAV_ICONS.saved} onClick={() => scrollToId('saved')} />}
+          {isTenant && <NavRow label={t.navReviews} d={NAV_ICONS.reviews} disabled disabledTitle={t.disabledTitle} />}
+          <NavRow label={t.navSettings} d={NAV_ICONS.settings} onClick={() => scrollToId('settings')} />
+          {role === 'owner' && <NavRow label={t.navOwnerDashboard} d={NAV_ICONS.overview} href="/partner/dashboard" />}
+          {role === 'admin' && <NavRow label={t.navAdminDashboard} d={NAV_ICONS.overview} href="/admin/dashboard" />}
+          <NavRow label={t.navNotifications} d={NAV_ICONS.reviews} href="/notifications" />
+          <div className="my-2 h-px bg-[#F0F2F6]" />
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-danger hover:bg-danger/5"
+          >
+            <span className="flex w-[22px] justify-center">
+              {iconSvg('M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 17l5-5-5-5M15 12H3', { stroke: '#E0413B' })}
+            </span>
+            <span className="text-[14.5px] font-semibold">{t.logout}</span>
           </button>
         </aside>
 
-        <section className="min-w-0 flex-1">
-          {tab === 'profile' ? <ProfileTab user={user} onSaved={setUser} t={t} /> : <SecurityTab hasPassword={hasPassword} t={t} />}
+        <section className="flex min-w-0 flex-col gap-5">
+          {isTenant && <OwnerPitch t={t} />}
+          {isTenant && <BookingsSection t={t} lang={lang} />}
+          {isTenant && <SavedSection t={t} />}
+          <VerifySection user={user} onVerified={setUser} t={t} />
+          <SettingsSection user={user} onSaved={setUser} hasPassword={hasPassword} t={t} />
         </section>
       </div>
     </main>
+  );
+}
+
+function ProfileStats({ user, t }: { user: User; t: T }) {
+  const { bookings } = useBookings();
+  const { favorites } = useFavorites();
+  const activeCount = bookings.filter((b) => ['pending', 'confirmed', 'paid'].includes(normalizeStatus(b.status))).length;
+
+  return (
+    <>
+      <StatBox value={activeCount} label={t.statActive} />
+      <StatBox value={favorites.length} label={t.statSaved} />
+      <StatBox value={user.reviewCount ?? 0} label={t.statReviews} />
+      <StatBox value={bookings.length} label={t.statTotal} last />
+    </>
+  );
+}
+
+function OwnerPitch({ t }: { t: T }) {
+  const [ownerRequest, setOwnerRequest] = useState<OwnerRequest | null>(null);
+  const [requesting, setRequesting] = useState(false);
+
+  useEffect(() => {
+    apiClient.get<OwnerRequest | null>('/users/me/owner-request').then(setOwnerRequest).catch(() => {});
+  }, []);
+
+  async function requestOwner() {
+    setRequesting(true);
+    try {
+      const req = await apiClient.post<OwnerRequest>('/users/me/become-owner');
+      setOwnerRequest(req);
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  const requestStatus = ownerRequest ? normalizeStatus(ownerRequest.status) : null;
+
+  return (
+    <div className="flex items-center gap-4 rounded-card-lg bg-seller p-4 text-white shadow-sm">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 font-bold">H</div>
+      <div className="flex-1">
+        <p className="font-semibold">{t.becomeOwnerTitle}</p>
+        {requestStatus === 'pending' ? (
+          <p className="text-sm text-white/85">{t.ownerPending}</p>
+        ) : requestStatus === 'rejected' ? (
+          <p className="text-sm text-white/85">{t.ownerRejected}</p>
+        ) : (
+          <p className="text-sm text-white/85">{t.ownerPitch}</p>
+        )}
+      </div>
+      {requestStatus !== 'pending' && (
+        <button
+          onClick={requestOwner}
+          disabled={requesting}
+          className="rounded-btn bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25 disabled:opacity-60"
+        >
+          {requesting ? t.sendingRequest : t.requestOwner}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function BookingsSection({ t, lang }: { t: T; lang: Lang }) {
+  const { bookings, loading } = useBookings();
+
+  return (
+    <div id="bookings" className="scroll-mt-24 rounded-card-lg border border-card-border bg-white p-6 shadow-sm">
+      <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.bookingsTitle}</div>
+      {loading ? (
+        <PageLoader />
+      ) : bookings.length > 0 ? (
+        <div className="flex flex-col gap-3.5">
+          {bookings.map((b) => (
+            <div key={b.id} className="flex gap-4 rounded-2xl border border-card-border bg-[#FBFCFE] p-3.5">
+              <div className="h-24 w-[120px] shrink-0 overflow-hidden rounded-xl bg-surface-canvas">
+                {b.room?.dorm?.images?.[0] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={b.room.dorm.images[0]} alt="" className="h-full w-full object-cover" />
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-base font-bold text-ink-strong">{b.room?.dorm?.name ?? '—'}</span>
+                  <span className={`rounded-pill px-2.5 py-1 text-[11.5px] font-bold ${statusBadgeStyle(normalizeStatus(b.status))}`}>
+                    {t.statusLabel[normalizeStatus(b.status)]}
+                  </span>
+                </div>
+                <div className="mt-1 text-[13px] text-ink-faint">
+                  {b.room?.name ?? roomTypeLabel(b.room?.type, lang)} &middot; {t.checkIn} {formatDate(b.checkInDate, lang)}
+                </div>
+                <div className="mt-3 flex items-center gap-4">
+                  <span className="text-lg font-bold text-tenant">
+                    &#3647;{b.amount.toLocaleString()}
+                    <span className="text-xs font-normal text-ink-faint"> {t.perMonth}</span>
+                  </span>
+                  <Link
+                    href={`/bookings/${b.id}`}
+                    className="ml-auto rounded-btn bg-tenant px-4 py-2 text-[13px] font-bold text-white"
+                  >
+                    {t.viewDetail}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-ink-faint">{t.noBookings}</p>
+      )}
+    </div>
+  );
+}
+
+function SavedSection({ t }: { t: T }) {
+  const { favorites, favoriteIds, loaded, toggle } = useFavorites();
+  const visibleFavorites = favorites.filter((d) => favoriteIds.has(d.id));
+
+  return (
+    <div id="saved" className="scroll-mt-24 rounded-card-lg border border-card-border bg-white p-6 shadow-sm">
+      <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.savedTitle}</div>
+      {!loaded ? (
+        <PageLoader />
+      ) : visibleFavorites.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {visibleFavorites.map((dorm) => {
+            const availableRooms = dorm.rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');
+            const startingRoom = [...availableRooms].sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
+            return (
+              <Link
+                key={dorm.id}
+                href={`/dorms/${dorm.id}`}
+                className="block overflow-hidden rounded-2xl border border-card-border hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                <div className="relative h-[110px] bg-surface-canvas">
+                  {dorm.images?.[0] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={dorm.images[0]} alt="" className="h-full w-full object-cover" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggle(dorm.id);
+                    }}
+                    className="absolute right-2 top-2 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/90"
+                  >
+                    {iconSvg('M12 21s-8-4.5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6.5-8 11-8 11z', {
+                      stroke: '#E06A6A',
+                      fill: '#E06A6A',
+                    })}
+                  </button>
+                </div>
+                <div className="p-3">
+                  <StarRating rating={dorm.avgRating} count={dorm.reviewCount} />
+                  <div className="mt-1 truncate text-sm font-bold text-ink-strong">{dorm.name}</div>
+                  <div className="mt-0.5 text-[11.5px] text-ink-faint">{dorm.province}</div>
+                  {startingRoom && (
+                    <div className="mt-2">
+                      <span className="text-base font-bold text-tenant">
+                        &#3647;{startingRoom.pricePerMonth.toLocaleString()}
+                      </span>
+                      <span className="text-[11px] text-ink-faint">{t.perMonth}</span>
+                    </div>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-ink-faint">{t.noSaved}</p>
+      )}
+    </div>
+  );
+}
+
+type OtpStage = 'idle' | 'sending' | 'input' | 'verifying' | 'done';
+
+function VerifySection({ user, onVerified, t }: { user: User; onVerified: (u: User) => void; t: T }) {
+  const [stage, setStage] = useState<OtpStage>(user.emailVerified ? 'done' : 'idle');
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  async function sendOtp() {
+    setStage('sending');
+    setError(null);
+    try {
+      await apiClient.post('/users/me/send-verification-otp');
+      setStage('input');
+      setCode('');
+      setCountdown(60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.otpError);
+      setStage('idle');
+    }
+  }
+
+  async function verifyCode() {
+    setStage('verifying');
+    setError(null);
+    try {
+      const updated = await apiClient.post<User>('/users/me/verify-email-otp', { code });
+      onVerified(updated);
+      setStage('done');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.otpError);
+      setStage('input');
+    }
+  }
+
+  if (!user.email) return null;
+
+  const done = stage === 'done' || user.emailVerified;
+
+  return (
+    <div className={`rounded-card-lg border bg-white p-6 shadow-sm ${done ? 'border-[#CBEEDD]' : 'border-card-border'}`}>
+      <div className="flex items-center gap-3.5">
+        <span
+          className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl ${done ? 'bg-[#E7F7EF]' : 'bg-[#EAF1FF]'}`}
+        >
+          {iconSvg('M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4zM9 12l2 2 4-4', {
+            stroke: done ? '#1FB56E' : '#2F6FE0',
+            w: 1.8,
+          })}
+        </span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[17px] font-bold text-ink-strong">{t.verifyTitle}</span>
+            <span
+              className={`rounded-pill px-2.5 py-1 text-[11.5px] font-bold ${done ? 'bg-[#E7F7EF] text-[#12704A]' : 'bg-[#FFF3E0] text-[#C77B14]'}`}
+            >
+              {done ? t.verifiedTag : t.unverifiedTag}
+            </span>
+          </div>
+          <div className="mt-0.5 text-[13px] text-ink-faint">{done ? t.verifyDescDone : t.verifyDescIdle}</div>
+        </div>
+        {stage === 'idle' && (
+          <button
+            type="button"
+            onClick={sendOtp}
+            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-tenant px-5 text-sm font-bold text-white shadow-sm"
+          >
+            {t.sendOtp}
+          </button>
+        )}
+        {stage === 'sending' && (
+          <span className="text-sm font-semibold text-ink-faint">{t.sendingOtp}</span>
+        )}
+      </div>
+
+      {error && (stage === 'idle' || stage === 'sending') && <p className="mt-3 text-sm text-danger">{error}</p>}
+
+      {(stage === 'input' || stage === 'verifying') && (
+        <div className="mt-5 border-t border-[#F0F2F6] pt-5">
+          <div className="text-[13.5px] text-[#5B616C]">{t.otpSentTo(user.email)}</div>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            maxLength={6}
+            inputMode="numeric"
+            placeholder="123456"
+            className="mt-3.5 h-14 w-full max-w-[220px] rounded-xl border-2 border-[#E4E7EC] bg-[#F7F9FC] px-4 text-center text-2xl font-bold tracking-[6px] text-ink-strong focus:border-tenant focus:outline-none"
+          />
+          {error && <p className="mt-2.5 text-sm text-danger">{error}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              onClick={verifyCode}
+              disabled={stage === 'verifying' || code.length !== 6}
+              className="h-[46px] rounded-xl bg-gradient-to-br from-[#178F5A] to-[#1FB56E] px-6 text-[14.5px] font-bold text-white shadow-sm disabled:opacity-60"
+            >
+              {stage === 'verifying' ? t.verifying : t.verifyCode}
+            </button>
+            <span className="text-[13px] text-ink-faint">
+              {countdown > 0 ? (
+                t.resendIn(`00:${String(countdown).padStart(2, '0')}`)
+              ) : (
+                <button type="button" onClick={sendOtp} className="font-bold text-tenant">
+                  {t.resend}
+                </button>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {stage === 'done' && (
+        <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-[#E7F7EF] px-4 py-3.5">
+          {iconSvg('M8 12l3 3 5-6', { stroke: '#fff', w: 2.2, fill: '#1FB56E' })}
+          <span className="text-sm font-semibold text-[#12704A]">{t.verifySuccess}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsSection({
+  user,
+  onSaved,
+  hasPassword,
+  t,
+}: {
+  user: User;
+  onSaved: (u: User) => void;
+  hasPassword: boolean;
+  t: T;
+}) {
+  const [name, setName] = useState(user.name);
+  const [phone, setPhone] = useState(user.phone ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaved, setPwSaved] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const updated = await apiClient.patch<User>('/users/me', { name, phone: phone || undefined });
+      onSaved(updated);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.saveError);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(null);
+    setPwSaved(false);
+    if (newPassword !== confirmPassword) {
+      setPwError(t.passwordMismatch);
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await apiClient.patch('/users/me/password', { currentPassword, newPassword });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPwSaved(true);
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : t.passwordChangeError);
+    } finally {
+      setPwSaving(false);
+    }
+  }
+
+  const inputBoxClass =
+    'h-12 w-full rounded-xl border border-[#E4E7EC] bg-white px-4 text-[14.5px] text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none';
+
+  return (
+    <div id="settings" className="scroll-mt-24 flex flex-col gap-5">
+      <div className="rounded-card-lg border border-card-border bg-white p-6 shadow-sm">
+        <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.fieldsTitle}</div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.nameLabel}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className={inputBoxClass} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.emailLabel}</label>
+            {fieldBox(iconSvg('M3 5h18v14H3zM4 7l8 6 8-6', { stroke: '#9AA0AB', w: 1.7 }), user.email ?? '—')}
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.phoneLabel}</label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={t.phoneNotSet}
+              className={inputBoxClass}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.roleLabel}</label>
+            {fieldBox(
+              iconSvg('M12 12a4 4 0 100-8 4 4 0 000 8zM4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1', {
+                stroke: '#9AA0AB',
+                w: 1.7,
+              }),
+              user.role.toLowerCase() === 'owner' ? t.roleOwner : user.role.toLowerCase() === 'admin' ? t.roleAdmin : t.roleTenant,
+            )}
+          </div>
+        </div>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+        {saved && <p className="mt-3 text-sm text-success">{t.savedProfile}</p>}
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-btn bg-tenant px-6 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+          >
+            {saving ? t.saving : t.saveInfo}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-card-lg border border-card-border bg-white p-6 shadow-sm">
+        <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.passwordTitle}</div>
+        {!hasPassword ? (
+          <p className="text-sm text-ink-faint">{t.googleOnlyNote}</p>
+        ) : (
+          <form onSubmit={handlePasswordSubmit} className="flex max-w-md flex-col gap-3.5">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.currentPassword}</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className={inputBoxClass}
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.newPassword}</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={inputBoxClass}
+                minLength={6}
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-ink-faint">{t.confirmPassword}</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={inputBoxClass}
+                minLength={6}
+                required
+              />
+            </div>
+            {pwError && <p className="text-sm text-danger">{pwError}</p>}
+            {pwSaved && <p className="text-sm text-success">{t.passwordChanged}</p>}
+            <button
+              type="submit"
+              disabled={pwSaving}
+              className="self-start rounded-btn bg-tenant px-6 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+            >
+              {pwSaving ? t.updating : t.updatePassword}
+            </button>
+          </form>
+        )}
+
+        <div className="mt-5 flex items-center justify-between rounded-xl bg-[#F7F9FC] px-4 py-3.5">
+          <span className="text-sm font-semibold text-ink-strong">{t.twoFactor}</span>
+          <span
+            title={t.disabledTitle}
+            className="cursor-not-allowed rounded-pill bg-white px-3 py-1 text-xs font-medium text-ink-faint"
+          >
+            {t.comingSoon}
+          </span>
+        </div>
+        <div className="mt-2.5 flex items-center justify-between rounded-xl bg-[#F7F9FC] px-4 py-3.5">
+          <span className="text-sm font-semibold text-ink-strong">{t.loginDevices}</span>
+          <span
+            title={t.disabledTitle}
+            className="cursor-not-allowed rounded-pill bg-white px-3 py-1 text-xs font-medium text-ink-faint"
+          >
+            {t.comingSoon}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }

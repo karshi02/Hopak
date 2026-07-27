@@ -84,6 +84,13 @@ model User {
   googleId  String?  @unique
   suspended Boolean  @default(false)
 
+  // ยืนยันตัวตนด้วย OTP ทางอีเมล (ผู้ใช้กดยืนยันเองจากหน้าโปรไฟล์)
+  emailVerified Boolean   @default(false)
+  otpCodeHash   String?
+  otpExpiresAt  DateTime?
+  otpSentAt     DateTime?
+  otpAttempts   Int       @default(0)
+
   // ข้อมูลบัญชีรับเงินของเจ้าของหอ — ใช้ตอนแอดมินโอนยอด payout ให้
   bankName          String?
   bankAccountNumber String?

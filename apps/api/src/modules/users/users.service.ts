@@ -1,10 +1,21 @@
-import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma.service';
+import { MailService } from '../mail/mail.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 const SALT_ROUNDS = 10;
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
 const SELECT_SAFE = {
   id: true,
@@ -15,6 +26,7 @@ const SELECT_SAFE = {
   avatarUrl: true,
   address: true,
   googleId: true,
+  emailVerified: true,
   bankName: true,
   bankAccountNumber: true,
   promptpayId: true,
@@ -24,10 +36,19 @@ const SELECT_SAFE = {
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  private logger = new Logger(UsersService.name);
 
-  findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id }, select: SELECT_SAFE });
+  constructor(
+    private prisma: PrismaService,
+    private mail: MailService,
+  ) {}
+
+  async findById(id: string) {
+    const [user, reviewCount] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id }, select: SELECT_SAFE }),
+      this.prisma.review.count({ where: { tenantId: id } }),
+    ]);
+    return user ? { ...user, reviewCount } : user;
   }
 
   async updateProfile(id: string, data: UpdateProfileDto) {
@@ -67,5 +88,58 @@ export class UsersService {
 
   myOwnerRequest(userId: string) {
     return this.prisma.ownerRequest.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async sendVerificationOtp(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.email) throw new BadRequestException('บัญชีนี้ไม่มีอีเมลผูกไว้');
+    if (user.emailVerified) throw new BadRequestException('บัญชีนี้ยืนยันอีเมลแล้ว');
+    if (user.otpSentAt && Date.now() - user.otpSentAt.getTime() < OTP_RESEND_COOLDOWN_MS) {
+      throw new BadRequestException('กรุณารอสักครู่ก่อนขอรหัสใหม่');
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const otpCodeHash = await bcrypt.hash(code, SALT_ROUNDS);
+    const now = new Date();
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { otpCodeHash, otpExpiresAt: new Date(now.getTime() + OTP_TTL_MS), otpSentAt: now, otpAttempts: 0 },
+    });
+
+    const sent = await this.mail.send(
+      user.email,
+      'รหัสยืนยันอีเมล Hopak',
+      `<p>รหัสยืนยันอีเมลของคุณคือ</p><h2 style="letter-spacing:4px">${code}</h2><p>รหัสนี้หมดอายุใน 10 นาที</p>`,
+    );
+    // ส่งไม่สำเร็จได้ทั้งเพราะ SMTP ยังไม่ตั้งค่า หรือ Resend sandbox mode reject โดเมนที่ไม่ verify
+    // (ดูสาเหตุจริงจาก error log ของ MailService เอง) — log รหัสสำรองไว้ให้ทดสอบต่อได้ทั้งสองกรณี
+    if (!sent) this.logger.warn(`[DEV fallback] ส่งอีเมลไม่สำเร็จ — OTP สำหรับ ${user.email} คือ ${code}`);
+
+    return { sent, email: user.email };
+  }
+
+  async verifyEmailOtp(userId: string, code: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.emailVerified) throw new BadRequestException('บัญชีนี้ยืนยันอีเมลแล้ว');
+    if (!user.otpCodeHash || !user.otpExpiresAt) throw new BadRequestException('กรุณาขอรหัส OTP ก่อน');
+    if (user.otpExpiresAt.getTime() < Date.now()) throw new UnauthorizedException('รหัส OTP หมดอายุ กรุณาขอรหัสใหม่');
+    if (user.otpAttempts >= OTP_MAX_ATTEMPTS) {
+      throw new UnauthorizedException('กรอกผิดเกินจำนวนที่กำหนด กรุณาขอรหัสใหม่');
+    }
+
+    const valid = await bcrypt.compare(code, user.otpCodeHash);
+    if (!valid) {
+      await this.prisma.user.update({ where: { id: userId }, data: { otpAttempts: { increment: 1 } } });
+      throw new UnauthorizedException('รหัส OTP ไม่ถูกต้อง');
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: true, otpCodeHash: null, otpExpiresAt: null, otpAttempts: 0 },
+      select: SELECT_SAFE,
+    });
   }
 }

@@ -54,8 +54,13 @@ export default function SavedPage() {
               href={`/dorms/${dorm.id}`}
               className="relative block overflow-hidden rounded-card border border-card-border bg-white hover:shadow-md dark:border-white/10 dark:bg-[#1a1a19]"
             >
-              <div className="relative flex h-36 items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
-                {t.photoPlaceholder}
+              <div className="relative flex h-36 items-center justify-center overflow-hidden bg-surface-canvas font-mono text-xs text-ink-faint dark:bg-[#2c2c2a]">
+                {dorm.images?.[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={dorm.images[0]} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  t.photoPlaceholder
+                )}
                 <FavoriteButton active={favoriteIds.has(dorm.id)} onToggle={() => toggle(dorm.id)} />
               </div>
               <div className="p-4">

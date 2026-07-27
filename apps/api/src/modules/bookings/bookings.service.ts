@@ -36,7 +36,11 @@ export class BookingsService {
   }
 
   listForTenant(tenantId: string) {
-    return this.prisma.booking.findMany({ where: { tenantId }, include: { room: true } });
+    return this.prisma.booking.findMany({
+      where: { tenantId },
+      include: { room: { include: { dorm: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   listForOwner(ownerId: string) {

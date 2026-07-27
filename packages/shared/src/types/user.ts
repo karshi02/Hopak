@@ -14,6 +14,8 @@ export interface User {
   suspended?: boolean;
   createdAt?: string;
   bookingCount?: number;
+  reviewCount?: number;
+  emailVerified?: boolean;
   bankName?: string | null;
   bankAccountNumber?: string | null;
   promptpayId?: string | null;

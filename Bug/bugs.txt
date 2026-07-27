@@ -458,7 +458,7 @@ title="เร็วๆ นี้"/"Coming soon" ยืนยันว่าต�
 สถานะ: แก้แล้ว + ทดสอบผ่าน curl (สร้าง user จริงผ่าน endpoint ใหม่, ค้นหาเจอ
 หอ/user/booking จริง) tsc --noEmit ผ่าน 0 error (26/07/2026)
 
-[39] Production: DNS ใช้งานได้แล้ว แต่ nginx บน server จริงไม่แยก server_name + HTTPS ยังไม่พร้อม
+[แก้แล้ว] [39] Production: DNS ใช้งานได้แล้ว แต่ nginx บน server จริงไม่แยก server_name + HTTPS ยังไม่พร้อม
 --------------------------------------------------------
 ไฟล์: docker/nginx-hopak.conf (ไฟล์ในโปรเจกต์ vs config จริงบน server ไม่ตรงกัน)
 อาการ: เช็ค DNS ผ่านหมดแล้ว — NS ชี้ th13/th14.hostatom.com ถูกต้อง, A record
@@ -474,9 +474,50 @@ server จริงยังเป็นค่า default (proxy ทุกอย
 เพิ่มเติม: port 443 (HTTPS) closed/filtered จาก server — ยังไม่ได้ตั้ง SSL
 (certbot) เลย เข้า https://hoprak.com ไม่ได้เลยตอนนี้
 สถานะ: ยังไม่แก้ (ต้องทำบน server จริงผ่าน SSH ไม่ใช่แก้โค้ดในโปรเจกต์) —
-ต้องทำ: (1) copy docker/nginx-hopak.conf ไปที่ /etc/nginx/sites-available/
-บน server จริง แล้ว symlink เข้า sites-enabled + nginx -t + reload (2) รัน
-certbot --nginx -d hoprak.com -d www.hoprak.com -d app.hoprak.com -d api.hoprak.com
-เพื่อเปิด HTTPS (3) เช็ค GOOGLE_CLIENT callback URL ต้องเปลี่ยนเป็น
-https://api.hoprak.com/auth/google/callback ให้ตรง (เกี่ยวโยงกับ [31])
-(27/07/2026)
+แก้ไข: รื้อของเก่าทั้งหมดบน VPS ทิ้ง (container+volume+nginx site+cert เก่า)
+แล้ว deploy ใหม่ทั้งชุด (ดู DEPLOY.md ขั้นตอน 0-11): clone โค้ดใหม่, copy
+docker/nginx-hopak.conf เข้า sites-available/sites-enabled จริง, รัน
+certbot --nginx -d app.hoprak.com -d api.hoprak.com -d hoprak.com -d www.hoprak.com
+สำเร็จ ออก cert จริง — แต่ HTTPS ยังเข้าไม่ได้อีกจุด: `ufw status` เจอ firewall
+เปิดแค่ port 22/80 ("Nginx HTTP" profile เท่านั้น) ไม่เคยเปิด 443 เลยตั้งแต่ต้น
+(สาเหตุที่แท้จริงที่ทำให้ port 443 closed/filtered จากภายนอกทั้งที่ nginx/cert
+พร้อมแล้ว) แก้ด้วย `ufw allow 443/tcp`
+ระหว่างทางเจอเพิ่ม (บั๊กใหม่ ไม่เกี่ยวกับ DNS/nginx โดยตรง): production Docker
+build ของ apps/api ล่ม restart loop ตลอด เพราะ `multer` เป็นแค่ transitive
+dependency ผ่าน @nestjs/platform-express ไม่เคยประกาศตรงใน
+apps/api/package.json (มีแต่ @types/multer) — ใช้งานได้ตอน dev local เพราะ
+pnpm hoist ให้ แต่ Docker build (strict node_modules) หาไม่เจอ = MODULE_NOT_FOUND
+แก้เพิ่ม dependency ตรง "multer": "2.0.2" ใน package.json + อัปเดต
+pnpm-lock.yaml, และ Dockerfile.api runner stage เดิมไม่ copy
+apps/api/package.json + tsconfig.json เข้าไปเลย ทำให้ `npm run db:seed`/
+`npx prisma migrate deploy` (ที่รันหลัง deploy) หา script ไม่เจอ (ENOENT
+package.json) และ npx ไปดึง prisma เวอร์ชันล่าสุดที่ไม่ตรงกับที่ pin ไว้แทน —
+แก้เพิ่ม COPY 2 ไฟล์นี้เข้า runner stage ด้วย
+สถานะ: แก้แล้วทั้งหมด — ทดสอบจริงจากภายนอก (curl -I) ยืนยัน:
+https://app.hoprak.com → 200 Next.js, https://api.hoprak.com → 404
+Express/NestJS (ถูกต้อง คนละ backend จริงแล้ว), https://hoprak.com → 301
+ไป app ถูกต้อง, cert หมดอายุ 2026-10-25 auto-renew ตั้งไว้แล้ว (27/07/2026)
+ยังต้องทำต่อ (นอกเหนือจากโค้ด/infra): อัปเดต Google OAuth Authorized redirect
+URI เป็น https://api.hoprak.com/auth/google/callback ใน Google Cloud Console
+(เกี่ยวโยงกับ [31]), เปลี่ยนรหัสผ่าน admin/owner จาก seed default "hopak1234"
+ทันทีหลัง login ครั้งแรกบน production
+
+[41] หน้า Profile: ยืนยันตัวตนด้วย OTP ทางอีเมล — error message มองไม่เห็นถ้าส่งพลาดตอนยังไม่เปิดกล่องกรอกรหัส
+--------------------------------------------------------
+ไฟล์: apps/web/src/app/(tenant)/profile/page.tsx (VerifySection)
+อาการ: ระหว่างทดสอบ endpoint ใหม่ POST /users/me/send-verification-otp (เพิ่ง
+เพิ่มฟีเจอร์ยืนยันอีเมลด้วย OTP จริง ใช้ MailService/Resend เดิม) เจอว่าถ้า
+ส่งรหัสไม่สำเร็จ (เช่น ชนช่วง cooldown 60 วิ ขอรหัสใหม่ถี่เกินไป) โค้ด setError()
+ไว้ก็จริง แต่ <p>{error}</p> อยู่ใน JSX block ที่ render เฉพาะตอน
+stage==='input'||'verifying' เท่านั้น — พอส่งพลาดตั้งแต่ตอน stage ยังเป็น 'idle'
+(กลับไป idle ใน catch) ข้อความ error เลยไม่ถูก render เลย ผู้ใช้กดปุ่ม "ส่งรหัส
+OTP" แล้วเหมือนไม่มีอะไรเกิดขึ้น ไม่รู้สาเหตุ
+แก้ไข: ย้าย error paragraph ออกมาเป็นเงื่อนไขแยก แสดงตอน stage==='idle'||'sending'
+ด้วย (เพิ่มจากเดิมที่โชว์เฉพาะ input/verifying)
+สถานะ: แก้แล้ว, ทดสอบ flow เต็ม (ส่งรหัส→อ่านโค้ดจาก log dev-mode→กรอก→ยืนยัน
+สำเร็จ emailVerified:true, badge/tag ขึ้นถูกต้อง) ผ่าน curl+browser จริง
+tsc --noEmit ผ่าน 0 error ทั้ง 2 apps (27/07/2026)
+หมายเหตุ: เพิ่ม User.emailVerified/otpCodeHash/otpExpiresAt/otpSentAt/otpAttempts
+ใน schema (migration add_user_email_otp) รวมถึงเจอ+แก้ระหว่างทาง: auth.service
+omitPassword() เดิมกรองแค่ password ไม่กรอง otpCodeHash — ขยายให้กรองคู่กัน
+กันรั่ว hash ของรหัส OTP ออกไปกับ response register/login/google-callback ทุกจุด

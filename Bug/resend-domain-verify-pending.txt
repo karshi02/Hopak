@@ -12,7 +12,9 @@
 
 DNS record ที่ต้องเพิ่มที่ Hostatom (cPanel > Zone Editor > hoprak.com)
 -----------------------------------------------------------------------
-1. TXT   Name: resend._domainkey   Content: p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDPvh+gnDJplIPqVHBKhK/Q2sfQ2jCzkPcKJpviHccmsMK4aNKrCQjniJXLL3aHoZuwtKJLD6mkzq/jk5d8aaauMSJJdrb8Zm3s5Rz2r+Ze3kgSCVgiljMIntUHObAx1NUkhpCnVhPsfbrWc64/FGOQGm3FhoSifnk/4drZPhYp+wIDAQAB
+[อัปเดต 27/07/2026 — ลบ domain entry เก่า (hopak.co.th ผิด) ใน Resend ทิ้งแล้ว
+สร้างใหม่เป็น hoprak.com ได้ DKIM key ใหม่ ใช้ชุดค่าด้านล่างนี้เท่านั้น ของเก่าเลิกใช้]
+1. TXT   Name: resend._domainkey   Content: p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC/0pic1Z/2hZy6cTFo5S2Z4ApRlBBMoz45nF8CER3cwdgWKU48Ak0V6FBu+hJ9ctVpVNHY7wzmnkRq6WMCDAjVxW7KXFMyPOdW/aSdUHYROiq/mugZ09dOJP7DVXCcyNh/xg9kI/YNZKa8dA4ml2hdQx3kKU+sCIDCw2lyg9ZlKQIDAQAB
 2. MX    Name: send   Content: feedback-smtp.ap-northeast-1.amazonses.com   Priority: 10
 3. TXT   Name: send   Content: v=spf1 include:amazonses.com ~all
 4. TXT (optional)   Name: _dmarc   Content: v=DMARC1; p=none;

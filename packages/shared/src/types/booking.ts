@@ -1,3 +1,5 @@
+import type { Dorm, Room } from './dorm';
+
 export type BookingStatus = 'pending' | 'confirmed' | 'paid' | 'cancelled' | 'completed';
 
 export interface Booking {
@@ -12,4 +14,5 @@ export interface Booking {
   note?: string;
   createdAt: string;
   cancelDeadline: string;
+  room?: Room & { dorm?: Dorm };
 }

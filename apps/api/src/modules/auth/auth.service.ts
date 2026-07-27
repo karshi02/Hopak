@@ -19,8 +19,8 @@ export class AuthService {
     return this.jwt.sign({ sub: user.id, role: user.role.toLowerCase() });
   }
 
-  private omitPassword<T extends { password?: string | null }>(user: T) {
-    const { password: _password, ...rest } = user;
+  private omitPassword<T extends { password?: string | null; otpCodeHash?: string | null }>(user: T) {
+    const { password: _password, otpCodeHash: _otpCodeHash, ...rest } = user;
     return rest;
   }
 

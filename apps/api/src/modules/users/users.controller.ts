@@ -34,4 +34,14 @@ export class UsersController {
   myOwnerRequest(@CurrentUser() user: { id: string }) {
     return this.usersService.myOwnerRequest(user.id);
   }
+
+  @Post('me/send-verification-otp')
+  sendVerificationOtp(@CurrentUser() user: { id: string }) {
+    return this.usersService.sendVerificationOtp(user.id);
+  }
+
+  @Post('me/verify-email-otp')
+  verifyEmailOtp(@CurrentUser() user: { id: string }, @Body('code') code: string) {
+    return this.usersService.verifyEmailOtp(user.id, code);
+  }
 }

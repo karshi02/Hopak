@@ -182,7 +182,7 @@ export class OwnerApplicationsService {
       'รหัสยืนยันอีเมล Hopak Seller',
       `<p>รหัสยืนยันอีเมลของคุณคือ</p><h2 style="letter-spacing:4px">${code}</h2><p>รหัสนี้หมดอายุใน 10 นาที</p>`,
     );
-    if (!sent) this.logger.warn(`[DEV] SMTP ยังไม่ตั้งค่า — OTP สำหรับ ${app.email} คือ ${code}`);
+    if (!sent) this.logger.warn(`[DEV fallback] ส่งอีเมลไม่สำเร็จ — OTP สำหรับ ${app.email} คือ ${code}`);
 
     return { sent, email: app.email };
   }
