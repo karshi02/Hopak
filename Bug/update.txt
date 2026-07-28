@@ -1,0 +1,60 @@
+========================================================
+UPDATE — Deploy ขึ้น Production สำเร็จ 28/07/2026
+========================================================
+VPS: 203.170.190.188 (hopak.co.th) · path /opt/hopak
+เว็บจริง: https://app.hoprak.com · API: https://api.hoprak.com
+
+
+สรุป: โค้ดทั้งเซสชั่น (บั๊ก [43]-[62] + security [55]-[58]) ขึ้น prod ครบ
+2 commits: 2419595 (ฟีเจอร์) + a5a7765 (security)
+
+
+ขั้นตอน deploy ที่ทำจริง
+--------------------------------------------------------
+1. git pull origin main (บน /opt/hopak)
+2. docker compose -f docker-compose.prod.yml up -d --build
+   → build api+web สำเร็จ, สร้าง volume docker_api_private (D3), คอนเทนเนอร์ขึ้นครบ
+3. prisma migrate deploy — ครั้งแรกพลาด "Could not find Prisma Schema"
+   สาเหตุ: WORKDIR คอนเทนเนอร์ = /app แต่ schema อยู่ /app/apps/api/prisma
+   แก้: รันจาก apps/api → cd apps/api && npx prisma migrate deploy
+   ผล: apply 7 migrations สำเร็จ (add_user_email_otp + 6 ตัวใหม่) DB sync
+4. แก้ role คนเก่า [43]: SELECT เจอ 0 rows / UPDATE 0 = ไม่มีใครโดนบั๊กบน prod
+
+
+ผลตรวจ prod จริงหลัง deploy (curl)
+--------------------------------------------------------
+- GET https://api.hoprak.com/settings/hero → 200 คืน {"promoCards":[]}
+  = คอลัมน์ใหม่ทำงาน migration apply จริง ไม่ 500
+- GET https://api.hoprak.com/dorms → 200
+- GET https://app.hoprak.com/ → 200
+- log api: ทุก route map ครบ (มี /admin/settings/promos, /owner-applications ใหม่)
+  "Nest application successfully started" ไม่มี error
+
+
+เช็คลิสต์ก่อน deploy — ปิดครบทุกข้อ
+--------------------------------------------------------
+[D1] ✅ migration 7 ตัว apply แล้ว DB sync (prisma 5.22 ถูกเวอร์ชัน)
+[D2] ✅ ไม่มี role เจ้าของหอผิด (UPDATE 0)
+[D3] ✅ volume api_private สร้างแล้ว — เอกสาร/สลิปไม่หายตอน redeploy ครั้งหน้า
+[D4] ✅ [55] payment IDOR แก้แล้ว (owner + CONFIRMED + กันจ่ายซ้ำ)
+[D5] ✅ [56] ลบ dead endpoint /uploads (stored XSS)
+[D6] ✅ [57] rate limit auth (zero-dep in-memory + trust proxy)
+[D7] ✅ [58] CORS จำกัด origin = FRONTEND_URL
+
+
+บทเรียนสำหรับ deploy ครั้งหน้า (กันพลาดซ้ำ)
+--------------------------------------------------------
+- path prod จริง = /opt/hopak (ไม่ใช่ ~/Hopak) และ compose อยู่ใน docker/
+- prisma migrate deploy ต้องรันจาก apps/api ไม่ใช่ /app
+  (WORKDIR = /app แต่ schema อยู่ apps/api/prisma) — ใช้:
+  docker compose -f docker-compose.prod.yml exec -T api sh -c "cd apps/api && npx prisma migrate deploy"
+- prod image ตัด devDependency แต่ยังมี prisma 5.22 ใน apps/api/node_modules
+  (npx prisma จาก /app จะโหลด 7.9.1 มาผิดเวอร์ชัน — รันจาก apps/api ถึงเจอตัวถูก)
+
+
+ยังเหลือ (ไม่บล็อกการใช้งาน)
+--------------------------------------------------------
+- smoke test กดเล่นจริงบนเว็บ: login, จอง→เคลียร์บิล→โค้ดเข้าพัก, ลืมรหัส (เช็คอีเมล),
+  กระดิ่งแจ้งเตือน — ถ้าเจอ error ค่อยเก็บ
+- ปรับปรุงในอนาคต (ไม่ด่วน): rate limiter ตอนนี้ in-memory ต่อ instance เดียว
+  ถ้าสเกลหลาย API instance ค่อยเปลี่ยนเป็น Redis-backed

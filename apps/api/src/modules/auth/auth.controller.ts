@@ -59,7 +59,9 @@ export class AuthController {
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
     try {
       const { accessToken } = await this.authService.loginWithGoogle(req.user, deviceFromReq(req));
-      res.redirect(`${FRONTEND_URL}/auth/google/callback?token=${accessToken}`);
+      // ส่ง token ผ่าน URL fragment (#) ไม่ใช่ query (?) — fragment เบราว์เซอร์ไม่ส่งไป server
+      // จึงไม่หลุดเข้า nginx access log และไม่รั่วผ่าน Referer header ไปยัง resource บนหน้านั้น
+      res.redirect(`${FRONTEND_URL}/auth/google/callback#token=${accessToken}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'google_login_failed';
       res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(message)}`);

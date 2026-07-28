@@ -1104,3 +1104,26 @@ error ทั้ง 2 apps (28/07/2026)
 สถานะรวม: [55]-[58] แก้ครบ + ทดสอบ curl ผ่านทุกเคส tsc --noEmit ผ่าน 0 error
 เหลือใน PRE-DEPLOY-CHECKLIST: D1 migrate deploy, D2 แก้ role คนเก่า, D3 volume
 private (แก้ใน compose แล้ว รอ redeploy)
+
+[63] [ความปลอดภัย] JWT token หลุดใน URL/nginx log/Referer ตอน Google login callback
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/auth/auth.controller.ts,
+apps/web/src/app/(auth)/auth/google/callback/page.tsx
+เจอตอน: ทดสอบเจาะ + ดู nginx access log จริง เห็นบรรทัด:
+  GET /_next/.../callback/page-*.js ... Referer: .../auth/google/callback?token=eyJ...
+อาการ: หลัง login ด้วย Google API redirect ไป
+  FRONTEND_URL/auth/google/callback?token=<JWT> (ใส่ token ใน query string)
+ทำให้ token 7 วันหลุดเข้า:
+  - nginx access log (token อยู่ใน request line ทุกครั้ง)
+  - Referer header → รั่วไปทุก resource (.js/.css/รูป) ที่โหลดบนหน้านั้น
+  - browser history, proxy/CDN log
+ผลกระทบ: ใครเข้าถึง log หรือดัก Referer ได้ = ขโมย token → เข้าบัญชีได้เลย
+แก้ไข:
+- API: เปลี่ยน redirect จาก query (?token=) เป็น URL fragment (#token=)
+  fragment เบราว์เซอร์ไม่ส่งไป server จึงไม่เข้า access log และไม่รั่วผ่าน Referer
+- web callback page: อ่าน token จาก window.location.hash แทน useSearchParams
+  แล้ว window.history.replaceState ล้าง fragment ทิ้งจาก URL ทันทีหลังเก็บ token
+  (กันค้างใน history/แชร์ลิงก์ต่อ)
+สถานะ: แก้แล้ว + ยืนยันโค้ด redirect ใช้ # tsc ผ่าน 0 error ทั้ง 2 apps (28/07/2026)
+หมายเหตุ: เป็น finding จากการทำ pentest จริง (blue team ดู nginx log เจอ) —
+ตอกย้ำว่าควรมี security logging ในแอปเองด้วย (ยังเป็นช่องว่างที่ค้างอยู่)
