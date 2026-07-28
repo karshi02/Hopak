@@ -1,13 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
 export class UsersController {
   constructor(private usersService: UsersService) {}
 
@@ -43,6 +45,7 @@ export class UsersController {
   }
 
   @Post('me/send-verification-otp')
+  @RateLimit(5, 60_000) // ขอ OTP: 5 ครั้ง/นาที/IP (เสริมจาก cooldown 60 วิ ต่อบัญชีใน service)
   sendVerificationOtp(@CurrentUser() user: { id: string }) {
     return this.usersService.sendVerificationOtp(user.id);
   }

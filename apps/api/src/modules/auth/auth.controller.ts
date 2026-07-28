@@ -6,6 +6,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
@@ -14,30 +16,36 @@ function deviceFromReq(req: Request): DeviceInfo {
 }
 
 @Controller('auth')
+@UseGuards(RateLimitGuard)
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
+  @RateLimit(10, 60_000) // สมัคร: 10 ครั้ง/นาที/IP
   register(@Body() dto: RegisterDto, @Req() req: Request) {
     return this.authService.register(dto, deviceFromReq(req));
   }
 
   @Post('login')
+  @RateLimit(10, 60_000) // login: 10 ครั้ง/นาที/IP กันเดารหัสรัว
   login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.authService.login(dto, deviceFromReq(req));
   }
 
   @Post('admin-login')
+  @RateLimit(10, 60_000)
   adminLogin(@Body() dto: LoginDto, @Req() req: Request) {
     return this.authService.adminLogin(dto, deviceFromReq(req));
   }
 
   @Post('forgot-password')
+  @RateLimit(5, 60_000) // ส่งอีเมลรีเซ็ต: 5 ครั้ง/นาที/IP กันสแปมอีเมล
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
 
   @Post('reset-password')
+  @RateLimit(10, 60_000)
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.password);
   }

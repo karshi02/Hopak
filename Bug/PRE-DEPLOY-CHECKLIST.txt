@@ -42,27 +42,20 @@ prod (VPS 203.170.190.188 / hoprak.com) ยังรันโค้ดเก่�
        และประกาศ volume api_private: ท้ายไฟล์
      (public uploads ก็ควรเช็คว่าไฟล์เก่ายังอยู่ครบหลัง redeploy)
 
-[D4] Security [55] [ร้ายแรง] payment IDOR ยังไม่แก้
-     - POST /bookings/:bookingId/payment ไม่เช็คเจ้าของ + ไม่เช็คสถานะ booking
-     - ผู้เช่าคนไหนก็จ่ายเงิน/แนบสลิปทับ booking ของคนอื่นได้ (ยืนยันเจาะได้จริง)
-     - จ่าย booking ที่ยัง PENDING ได้ (ข้ามการยืนยันของเจ้าของหอ)
-     รายละเอียดเต็ม: bugs.txt entry [55]
+[D4] ✅ แก้แล้ว (commit ถัดไป) Security [55] payment IDOR
+     - pay() เช็ค ownership + status CONFIRMED + กันจ่ายซ้ำ
 
-[D5] Security [56] stored-XSS ผ่าน /uploads
-     - endpoint /uploads เปิดให้ผู้ล็อกอินอัปโหลด .html/.svg เสิร์ฟเป็น text/html
-     - grep แล้วไม่มีหน้าเว็บไหนเรียกเลย = dead endpoint
-     วิธีที่ปลอดภัยสุด: ลบ endpoint นี้ทิ้ง (uploads.controller.ts + uploads.module)
+[D5] ✅ แก้แล้ว (commit ถัดไป) Security [56] stored-XSS ผ่าน /uploads
+     - ลบ dead endpoint POST /uploads ทิ้ง
 
 
 🟡 ควรรู้ / ทำเพิ่มความปลอดภัย
 --------------------------------------------------------
-[D6] Security [57] ไม่มี rate limit เลย
-     - /auth/login เดารหัสไม่จำกัด, /auth/forgot-password + OTP spam อีเมลได้
-     - Resend มีโควตา ถ้าโดนยิงรัวอาจโดนบล็อก/คิดเงิน
-     วิธี: เพิ่ม @nestjs/throttler ครอบ endpoint กลุ่ม auth
+[D6] ✅ แก้แล้ว (commit ถัดไป) Security [57] rate limit
+     - guard in-memory zero-dep ครอบ auth (login/forgot/otp) + trust proxy
 
-[D7] Security [58] CORS เปิดทุก origin (app.enableCors() ไม่มี arg)
-     วิธี: จำกัดเป็น FRONTEND_URL (prod = https://app.hoprak.com)
+[D7] ✅ แก้แล้ว (commit ถัดไป) Security [58] CORS
+     - จำกัด origin = FRONTEND_URL (prod = https://app.hoprak.com)
 
 
 ✅ ตรวจแล้วไม่มีปัญหา (ข่าวดี)

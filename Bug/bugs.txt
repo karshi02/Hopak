@@ -1068,3 +1068,39 @@ apps/web/src/app/(tenant)/dorms/[id]/page.tsx
 สถานะ: แก้แล้ว + ทดสอบจริง (เจ้าของหอ POST /bookings ห้องตัวเองโดน 403, หน้าเว็บ
 เจ้าของเห็น "นี่คือหอพักของคุณ" ไม่มีปุ่มจองทั้ง sidebar และ modal) tsc ผ่าน 0
 error ทั้ง 2 apps (28/07/2026)
+
+========================================================
+[แก้ช่องโหว่ก่อน deploy 28/07/2026] แก้ [55]-[58] จากผลตรวจ security audit
+========================================================
+
+[55] แก้แล้ว: payment IDOR + ข้ามสถานะ
+- payments.controller ส่ง @CurrentUser().id เข้า pay()
+- pay() เช็ค 3 อย่างก่อนสร้าง Payment: (1) booking.tenantId===userId (ไม่ใช่ของ
+  คุณ→403) (2) status==='CONFIRMED' (ยังไม่ยืนยัน→400) (3) ไม่มี payment เดิม (จ่าย
+  ซ้ำ→400)
+- ทดสอบ curl ครบ: จ่ายตอน PENDING บล็อก / คนอื่นจ่ายทับ 403 / เจ้าของจ่ายหลัง
+  CONFIRMED ผ่าน / จ่ายซ้ำ 400
+
+[56] แก้แล้ว: ลบ dead endpoint POST /uploads (stored XSS)
+- ลบ uploads.controller.ts + เอาออกจาก uploads.module (เหลือ FilesController เสิร์ฟ
+  ไฟล์ private ผ่าน signed URL) — grep ยืนยันไม่มี web/mobile เรียกเลย
+- ทดสอบ: POST /uploads = 404 การอัปโหลดจริงไปผ่าน endpoint เฉพาะทางที่ whitelist
+  ชนิดไฟล์อยู่แล้ว (avatar/รูปห้อง/เอกสาร)
+
+[57] แก้แล้ว: เพิ่ม rate limit (zero-dep, in-memory fixed-window)
+- common/guards/rate-limit.guard.ts + decorators/rate-limit.decorator.ts (@RateLimit)
+- ไม่เพิ่ม npm dependency (ไม่ใช้ @nestjs/throttler) — เก็บใน Map คีย์ IP+route
+  เหมาะกับ prod instance เดียว (สเกลหลาย instance ค่อยเปลี่ยนเป็น Redis)
+- ใส่: login/register/admin-login/reset-password 10 ครั้ง/นาที, forgot-password +
+  send-verification-otp 5 ครั้ง/นาที (ต่อ IP)
+- ทดสอบ: forgot-password ครั้งที่ 6 โดน 429, login เกิน 10 โดน 429
+
+[58] แก้แล้ว: จำกัด CORS + trust proxy
+- main.ts: enableCors origin = FRONTEND_URL (prod) / localhost regex (dev)
+- app.set('trust proxy', 1) — อยู่หลัง nginx ให้ req.ip เป็น IP จริง (จำเป็นต่อ rate
+  limiter + เก็บ ip ใน Session)
+- ทดสอบ: Origin evil.com ไม่ได้ ACAO header, localhost ได้
+
+สถานะรวม: [55]-[58] แก้ครบ + ทดสอบ curl ผ่านทุกเคส tsc --noEmit ผ่าน 0 error
+เหลือใน PRE-DEPLOY-CHECKLIST: D1 migrate deploy, D2 แก้ role คนเก่า, D3 volume
+private (แก้ใน compose แล้ว รอ redeploy)
