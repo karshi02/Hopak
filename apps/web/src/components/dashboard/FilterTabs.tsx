@@ -33,7 +33,7 @@ export function FilterTabs({ options, value, onChange }: FilterTabsProps) {
           <button
             key={opt.value}
             onClick={() => onChange(opt.value)}
-            className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-opacity ${
+            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition-opacity ${
               toneClass ?? (active ? 'bg-[#0b0b0b] text-white dark:bg-white dark:text-[#0b0b0b]' : 'bg-black/5 text-ink-subtitle hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15')
             } ${hasTone && !active ? 'opacity-60' : ''}`}
           >

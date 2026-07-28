@@ -3,6 +3,15 @@ import { PrismaService } from '../../prisma.service';
 
 const SETTINGS_ID = 'site';
 
+export interface PromoCard {
+  tagTh: string;
+  titleTh: string;
+  subTh: string;
+  tagEn: string;
+  titleEn: string;
+  subEn: string;
+}
+
 @Injectable()
 export class SettingsService {
   constructor(private prisma: PrismaService) {}
@@ -13,7 +22,27 @@ export class SettingsService {
       heroImageUrl: settings?.heroImageUrl ?? null,
       posterUrls: settings?.posterUrls ?? [],
       areaImages: (settings?.areaImages as Record<string, string>) ?? {},
+      promoCards: (settings?.promoCards as unknown as PromoCard[]) ?? [],
     };
+  }
+
+  // รับการ์ดจุดขายทั้งชุด (แทนที่ของเดิมทั้งหมด) — เก็บได้สูงสุด 3 ใบตามดีไซน์หน้าแรก
+  // ตัด field ที่ไม่รู้จักออก + trim กันข้อมูลขยะ; ถ้าส่ง array ว่างมา = กลับไปใช้ข้อความ default
+  async setPromoCards(cards: PromoCard[]) {
+    const clean = (cards ?? []).slice(0, 3).map((c) => ({
+      tagTh: String(c.tagTh ?? '').trim(),
+      titleTh: String(c.titleTh ?? '').trim(),
+      subTh: String(c.subTh ?? '').trim(),
+      tagEn: String(c.tagEn ?? '').trim(),
+      titleEn: String(c.titleEn ?? '').trim(),
+      subEn: String(c.subEn ?? '').trim(),
+    }));
+    const settings = await this.prisma.siteSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, promoCards: clean as unknown as object },
+      update: { promoCards: clean as unknown as object },
+    });
+    return { promoCards: settings.promoCards as unknown as PromoCard[] };
   }
 
   async setHero(heroImageUrl: string) {

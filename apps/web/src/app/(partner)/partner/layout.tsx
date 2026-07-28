@@ -12,7 +12,7 @@ import { PageLoader } from '@/components/PageLoader';
 import { AdminIcon } from '@/components/admin/AdminIcon';
 import type { Booking } from '@hopak/shared';
 
-type IconKey = 'dash' | 'bed' | 'book' | 'money' | 'bell' | 'gear';
+type IconKey = 'dash' | 'bed' | 'book' | 'money' | 'bell' | 'gear' | 'shield';
 interface NavItem {
   href: string;
   icon: IconKey;
@@ -25,6 +25,7 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/partner/dashboard', icon: 'dash', label: 'แดชบอร์ด' },
     { href: '/partner/rooms', icon: 'bed', label: 'ห้องพัก' },
     { href: '/partner/requests', icon: 'book', label: 'การจอง', badgeKey: 'pending' },
+    { href: '/partner/check-in', icon: 'shield', label: 'ยืนยันเข้าพัก' },
     { href: '/partner/slips', icon: 'money', label: 'ใบจอง' },
     { href: '/partner/notifications', icon: 'bell', label: 'แจ้งเตือน' },
     { href: '/partner/settings', icon: 'gear', label: 'ตั้งค่า' },
@@ -33,6 +34,7 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/partner/dashboard', icon: 'dash', label: 'Dashboard' },
     { href: '/partner/rooms', icon: 'bed', label: 'Rooms' },
     { href: '/partner/requests', icon: 'book', label: 'Bookings', badgeKey: 'pending' },
+    { href: '/partner/check-in', icon: 'shield', label: 'Check-in' },
     { href: '/partner/slips', icon: 'money', label: 'Slips' },
     { href: '/partner/notifications', icon: 'bell', label: 'Notifications' },
     { href: '/partner/settings', icon: 'gear', label: 'Settings' },
@@ -51,6 +53,14 @@ const PAGE_HEADER: Record<string, Record<'th' | 'en', { title: string; subtitle:
   '/partner/requests': {
     th: { title: 'การจอง', subtitle: 'คำขอจองและผู้เช่าปัจจุบัน' },
     en: { title: 'Bookings', subtitle: 'Requests and current tenants' },
+  },
+  '/partner/profile': {
+    th: { title: 'โปรไฟล์ของฉัน', subtitle: 'รูปโปรไฟล์ ข้อมูลส่วนตัว และรหัสผ่าน' },
+    en: { title: 'My Profile', subtitle: 'Photo, personal info, and password' },
+  },
+  '/partner/check-in': {
+    th: { title: 'ยืนยันเข้าพัก', subtitle: 'กรอกโค้ดจากใบเสร็จของผู้เช่าเพื่อยืนยันตัวตนตอนเข้าพัก' },
+    en: { title: 'Check-in', subtitle: "Enter the code from the tenant's receipt to verify them at check-in" },
   },
   '/partner/slips': {
     th: { title: 'ใบจอง', subtitle: 'รายละเอียดห้อง ราคา และใบยืนยันการชำระเงิน' },
@@ -77,6 +87,12 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
   const { lang, setLang } = useLang();
   const isOwner = user?.role.toLowerCase() === 'owner';
   const [pendingCount, setPendingCount] = useState(0);
+  const [navOpen, setNavOpen] = useState(false);
+
+  // เปลี่ยนหน้าแล้วปิดลิ้นชักเมนูเสมอ ไม่งั้นบนมือถือเมนูจะค้างทับหน้าใหม่
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!loading && !isOwner) router.replace('/login');
@@ -104,8 +120,18 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-canvas">
+      {/* ฉากหลังทึบตอนเปิดเมนูบนจอเล็ก — กดที่ไหนก็ปิดเมนูได้ */}
+      {navOpen && (
+        <div onClick={() => setNavOpen(false)} className="fixed inset-0 z-40 bg-black/40 lg:hidden" aria-hidden />
+      )}
+
       {/* ===== SIDEBAR ===== */}
-      <aside className="flex w-64 shrink-0 flex-col bg-admin-sidebar px-4 py-5">
+      {/* จอเล็ก = ลิ้นชักเลื่อนเข้าออก, จอ lg ขึ้นไป = คอลัมน์ติดอยู่กับที่เหมือนเดิม */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col bg-admin-sidebar px-4 py-5 transition-transform duration-200 lg:static lg:translate-x-0 ${
+          navOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="flex items-center gap-2.5 px-1 pb-5">
           <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] bg-seller shadow-[0_6px_16px_rgba(23,143,90,0.4)] font-sans text-xl font-extrabold text-white">
             H
@@ -148,15 +174,25 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           <LangSwitch lang={lang} onChange={setLang} dark />
         </div>
 
-        <div className="mt-2 flex items-center gap-2.5 border-t border-admin-sidebarborder px-1 py-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-pill bg-gradient-to-br from-tenant to-tenant-dark font-sans text-[13px] font-bold text-white">
-            {initials}
+        <Link
+          href="/partner/profile"
+          className="mt-2 flex items-center gap-2.5 rounded-[11px] border-t border-admin-sidebarborder px-1 py-3 transition-colors hover:bg-white/5"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-gradient-to-br from-tenant to-tenant-dark font-sans text-[13px] font-bold text-white">
+            {user?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials
+            )}
           </span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13.5px] font-semibold text-white">{user?.name}</div>
-            <div className="text-[11.5px] text-admin-sidebarmuted">{lang === 'th' ? 'เจ้าของหอ' : 'Owner'}</div>
+            <div className="text-[11.5px] text-admin-sidebarmuted">
+              {lang === 'th' ? 'จัดการโปรไฟล์' : 'Manage profile'}
+            </div>
           </div>
-        </div>
+        </Link>
         <button
           onClick={handleLogout}
           className="flex items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-left text-sm font-semibold text-danger-dark hover:bg-danger-dark/10"
@@ -168,32 +204,50 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
 
       {/* ===== MAIN ===== */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-[72px] shrink-0 items-center gap-4 border-b border-card-border bg-white px-7">
-          <div>
-            <div className="text-xl font-bold leading-none text-ink-strong">{t.title}</div>
-            <div className="mt-1 text-[12.5px] text-ink-muted">{t.subtitle}</div>
+        <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-card-border bg-white px-4 sm:px-7">
+          <button
+            onClick={() => setNavOpen(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-card-border text-ink-subtitle lg:hidden"
+            aria-label="menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <div className="truncate text-lg font-bold leading-none text-ink-strong sm:text-xl">{t.title}</div>
+            <div className="mt-1 hidden text-[12.5px] text-ink-muted sm:block">{t.subtitle}</div>
           </div>
           <div className="ml-auto flex items-center gap-2.5">
             <Link
               href="/partner/rooms/new"
-              className="flex items-center gap-2 rounded-[11px] bg-tenant px-4 py-2.5 text-sm font-semibold text-white hover:bg-tenant-dark"
+              className="flex h-10 items-center gap-2 rounded-[11px] bg-tenant px-3 text-sm font-semibold text-white hover:bg-tenant-dark sm:px-4"
             >
               <AdminIcon name="plus" size={17} />
-              {lang === 'th' ? 'เพิ่มห้องพัก' : 'Add Room'}
+              <span className="hidden sm:inline">{lang === 'th' ? 'เพิ่มห้องพัก' : 'Add Room'}</span>
             </Link>
             <Link
               href="/partner/notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-[11px] border border-card-border bg-white text-ink-subtitle"
+              className="relative hidden h-10 w-10 items-center justify-center rounded-[11px] border border-card-border bg-white text-ink-subtitle sm:flex"
             >
               <AdminIcon name="bell" size={19} />
             </Link>
-            <span className="flex h-10 w-10 items-center justify-center rounded-pill bg-gradient-to-br from-tenant to-tenant-dark font-sans text-[13px] font-bold text-white">
-              {initials}
-            </span>
+            <Link
+              href="/partner/profile"
+              title={lang === 'th' ? 'จัดการโปรไฟล์' : 'Manage profile'}
+              className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-gradient-to-br from-tenant to-tenant-dark font-sans text-[13px] font-bold text-white ring-tenant ring-offset-2 transition-shadow hover:ring-2"
+            >
+              {user?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </Link>
           </div>
         </div>
 
-        <main className="flex-1 overflow-auto px-7 py-6">{children}</main>
+        <main className="flex-1 overflow-auto px-4 py-5 sm:px-7 sm:py-6">{children}</main>
       </div>
     </div>
   );

@@ -86,7 +86,7 @@ export default function PayBookingPage() {
   if (!booking) return <PageLoader />;
 
   return (
-    <main className="mx-auto max-w-sm p-6">
+    <main className="mx-auto max-w-sm p-4 sm:p-6">
       <h1 className="text-xl font-bold text-[#0b0b0b] dark:text-white">{t.title}</h1>
       <p className="mt-1 text-3xl font-semibold tabular-nums text-[#0b0b0b] dark:text-white">
         {booking.amount.toLocaleString()} ฿

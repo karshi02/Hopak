@@ -41,7 +41,7 @@ export default function SavedPage() {
   if (!loaded) return <PageLoader />;
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className="mx-auto max-w-6xl p-4 sm:p-6">
       <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

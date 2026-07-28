@@ -66,7 +66,7 @@ export default function PartnerSlipsPage() {
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.id}</th>

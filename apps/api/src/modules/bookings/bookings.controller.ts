@@ -26,9 +26,17 @@ export class BookingsController {
     return this.bookingsService.listForTenant(user.id);
   }
 
+  // ยืนยันโทเค็นเข้าพัก — ต้องอยู่ก่อน @Get(':id') ไม่งั้น 'check-in' จะถูกจับเป็น id
+  @Post('check-in')
+  @Roles('owner')
+  @UseGuards(RolesGuard)
+  checkIn(@CurrentUser() user: { id: string }, @Body() body: { token: string }) {
+    return this.bookingsService.checkIn(user.id, body.token ?? '');
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.bookingsService.findOne(id);
+  findOne(@CurrentUser() user: { id: string; role: string }, @Param('id') id: string) {
+    return this.bookingsService.findOneFor(id, user);
   }
 
   @Patch(':id/confirm')

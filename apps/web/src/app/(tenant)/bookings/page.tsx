@@ -47,7 +47,7 @@ export default function BookingsPage() {
   }, [router]);
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
+    <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <h1 className="text-xl font-bold text-[#0b0b0b] dark:text-white">{t.title}</h1>
       {loading ? (
         <PageLoader />

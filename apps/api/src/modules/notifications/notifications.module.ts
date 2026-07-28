@@ -3,12 +3,13 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { PushService } from './push/push.service';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { UploadsService } from '../uploads/uploads.service';
 import { PrismaService } from '../../prisma.service';
 
 @Module({
   imports: [RealtimeModule],
   controllers: [NotificationsController],
-  providers: [NotificationsService, PushService, PrismaService],
+  providers: [NotificationsService, PushService, UploadsService, PrismaService],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

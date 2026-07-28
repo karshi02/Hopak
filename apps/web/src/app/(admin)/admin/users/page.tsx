@@ -352,18 +352,18 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs options={FILTERS} value={roleFilter} onChange={setRoleFilter} />
-        <div className="flex shrink-0 items-center gap-2.5">
+        <div className="flex items-center gap-2.5 lg:shrink-0">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="h-9 w-56 rounded-btn border border-card-border bg-white px-3.5 text-sm text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none"
+            className="h-9 min-w-0 flex-1 rounded-btn border border-card-border bg-white px-3.5 text-sm text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none lg:w-56 lg:flex-none"
           />
           <button
             onClick={openAdd}
-            className="rounded-btn bg-tenant px-4 py-2 text-sm font-semibold text-white hover:bg-tenant-dark"
+            className="shrink-0 whitespace-nowrap rounded-btn bg-tenant px-4 py-2 text-sm font-semibold text-white hover:bg-tenant-dark"
           >
             {t.addUser}
           </button>
@@ -371,7 +371,7 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.name}</th>
@@ -452,8 +452,8 @@ export default function AdminUsersPage() {
       </div>
 
       {warningTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-sm rounded-card-lg border border-card-border bg-white p-5 shadow-card">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
             <h2 className="font-bold text-ink-strong">{t.warningTitle}</h2>
             <p className="mt-1 text-sm text-ink-subtitle">
               {t.to} {warningTarget.name} {warningTarget.email && `(${warningTarget.email})`}
@@ -516,8 +516,8 @@ export default function AdminUsersPage() {
       )}
 
       {docsTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-sm rounded-card-lg border border-card-border bg-white p-5 shadow-card">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
             <h2 className="font-bold text-ink-strong">{t.docsTitle(docsTarget.name)}</h2>
             <div className="mt-3 flex max-h-96 flex-col gap-4 overflow-y-auto">
               <div>
@@ -588,8 +588,8 @@ export default function AdminUsersPage() {
       )}
 
       {addOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-sm rounded-card-lg border border-card-border bg-white p-5 shadow-card">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
             <h2 className="font-bold text-ink-strong">{t.addUserTitle}</h2>
             <p className="mt-1 text-sm text-ink-subtitle">{t.addUserHint}</p>
             <form onSubmit={submitAdd} className="mt-4 flex flex-col gap-3">
@@ -673,8 +673,8 @@ export default function AdminUsersPage() {
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-sm rounded-card-lg border border-card-border bg-white p-5 shadow-card">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
             <h2 className="font-bold text-ink-strong">{t.deleteConfirmTitle}</h2>
             <p className="mt-2 text-sm text-ink-subtitle">{t.deleteConfirmBody(deleteTarget.name)}</p>
             {deleteError && <p className="mt-3 text-sm text-danger">{deleteError}</p>}

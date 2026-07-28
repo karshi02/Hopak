@@ -185,7 +185,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="mt-[18px] grid grid-cols-1 gap-[18px] lg:grid-cols-[1.55fr_1fr]">
+      <div className="mt-[18px] grid grid-cols-1 gap-[18px] xl:grid-cols-[1.55fr_1fr]">
         <div className="rounded-card-lg border border-card-border bg-white p-6 shadow-card">
           <div className="flex items-center justify-between">
             <div className="text-base font-bold text-ink-strong">{t.recentBookings}</div>
@@ -194,7 +194,7 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
                 <tr className="border-b border-hairline text-xs text-ink-faint">
                   <th className="p-2 font-normal">{t.booker}</th>

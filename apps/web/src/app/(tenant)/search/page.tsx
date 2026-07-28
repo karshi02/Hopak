@@ -285,7 +285,7 @@ export default function SearchPage() {
     'w-full appearance-none bg-transparent text-[14px] font-semibold text-[#2A303C] outline-none';
 
   return (
-    <main className="mx-auto max-w-[1360px] px-6 py-6">
+    <main className="mx-auto max-w-[1360px] px-4 py-6 sm:px-6">
       {/* ===== HERO BAND ===== */}
       <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(135deg,#1E4FB0_0%,#2F6FE0_55%,#173A87_120%)] p-8 shadow-[0_16px_40px_rgba(30,79,176,0.28)]">
         <div className="pointer-events-none absolute -top-12 right-28 h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.28),transparent_66%)] blur-lg" />

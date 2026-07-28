@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma.service';
 import { MailService } from '../mail/mail.service';
+import { UploadsService } from '../uploads/uploads.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 const SALT_ROUNDS = 10;
@@ -28,6 +30,7 @@ const SELECT_SAFE = {
   googleId: true,
   emailVerified: true,
   bankName: true,
+  bankAccountName: true,
   bankAccountNumber: true,
   promptpayId: true,
   createdAt: true,
@@ -41,6 +44,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private mail: MailService,
+    private uploads: UploadsService,
   ) {}
 
   async findById(id: string) {
@@ -60,6 +64,33 @@ export class UsersService {
       }
       throw err;
     }
+  }
+
+  // รูปโปรไฟล์เป็นรูปสาธารณะ (โชว์ในหน้าเว็บทั่วไป) — ใช้ visibility 'public' เหมือนรูปหอพัก ไม่ใช่เอกสารส่วนตัว
+  async updateAvatar(id: string, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('กรุณาแนบรูปภาพ');
+    const key = `avatars/${id}/${Date.now()}-${file.originalname}`;
+    const avatarUrl = await this.uploads.upload(key, file.buffer, file.mimetype, 'public');
+    return this.prisma.user.update({ where: { id }, data: { avatarUrl }, select: SELECT_SAFE });
+  }
+
+  // โชว์เฉพาะ session ที่ยังไม่ถูกเตะออก — อันที่ revoke ไปแล้วไม่มีประโยชน์ให้เห็นซ้ำใน UI
+  listSessions(userId: string) {
+    return this.prisma.session.findMany({
+      where: { userId, revokedAt: null },
+      orderBy: { lastSeenAt: 'desc' },
+      select: { id: true, userAgent: true, ip: true, createdAt: true, lastSeenAt: true },
+    });
+  }
+
+  // เตะออกจากอุปกรณ์นั้นทันที — request ถัดไปของ token ตัวนั้นโดน JwtStrategy บล็อกทันที
+  // ไม่ต้องรอ token หมดอายุเอง (เช็ค ownership ก่อนเสมอ กัน revoke session ของคนอื่น)
+  async revokeSession(userId: string, sessionId: string) {
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) throw new NotFoundException('ไม่พบเซสชันนี้');
+    if (session.userId !== userId) throw new ForbiddenException('ไม่ใช่เซสชันของคุณ');
+    await this.prisma.session.update({ where: { id: sessionId }, data: { revokedAt: new Date() } });
+    return { revoked: true };
   }
 
   async changePassword(id: string, currentPassword: string, newPassword: string) {

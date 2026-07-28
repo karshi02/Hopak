@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../prisma.service';
 import { UploadsService } from '../uploads/uploads.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { ReviewsService } from '../reviews/reviews.service';
 
 interface CreateRoomData {
   type: 'AIR' | 'FAN';
@@ -21,6 +22,7 @@ export class RoomsService {
     private prisma: PrismaService,
     private uploads: UploadsService,
     private realtime: RealtimeGateway,
+    private reviews: ReviewsService,
   ) {}
 
   private async assertOwnsDorm(ownerId: string, dormId: string) {
@@ -66,6 +68,19 @@ export class RoomsService {
   // เฉพาะห้องที่ผ่านตรวจแล้ว — endpoint นี้เปิดสาธารณะ ไม่กรองจะรั่วห้องที่ยังไม่อนุมัติ
   listByDorm(dormId: string) {
     return this.prisma.room.findMany({ where: { dormId, approved: true } });
+  }
+
+  // ห้องเดี่ยวพร้อมข้อมูลหอ/คะแนนรีวิว — หน้าส่งคำขอจองต้องใช้สรุปค่าใช้จ่ายก่อนกดยืนยัน
+  // เปิดสาธารณะเหมือน listByDorm จึงต้องกรองทั้ง room.approved และ dorm.status เหมือนกัน
+  async findOne(id: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { id, approved: true, dorm: { status: 'APPROVED' } },
+      include: { dorm: { include: { owner: { select: { name: true } } } } },
+    });
+    if (!room) throw new NotFoundException('Room not found');
+
+    const ratings = await this.reviews.summaryForDorms([room.dormId]);
+    return { ...room, dorm: { ...room.dorm, ...ratings.get(room.dormId) } };
   }
 
   async setStatus(ownerId: string, roomId: string, status: 'AVAILABLE' | 'OCCUPIED') {

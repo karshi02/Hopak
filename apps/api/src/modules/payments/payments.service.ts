@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { calcCommission, calcOwnerPayout, calcChamberShare, calcPlatformShare } from '@hopak/shared';
 import { PrismaService } from '../../prisma.service';
 import { PromptPayGateway } from './gateway/promptpay.gateway';
-import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { UploadsService } from '../uploads/uploads.service';
 
 @Injectable()
@@ -10,7 +9,6 @@ export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private gateway: PromptPayGateway,
-    private realtime: RealtimeGateway,
     private uploads: UploadsService,
   ) {}
 
@@ -39,24 +37,5 @@ export class PaymentsService {
         slipKey,
       },
     });
-  }
-
-  async settleDuePayments() {
-    const midnight = new Date();
-    midnight.setHours(0, 0, 0, 0);
-
-    const due = await this.prisma.payment.findMany({ where: { status: 'PENDING' } });
-    for (const payment of due) {
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'SETTLED', settledAt: new Date() },
-      });
-      const booking = await this.prisma.booking.update({
-        where: { id: payment.bookingId },
-        data: { status: 'PAID' },
-      });
-      this.realtime.emitToUser(booking.tenantId, 'booking:updated', booking);
-    }
-    return { settled: due.length };
   }
 }

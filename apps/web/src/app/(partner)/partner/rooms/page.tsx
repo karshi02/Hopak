@@ -360,7 +360,7 @@ function EditRoomModal({
   const inputClass = 'h-11 w-full rounded-lg border border-card-border px-3.5 text-sm outline-none focus:border-tenant';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
       <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
         <h2 className="font-bold text-ink-strong">{t.editTitle}</h2>
         <div className="mt-4 flex flex-col gap-3">

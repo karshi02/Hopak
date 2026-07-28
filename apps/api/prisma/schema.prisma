@@ -19,6 +19,9 @@ model SiteSettings {
   posterUrls   String[] @default([])
   // รูปพื้นหลังการ์ด "ทำเลยอดนิยม" หน้าแรก ผูกกับชื่อจังหวัด — { "มหาสารคาม": "https://..." }
   areaImages   Json     @default("{}")
+  // การ์ดจุดขาย 3 ใบใต้ hero หน้าแรก — array [{ tagTh,titleTh,subTh,tagEn,titleEn,subEn }]
+  // ว่าง = ใช้ข้อความ default ที่ hardcode ในหน้าเว็บ (ไม่บังคับให้แอดมินตั้งก่อนถึงจะโชว์)
+  promoCards   Json     @default("[]")
   updatedAt    DateTime @updatedAt
 }
 
@@ -91,8 +94,18 @@ model User {
   otpSentAt     DateTime?
   otpAttempts   Int       @default(0)
 
+  // รีเซ็ตรหัสผ่านทางอีเมล — เก็บแค่ sha256 ของ token ตัวจริงอยู่ในลิงก์ที่ส่งไปอีเมลเท่านั้น
+  // (sha256 ไม่ใช่ bcrypt เพราะต้อง lookup ด้วย hash ตรงๆ ตอน user กดลิงก์กลับมา
+  //  token เป็น random 32 bytes อยู่แล้ว ไม่มีทาง brute-force เหมือนรหัสผ่านที่คนตั้งเอง)
+  resetTokenHash      String?
+  resetTokenExpiresAt DateTime?
+  resetTokenSentAt    DateTime?
+
   // ข้อมูลบัญชีรับเงินของเจ้าของหอ — ใช้ตอนแอดมินโอนยอด payout ให้
+  // bankAccountName แยกจาก name เจ้าของบัญชี (อาจไม่ตรงกัน เช่น บัญชีธุรกิจ/ให้คนอื่นถือแทน)
+  // แอดมินต้องเห็นชื่อนี้คู่กับเลขบัญชีก่อนโอนทุกครั้ง กันโอนผิดคน
   bankName          String?
+  bankAccountName   String?
   bankAccountNumber String?
   promptpayId       String?
   // เอกสารยืนยันตัวตนระดับบัญชี (ไม่ผูกกับหอพักใดหอพักหนึ่ง) — เก็บเป็น storage key ส่วนตัว
@@ -109,6 +122,23 @@ model User {
   favorites     Favorite[]
   ownerRequests OwnerRequest[]
   approvalLogs  ApprovalLog[]
+  sessions      Session[]
+
+  @@index([resetTokenHash])
+}
+
+// อุปกรณ์ที่เข้าสู่ระบบ — บันทึกทุกครั้งที่ login สำเร็จ (register/login/google) เพื่อโชว์ประวัติ
+// และเตะออกจากอุปกรณ์นั้นได้จริง (jti ผูกกับ JWT ที่ออกไป, JwtStrategy เช็ค revokedAt ทุก request)
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  jti        String    @unique
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
 }
 
 model Dorm {
@@ -177,6 +207,13 @@ model Booking {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  // โทเค็นยืนยันตัวตนตอนเข้าพักจริง — ออกให้ตอนแอดมินเคลียร์บิล (จังหวะที่ใบเสร็จเกิดขึ้น)
+  // ผู้เช่าเอาโค้ดนี้จากใบเสร็จไปให้เจ้าของหอกรอกในระบบตอนเข้าพัก เพื่อปิดงานเป็น COMPLETED
+  // เห็นได้เฉพาะผู้เช่าเจ้าของการจองเท่านั้น — เจ้าของหอต้องถูก "แสดง" โค้ดตัวเป็นๆ ไม่ใช่อ่านเองจากระบบ
+  checkInToken          String?   @unique
+  checkInTokenExpiresAt DateTime?
+  checkedInAt           DateTime?
+
   payment Payment?
 }
 
@@ -207,6 +244,9 @@ model Notification {
   type      String
   title     String
   body      String
+  // เก็บ storage key ของไฟล์แนบ (เช่น สลิปโอนเงิน payout) — private key เท่านั้น ต้องขอ signed URL
+  // ใหม่ทุกครั้งผ่าน endpoint แยก ไม่ผูก URL ถาวรไว้ตรงนี้ (URL หมดอายุ 15 นาที)
+  attachmentKey String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
 }

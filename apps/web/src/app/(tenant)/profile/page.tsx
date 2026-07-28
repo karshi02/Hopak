@@ -14,11 +14,16 @@ import { StarRating } from '@/components/StarRating';
 import type { OwnerRequest, User } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
 const TEXT = {
   th: {
     disabledTitle: 'ยังไม่เปิดให้ใช้งาน',
     comingSoon: 'เร็วๆ นี้',
     editProfile: 'แก้ไขโปรไฟล์',
+    changePhoto: 'เปลี่ยนรูป',
+    uploadingPhoto: 'กำลังอัปโหลด...',
+    photoUploadError: 'อัปโหลดรูปไม่สำเร็จ',
     memberSince: (d: string) => `สมาชิกตั้งแต่ ${d}`,
     statActive: 'การจองที่ใช้งาน',
     statSaved: 'หอที่บันทึกไว้',
@@ -71,6 +76,11 @@ const TEXT = {
     updatePassword: 'อัปเดตรหัสผ่าน',
     twoFactor: 'ยืนยันตัวตนสองชั้น (2FA)',
     loginDevices: 'อุปกรณ์ที่เข้าสู่ระบบ',
+    logoutDevice: 'ออกจากระบบอุปกรณ์นี้',
+    loggingOutDevice: 'กำลังออก...',
+    noSessions: 'ไม่มีอุปกรณ์ที่เข้าสู่ระบบ',
+    lastSeen: (d: string) => `ใช้งานล่าสุด ${d}`,
+    sessionError: 'โหลดรายการอุปกรณ์ไม่สำเร็จ',
     verifiedBadge: 'ยืนยันอีเมลแล้ว',
     verifyTitle: 'ยืนยันตัวตนด้วย OTP',
     verifyDescIdle: 'เพิ่มความปลอดภัยให้บัญชี ด้วยการยืนยันอีเมลผ่านรหัส OTP',
@@ -99,6 +109,9 @@ const TEXT = {
     disabledTitle: 'Not enabled yet',
     comingSoon: 'Coming soon',
     editProfile: 'Edit profile',
+    changePhoto: 'Change photo',
+    uploadingPhoto: 'Uploading...',
+    photoUploadError: 'Failed to upload photo',
     memberSince: (d: string) => `Member since ${d}`,
     statActive: 'Active bookings',
     statSaved: 'Saved dorms',
@@ -151,6 +164,11 @@ const TEXT = {
     updatePassword: 'Update password',
     twoFactor: 'Two-factor authentication (2FA)',
     loginDevices: 'Logged-in devices',
+    logoutDevice: 'Log out this device',
+    loggingOutDevice: 'Logging out...',
+    noSessions: 'No logged-in devices',
+    lastSeen: (d: string) => `Last active ${d}`,
+    sessionError: 'Failed to load devices',
     verifiedBadge: 'Email verified',
     verifyTitle: 'Verify identity with OTP',
     verifyDescIdle: 'Add security to your account by verifying your email via OTP',
@@ -309,6 +327,32 @@ export default function ProfilePage() {
   const t = TEXT[lang];
   const [user, setUser] = useState<User | null>(null);
   const [hasPassword, setHasPassword] = useState(true);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setAvatarError(null);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const res = await fetch(`${API_URL}/users/me/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error();
+      const updated: User = await res.json();
+      setUser(updated);
+    } catch {
+      setAvatarError(t.photoUploadError);
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = '';
+    }
+  }
 
   useEffect(() => {
     if (!getToken()) {
@@ -336,7 +380,7 @@ export default function ProfilePage() {
   const isTenant = role === 'tenant';
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className="mx-auto max-w-6xl p-4 sm:p-6">
       {/* HEADER */}
       <div
         id="top"
@@ -355,14 +399,22 @@ export default function ProfilePage() {
           style={{ background: 'radial-gradient(circle,rgba(23,143,90,0.4),transparent 66%)' }}
         />
         <div className="relative flex flex-col gap-5 p-7 sm:flex-row sm:items-center">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white/50 bg-gradient-to-br from-[#EAF1FF] to-[#B9CEF5] text-4xl font-bold text-tenant shadow-lg">
+          <label className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white/50 bg-gradient-to-br from-[#EAF1FF] to-[#B9CEF5] text-4xl font-bold text-tenant shadow-lg">
             {user.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
             ) : (
               user.name.charAt(0)
             )}
-          </div>
+            <span
+              className={`absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-semibold text-white transition-opacity ${
+                avatarUploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}
+            >
+              {avatarUploading ? t.uploadingPhoto : t.changePhoto}
+            </span>
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={avatarUploading} />
+          </label>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="text-[26px] font-bold text-white">{user.name}</div>
@@ -394,6 +446,7 @@ export default function ProfilePage() {
                 {t.memberSince(formatMemberSince(user.createdAt, lang))}
               </span>
             </div>
+            {avatarError && <p className="mt-1.5 text-xs font-semibold text-[#FFB4B0]">{avatarError}</p>}
           </div>
           <button
             type="button"
@@ -440,7 +493,7 @@ export default function ProfilePage() {
           {isTenant && <BookingsSection t={t} lang={lang} />}
           {isTenant && <SavedSection t={t} />}
           <VerifySection user={user} onVerified={setUser} t={t} />
-          <SettingsSection user={user} onSaved={setUser} hasPassword={hasPassword} t={t} />
+          <SettingsSection user={user} onSaved={setUser} hasPassword={hasPassword} t={t} lang={lang} />
         </section>
       </div>
     </main>
@@ -483,7 +536,7 @@ function OwnerPitch({ t }: { t: T }) {
   const requestStatus = ownerRequest ? normalizeStatus(ownerRequest.status) : null;
 
   return (
-    <div className="flex items-center gap-4 rounded-card-lg bg-seller p-4 text-white shadow-sm">
+    <div className="flex flex-col gap-3 rounded-card-lg bg-seller p-4 text-white shadow-sm sm:flex-row sm:items-center sm:gap-4">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 font-bold">H</div>
       <div className="flex-1">
         <p className="font-semibold">{t.becomeOwnerTitle}</p>
@@ -669,7 +722,7 @@ function VerifySection({ user, onVerified, t }: { user: User; onVerified: (u: Us
 
   return (
     <div className={`rounded-card-lg border bg-white p-6 shadow-sm ${done ? 'border-[#CBEEDD]' : 'border-card-border'}`}>
-      <div className="flex items-center gap-3.5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3.5">
         <span
           className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl ${done ? 'bg-[#E7F7EF]' : 'bg-[#EAF1FF]'}`}
         >
@@ -749,16 +802,105 @@ function VerifySection({ user, onVerified, t }: { user: User; onVerified: (u: Us
   );
 }
 
+interface SessionItem {
+  id: string;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+// อ่าน browser/OS แบบหยาบๆ จาก User-Agent เพื่อโชว์ให้อ่านง่าย ไม่ต้องแม่นยำ 100%
+function describeDevice(ua: string | null): string {
+  if (!ua) return '—';
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /Chrome\//.test(ua)
+      ? 'Chrome'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Safari\//.test(ua)
+          ? 'Safari'
+          : 'Browser';
+  const os = /Windows/.test(ua)
+    ? 'Windows'
+    : /Mac OS/.test(ua)
+      ? 'macOS'
+      : /Android/.test(ua)
+        ? 'Android'
+        : /iPhone|iPad/.test(ua)
+          ? 'iOS'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : '';
+  return os ? `${browser} · ${os}` : browser;
+}
+
+function DeviceSessionsSection({ t, lang }: { t: T; lang: Lang }) {
+  const [sessions, setSessions] = useState<SessionItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  function reload() {
+    apiClient
+      .get<SessionItem[]>('/users/me/sessions')
+      .then(setSessions)
+      .catch(() => setError(t.sessionError));
+  }
+
+  useEffect(reload, []);
+
+  async function revoke(id: string) {
+    setRevokingId(id);
+    try {
+      await apiClient.delete(`/users/me/sessions/${id}`);
+      reload();
+    } catch {
+      setError(t.sessionError);
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  return (
+    <div className="mt-2.5 rounded-xl bg-[#F7F9FC] px-4 py-3.5">
+      <span className="text-sm font-semibold text-ink-strong">{t.loginDevices}</span>
+      <div className="mt-2.5 flex flex-col gap-2">
+        {(sessions ?? []).map((s) => (
+          <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3.5 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-ink-strong">{describeDevice(s.userAgent)}</p>
+              <p className="mt-0.5 text-xs text-ink-faint">{t.lastSeen(formatDate(s.lastSeenAt, lang))}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => revoke(s.id)}
+              disabled={revokingId === s.id}
+              className="shrink-0 rounded-btn border border-card-border px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
+            >
+              {revokingId === s.id ? t.loggingOutDevice : t.logoutDevice}
+            </button>
+          </div>
+        ))}
+        {sessions && sessions.length === 0 && <p className="text-xs text-ink-faint">{t.noSessions}</p>}
+      </div>
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 function SettingsSection({
   user,
   onSaved,
   hasPassword,
   t,
+  lang,
 }: {
   user: User;
   onSaved: (u: User) => void;
   hasPassword: boolean;
   t: T;
+  lang: Lang;
 }) {
   const [name, setName] = useState(user.name);
   const [phone, setPhone] = useState(user.phone ?? '');
@@ -918,15 +1060,7 @@ function SettingsSection({
             {t.comingSoon}
           </span>
         </div>
-        <div className="mt-2.5 flex items-center justify-between rounded-xl bg-[#F7F9FC] px-4 py-3.5">
-          <span className="text-sm font-semibold text-ink-strong">{t.loginDevices}</span>
-          <span
-            title={t.disabledTitle}
-            className="cursor-not-allowed rounded-pill bg-white px-3 py-1 text-xs font-medium text-ink-faint"
-          >
-            {t.comingSoon}
-          </span>
-        </div>
+        <DeviceSessionsSection t={t} lang={lang} />
       </div>
     </div>
   );

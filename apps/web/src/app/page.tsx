@@ -8,10 +8,22 @@ import { useDormSearch } from '@/hooks/useDormSearch';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useLang, type Lang } from '@/hooks/useLang';
+import { useTypewriter } from '@/hooks/useTypewriter';
 import { clearToken } from '@/lib/auth';
+import { getSocket } from '@/lib/ws';
+
+interface PromoCardData {
+  tagTh: string;
+  titleTh: string;
+  subTh: string;
+  tagEn: string;
+  titleEn: string;
+  subEn: string;
+}
 import { resetSocket } from '@/lib/ws';
 import { apiClient } from '@/lib/api-client';
 import { loadGoogleMaps } from '@/lib/googleMaps';
+import { haversineKm } from '@/lib/geo';
 import { StarRating } from '@/components/StarRating';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { LangSwitch } from '@/components/LangSwitch';
@@ -52,6 +64,8 @@ const PRICE_RANGE_OPTIONS: Record<Lang, { value: string; label: string }[]> = {
 const TEXT = {
   th: {
     navOwner: 'ลงประกาศหอพัก',
+    notifications: 'การแจ้งเตือน',
+    topSearchPhrases: ['ค้นหาจังหวัด', 'หอพักใกล้มหาวิทยาลัย', 'ชื่อหอพักใกล้ฉัน'],
     login: 'เข้าสู่ระบบ',
     register: 'สมัครสมาชิก',
     logout: 'ออกจากระบบ',
@@ -83,6 +97,7 @@ const TEXT = {
     trendingTitle: 'หอพักแนะนำ',
     dormsIn: (p: string) => `หอพักใน${p}`,
     nearbyCount: (n: number) => `${n} หอพักใกล้เคียง`,
+    distanceAway: (km: number) => (km < 1 ? `ห่างคุณ ${Math.round(km * 1000)} ม.` : `ห่างคุณ ${km.toFixed(1)} กม.`),
     noDorms: 'ยังไม่มีหอพักในจังหวัดนี้',
     perMonth: '/ เดือน',
     full: 'ห้องเต็ม',
@@ -108,6 +123,8 @@ const TEXT = {
   },
   en: {
     navOwner: 'List your dorm',
+    notifications: 'Notifications',
+    topSearchPhrases: ['Search by province', 'Dorms near your university', 'Dorm name near me'],
     login: 'Log in',
     register: 'Sign up',
     logout: 'Log out',
@@ -139,6 +156,7 @@ const TEXT = {
     trendingTitle: 'Recommended dorms',
     dormsIn: (p: string) => `Dorms in ${p}`,
     nearbyCount: (n: number) => `${n} nearby dorms`,
+    distanceAway: (km: number) => (km < 1 ? `${Math.round(km * 1000)} m from you` : `${km.toFixed(1)} km from you`),
     noDorms: 'No dorms in this province yet',
     perMonth: '/ month',
     full: 'Fully booked',
@@ -170,6 +188,27 @@ export default function HomePage() {
   const { dorms } = useDormSearch({});
   const { favoriteIds, toggle } = useFavorites();
 
+  // กระดิ่งแจ้งเตือน — เฉพาะผู้เช่า (tenant) ที่ล็อกอินอยู่ (navbar หน้าแรกเป็นตัวแยกจาก Navbar.tsx)
+  const isTenant = user?.role.toLowerCase() === 'tenant';
+  const [unreadNotif, setUnreadNotif] = useState(0);
+  useEffect(() => {
+    if (!isTenant) return;
+    const refetch = () =>
+      apiClient
+        .get<{ readAt: string | null }[]>('/notifications')
+        .then((list) => setUnreadNotif(list.filter((n) => !n.readAt).length))
+        .catch(() => {});
+    refetch();
+    const socket = getSocket();
+    const onNew = () => setUnreadNotif((c) => c + 1);
+    socket.on('notification:new', onNew);
+    window.addEventListener('hopak:notif-read', refetch);
+    return () => {
+      socket.off('notification:new', onNew);
+      window.removeEventListener('hopak:notif-read', refetch);
+    };
+  }, [isTenant]);
+
   const { lang, setLang } = useLang();
   const [province, setProvince] = useState<string>(PROVINCES[0]);
   const [open, setOpen] = useState(false);
@@ -179,13 +218,32 @@ export default function HomePage() {
   const [q, setQ] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<{ lat: number; lng: number; name: string } | null>(null);
   const [areaImages, setAreaImages] = useState<Record<string, string>>({});
+  const [promoCards, setPromoCards] = useState<PromoCardData[]>([]);
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [topSearchQ, setTopSearchQ] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiClient
-      .get<{ areaImages: Record<string, string> }>('/settings/hero')
-      .then((data) => setAreaImages(data.areaImages ?? {}))
-      .catch(() => setAreaImages({}));
+      .get<{ areaImages: Record<string, string>; promoCards: PromoCardData[] }>('/settings/hero')
+      .then((data) => {
+        setAreaImages(data.areaImages ?? {});
+        setPromoCards(data.promoCards ?? []);
+      })
+      .catch(() => {
+        setAreaImages({});
+        setPromoCards([]);
+      });
+  }, []);
+
+  // ขอตำแหน่งจริงของผู้ใช้ (ต้องกดอนุญาตเอง) — ไม่ได้ก็แค่ไม่โชว์ระยะทาง ไม่เดา/ไม่ใช้ค่า fallback ปลอม
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setMyLocation(null),
+      { enableHighAccuracy: false, timeout: 8000 },
+    );
   }, []);
 
   // ผูก Google Places autocomplete กับช่องค้นหาเดิม — เลือกสถานที่/มหาวิทยาลัยแล้วได้ lat/lng
@@ -220,8 +278,22 @@ export default function HomePage() {
   }, []);
 
   const t = TEXT[lang];
+  const topSearchPlaceholder = useTypewriter(t.topSearchPhrases);
   const roomTypeOptions = ROOM_TYPE_OPTIONS[lang];
   const priceRangeOptions = PRICE_RANGE_OPTIONS[lang];
+
+  // การ์ดจุดขายใต้ hero: merge ต่อช่อง — คงไว้ 3 ใบเสมอ
+  // ช่องไหนแอดมินตั้ง title ไว้ (ตามภาษาที่ดูอยู่) ใช้ของแอดมิน ช่องที่เหลือใช้ข้อความ default
+  // (กันกรณีแอดมินแก้แค่บางใบแล้วอีก 2 ใบหายไป)
+  const promos = t.promos.map((def, i) => {
+    const c = promoCards[i];
+    const adminTitle = c && (lang === 'th' ? c.titleTh : c.titleEn);
+    if (c && adminTitle)
+      return lang === 'th'
+        ? { tag: c.tagTh, title: c.titleTh, sub: c.subTh }
+        : { tag: c.tagEn, title: c.titleEn, sub: c.subEn };
+    return def;
+  });
   const provinceLabel = (p: string) => PROVINCE_LABEL[lang][p] ?? p;
 
   const byProvince = useMemo(() => {
@@ -307,6 +379,25 @@ export default function HomePage() {
             </span>
           </Link>
 
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              router.push(topSearchQ.trim() ? `/search?q=${encodeURIComponent(topSearchQ.trim())}` : '/search');
+            }}
+            className="hidden min-w-0 max-w-xs flex-1 items-center gap-2 rounded-full border border-white/12 bg-white/[0.07] px-4 py-2 sm:flex"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
+              <circle cx="11" cy="11" r="7" stroke="#9AA3B5" strokeWidth="2" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#9AA3B5" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              value={topSearchQ}
+              onChange={(e) => setTopSearchQ(e.target.value)}
+              placeholder={topSearchPlaceholder}
+              className="w-full min-w-0 bg-transparent text-[13.5px] text-white outline-none placeholder:text-[#9AA3B5]"
+            />
+          </form>
+
           <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-5">
             <LangSwitch lang={lang} onChange={setLang} dark />
 
@@ -324,7 +415,37 @@ export default function HomePage() {
             {!userLoading &&
               (user ? (
                 <>
-                  <Link href="/profile" className="text-[13.5px] font-semibold text-white hover:underline">
+                  {isTenant && (
+                    <Link
+                      href="/notifications"
+                      title={t.notifications}
+                      className="relative flex h-9 w-9 items-center justify-center rounded-[11px] bg-white/15 text-white hover:bg-white/25"
+                    >
+                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      {unreadNotif > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-pill border-2 border-[#0E1220] bg-danger px-1 text-[11px] font-bold text-white">
+                          {unreadNotif > 99 ? '99+' : unreadNotif}
+                        </span>
+                      )}
+                    </Link>
+                  )}
+                  <Link href="/profile" className="flex items-center gap-2 text-[13.5px] font-semibold text-white hover:underline">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-xs font-bold text-white">
+                      {user.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        user.name.charAt(0)
+                      )}
+                    </span>
                     {user.name}
                   </Link>
                   <button onClick={handleLogout} className="text-[13.5px] font-semibold text-[#F08A7A] hover:underline">
@@ -484,9 +605,9 @@ export default function HomePage() {
       {/* ===== PROMO STRIP ===== */}
       <div className="mx-auto max-w-[1240px] px-6 pt-8">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {t.promos.map((p, i) => (
+          {promos.map((p, i) => (
             <div
-              key={p.title}
+              key={`${i}-${p.title}`}
               className={`relative h-[132px] overflow-hidden rounded-2xl p-5 shadow-[0_4px_14px_rgba(16,24,40,0.08)] ${
                 i === 0
                   ? 'bg-gradient-to-br from-[#178F5A] to-[#12704A]'
@@ -697,6 +818,9 @@ export default function HomePage() {
                     </div>
                     <div className="mt-0.5 truncate text-[13px] text-ink-muted">
                       {d.university ?? provinceLabel(d.province)}
+                      {myLocation && (
+                        <span className="text-tenant"> · {t.distanceAway(haversineKm(myLocation.lat, myLocation.lng, d.lat, d.lng))}</span>
+                      )}
                     </div>
                     <div className="mt-2.5 text-sm">
                       {startingRoom ? (

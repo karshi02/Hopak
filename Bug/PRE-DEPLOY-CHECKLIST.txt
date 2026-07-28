@@ -1,0 +1,89 @@
+========================================================
+เช็คลิสต์ก่อนขึ้น PRODUCTION — สรุป 28/07/2026
+========================================================
+สถานะตอนนี้: โค้ด local ค้าง ~78 ไฟล์ ยังไม่ commit (บั๊ก [43]-[62])
+prod (VPS 203.170.190.188 / hoprak.com) ยังรันโค้ดเก่าอยู่
+ทุกข้อด้านล่างเช็คจากของจริงแล้ว (migration/env/dependency/volume) ไม่ได้เดา
+
+
+🔴 ต้องทำก่อน ไม่งั้นพังทันที
+--------------------------------------------------------
+[D1] Migration ค้าง 6 ตัว ต้องรันบน prod DB
+     - add_notification_attachment
+     - add_session_tracking
+     - add_bank_account_name
+     - add_password_reset
+     - add_checkin_token
+     - add_promo_cards
+     โค้ดใหม่ query คอลัมน์เหล่านี้ ถ้า DB prod ยังไม่มี = API พัง 500 ทุก
+     endpoint ที่แตะตาราง User/Booking/Notification/SiteSettings
+     วิธี: บน VPS รัน `docker compose -f docker-compose.prod.yml exec api
+     npx prisma migrate deploy` (มีใน DEPLOY.md บรรทัด 99 แล้ว)
+     migration format ถูกต้อง (มาตรฐาน prisma migrate) ใช้ deploy ได้เลย
+
+[D2] บั๊ก [43] role TENANT→OWNER — prod ยังโค้ดเก่า
+     - คนที่สมัครเป็นเจ้าของหอบน prod ก่อนหน้านี้ ได้ role ผิด (TENANT)
+     - deploy โค้ดใหม่แก้เฉพาะคนสมัคร "ใหม่" — คนเก่าต้องแก้ SQL มือบน prod DB
+     - ต้อง query หาว่ามีใครโดนบ้าง (คำสั่งอยู่ใน bugs.txt entry [43] ~บรรทัด 569)
+     - ผู้เกี่ยวข้องเดิม: "น้อง บีม / ปิยดิส เพลส" (ยืนยันแล้วว่าโดน แก้ local แล้ว)
+
+
+🟠 เสี่ยงข้อมูลหาย / ช่องโหว่ความปลอดภัย
+--------------------------------------------------------
+[D3] ไฟล์ private หายตอน restart container
+     - prod ใช้ local disk เก็บไฟล์ (S3_BUCKET ใน .env.production ว่าง)
+     - docker-compose.prod.yml mount volume แค่ api_uploads:/app/uploads (public)
+     - แต่ private-uploads/ (เอกสารบัตร ปชช./โฉนด/สลิปโอนเงิน) ไม่ถูก mount
+       → อยู่ที่ /app/private-uploads ในคอนเทนเนอร์ หายทุกครั้งที่ restart/redeploy
+     วิธี: เพิ่มใน docker-compose.prod.yml
+       volumes:
+         - api_uploads:/app/uploads
+         - api_private:/app/private-uploads     <-- เพิ่มบรรทัดนี้
+       และประกาศ volume api_private: ท้ายไฟล์
+     (public uploads ก็ควรเช็คว่าไฟล์เก่ายังอยู่ครบหลัง redeploy)
+
+[D4] Security [55] [ร้ายแรง] payment IDOR ยังไม่แก้
+     - POST /bookings/:bookingId/payment ไม่เช็คเจ้าของ + ไม่เช็คสถานะ booking
+     - ผู้เช่าคนไหนก็จ่ายเงิน/แนบสลิปทับ booking ของคนอื่นได้ (ยืนยันเจาะได้จริง)
+     - จ่าย booking ที่ยัง PENDING ได้ (ข้ามการยืนยันของเจ้าของหอ)
+     รายละเอียดเต็ม: bugs.txt entry [55]
+
+[D5] Security [56] stored-XSS ผ่าน /uploads
+     - endpoint /uploads เปิดให้ผู้ล็อกอินอัปโหลด .html/.svg เสิร์ฟเป็น text/html
+     - grep แล้วไม่มีหน้าเว็บไหนเรียกเลย = dead endpoint
+     วิธีที่ปลอดภัยสุด: ลบ endpoint นี้ทิ้ง (uploads.controller.ts + uploads.module)
+
+
+🟡 ควรรู้ / ทำเพิ่มความปลอดภัย
+--------------------------------------------------------
+[D6] Security [57] ไม่มี rate limit เลย
+     - /auth/login เดารหัสไม่จำกัด, /auth/forgot-password + OTP spam อีเมลได้
+     - Resend มีโควตา ถ้าโดนยิงรัวอาจโดนบล็อก/คิดเงิน
+     วิธี: เพิ่ม @nestjs/throttler ครอบ endpoint กลุ่ม auth
+
+[D7] Security [58] CORS เปิดทุก origin (app.enableCors() ไม่มี arg)
+     วิธี: จำกัดเป็น FRONTEND_URL (prod = https://app.hoprak.com)
+
+
+✅ ตรวจแล้วไม่มีปัญหา (ข่าวดี)
+--------------------------------------------------------
+- ไม่มี npm dependency ใหม่ (package.json / pnpm-lock ไม่เปลี่ยน)
+- env ใหม่พึ่งแค่ FRONTEND_URL — prod ตั้ง https://app.hoprak.com แล้ว
+- SMTP/Resend: โดเมน hoprak.com verified แล้ว, noreply@hoprak.com ส่งอีเมลจริงได้
+  (forgot-password + OTP ใช้ตัวเดียวกัน)
+- NEXT_PUBLIC_API_URL prod = https://api.hoprak.com (ตั้งแล้ว)
+- tsc --noEmit ผ่าน 0 error ทั้ง api และ web
+- migration ทุกตัว format มาตรฐาน prisma ใช้ migrate deploy ได้
+
+
+ลำดับ deploy ที่แนะนำ
+--------------------------------------------------------
+1. แก้ security [55] payment IDOR (โค้ด)
+2. ลบ dead upload endpoint [56] (โค้ด)
+3. เพิ่ม volume private-uploads ใน docker-compose.prod.yml [D3]
+4. (ถ้ามีเวลา) rate limit [57] + CORS จำกัด origin [58]
+5. commit + push
+6. บน VPS: git pull → docker compose build → up -d
+7. docker compose exec api npx prisma migrate deploy   [D1]
+8. query + แก้ role คนเก่าที่โดนบั๊ก [43] บน prod DB   [D2]
+9. เช็ค smoke test: login, จอง, อัปสลิป, แจ้งเตือน, หน้าแรก

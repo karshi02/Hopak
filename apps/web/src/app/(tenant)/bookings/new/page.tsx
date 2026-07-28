@@ -1,45 +1,164 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLang } from '@/hooks/useLang';
-import type { Booking } from '@hopak/shared';
+import type { Booking, Dorm, Room } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
 
-const inputClass =
-  'rounded-btn border border-card-border px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none dark:border-white/10 dark:bg-[#1a1a19] dark:text-white';
+type RoomDetail = Room & { dorm: Dorm };
 
 const TEXT = {
   th: {
-    title: 'ส่งคำขอจอง',
-    subtitle: 'กรอกข้อมูลติดต่อเพื่อยืนยันคำขอจอง',
-    namePlaceholder: 'ชื่อผู้จอง',
-    phonePlaceholder: 'เบอร์โทร',
+    title: 'ยืนยันการจอง',
+    subtitle: 'กรอกข้อมูลติดต่อเพื่อส่งคำขอจองไปยังเจ้าของหอ',
+    stepPrefix: 'ขั้นที่',
+    steps: ['ส่งข้อมูล', 'รอหอพักยืนยัน', 'หอพักยืนยัน', 'โอนเงิน + สลิป', 'รับใบเสร็จ'],
+    tenantInfo: 'ข้อมูลผู้เช่า',
+    nameLabel: 'ชื่อ-นามสกุล',
+    namePlaceholder: 'ชื่อ-นามสกุลผู้เช่า',
+    phoneLabel: 'เบอร์โทรศัพท์',
+    phonePlaceholder: '08X-XXX-XXXX',
     phoneHint: 'แก้ไขเบอร์ได้ถ้าต้องการใช้เบอร์อื่นสำหรับการจองนี้',
-    checkInLabel: 'วันเข้าอยู่',
-    notePlaceholder: 'หมายเหตุ (ถ้ามี)',
-    submitting: 'กำลังส่งคำขอ...',
+    checkInLabel: 'วันเข้าอยู่ที่ต้องการ',
+    otherDate: 'เลือกวันอื่น',
+    noteLabel: 'หมายเหตุถึงเจ้าของหอ (ถ้ามี)',
+    notePlaceholder: 'เช่น ต้องการเข้าดูห้องก่อน, สอบถามเรื่องสัตว์เลี้ยง...',
+    summaryTitle: 'สรุปค่าใช้จ่าย',
+    firstMonth: 'ค่าเช่าเดือนแรก',
+    deposit: 'ค่ามัดจำ',
+    depositNote: 'ชำระกับหอโดยตรง',
+    bookingFee: 'ค่าจองผ่าน Hopak',
+    free: 'ฟรี',
+    payNow: 'ยอดชำระผ่าน Hopak',
+    payNowNote: 'ค่าเช่าเดือนแรก · ชำระหลังเจ้าของหอยืนยัน',
     submit: 'ส่งคำขอจอง',
-    flowNote: 'ส่งคำขอ → รอเจ้าของหอยืนยัน → ชำระเงิน · ยกเลิกฟรีใน 1 วัน',
+    submitting: 'กำลังส่งคำขอ...',
+    ctaHint: 'กดเพื่อส่งคำขอไปยังเจ้าของหอ',
+    reassure: [
+      'หากหอพักยืนยัน จะไปขั้นตอนโอนเงินต่อ · หากไม่ยืนยัน คำขอจะสิ้นสุดทันที',
+      'โอนเงินเสร็จแนบสลิปในระบบ แล้วรอแอดมินตรวจสอบ',
+      'แอดมินยืนยันแล้วจะออกใบเสร็จ ให้นำไปยืนยันกับหอพัก',
+    ],
+    secure: 'ข้อมูลของคุณถูกเข้ารหัสและปลอดภัย',
+    roomAir: 'ห้องแอร์',
+    roomFan: 'ห้องพัดลม',
+    noReview: 'ยังไม่มีรีวิว',
     error: 'ส่งคำขอจองไม่สำเร็จ',
+    roomError: 'ไม่พบห้องพักนี้ หรือห้องนี้ยังไม่เปิดให้จอง',
+    fillRequired: 'กรุณากรอกชื่อ เบอร์โทร และเลือกวันเข้าอยู่',
+    dateLocale: 'th-TH',
   },
   en: {
-    title: 'Submit Booking Request',
-    subtitle: 'Fill in your contact info to confirm the booking request',
-    namePlaceholder: 'Booker name',
-    phonePlaceholder: 'Phone number',
+    title: 'Confirm booking',
+    subtitle: 'Fill in your contact info to send a booking request to the dorm owner',
+    stepPrefix: 'Step',
+    steps: ['Send info', 'Awaiting owner', 'Owner confirms', 'Transfer + slip', 'Get receipt'],
+    tenantInfo: 'Tenant info',
+    nameLabel: 'Full name',
+    namePlaceholder: 'Tenant full name',
+    phoneLabel: 'Phone number',
+    phonePlaceholder: '08X-XXX-XXXX',
     phoneHint: 'You can edit the number if you want to use a different one for this booking',
-    checkInLabel: 'Check-in date',
-    notePlaceholder: 'Note (optional)',
-    submitting: 'Submitting...',
-    submit: 'Submit request',
-    flowNote: 'Request → owner confirms → payment · free cancellation within 1 day',
+    checkInLabel: 'Preferred move-in date',
+    otherDate: 'Pick another date',
+    noteLabel: 'Note to the owner (optional)',
+    notePlaceholder: 'e.g. I would like to view the room first, question about pets...',
+    summaryTitle: 'Cost summary',
+    firstMonth: 'First month rent',
+    deposit: 'Deposit',
+    depositNote: 'Paid directly to the dorm',
+    bookingFee: 'Hopak booking fee',
+    free: 'Free',
+    payNow: 'Payable through Hopak',
+    payNowNote: 'First month rent · paid after the owner confirms',
+    submit: 'Send booking request',
+    submitting: 'Sending request...',
+    ctaHint: 'Tap to send the request to the dorm owner',
+    reassure: [
+      'If the dorm confirms, you move on to payment · if not, the request ends immediately',
+      'After transferring, attach the slip in the system and wait for admin review',
+      'Once the admin confirms, a receipt is issued for you to show the dorm',
+    ],
+    secure: 'Your information is encrypted and secure',
+    roomAir: 'Air-conditioned room',
+    roomFan: 'Fan room',
+    noReview: 'No reviews yet',
     error: 'Failed to submit booking request',
+    roomError: 'Room not found, or it is not open for booking',
+    fillRequired: 'Please fill in your name, phone and pick a move-in date',
+    dateLocale: 'en-US',
   },
 };
+
+const fieldBase = 'flex h-[50px] items-center gap-3 rounded-xl border-[1.5px] bg-white px-4 transition-colors';
+const fieldIdle = 'border-card-border';
+const fieldActive = 'border-tenant shadow-[0_0_0_3px_rgba(47,111,224,0.1)]';
+const inputBase =
+  'w-full bg-transparent text-[15px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-faint';
+
+/** วันที่แนะนำ 3 ตัว: วันที่ 1 และ 15 ของเดือนถัดไป และวันที่ 1 ของเดือนถัดไปอีกเดือน */
+function suggestedDates(): Date[] {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return [
+    nextMonth,
+    new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 15),
+    new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 1),
+  ];
+}
+
+const toISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function Stepper({ t, current }: { t: (typeof TEXT)['th']; current: number }) {
+  return (
+    <div className="mb-6 flex items-center overflow-x-auto rounded-card-lg border border-card-border bg-white px-5 py-4 shadow-card">
+      {t.steps.map((label, i) => {
+        const num = i + 1;
+        const active = num === current;
+        const done = num < current;
+        return (
+          <div key={label} className="flex flex-1 items-center last:flex-none">
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-pill border-2 text-sm font-bold ${
+                  done
+                    ? 'border-success bg-success text-white'
+                    : active
+                      ? 'border-tenant bg-tenant text-white'
+                      : 'border-card-border bg-white text-ink-faint'
+                }`}
+              >
+                {done ? '✓' : num}
+              </span>
+              <div>
+                <div className="text-[10.5px] font-semibold text-ink-faint">
+                  {t.stepPrefix} {num}
+                </div>
+                <div
+                  className={`whitespace-nowrap text-[13px] font-bold ${
+                    done || active ? 'text-ink-strong' : 'text-ink-faint'
+                  }`}
+                >
+                  {label}
+                </div>
+              </div>
+            </div>
+            {num < t.steps.length && (
+              <span
+                className={`mx-3.5 h-0.5 min-w-[14px] flex-1 rounded-sm ${done ? 'bg-success' : 'bg-card-border'}`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function NewBookingForm() {
   const router = useRouter();
@@ -49,6 +168,8 @@ function NewBookingForm() {
   const t = TEXT[lang];
 
   const { user } = useCurrentUser();
+  const [room, setRoom] = useState<RoomDetail | null>(null);
+  const [roomError, setRoomError] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [checkInDate, setCheckInDate] = useState('');
@@ -56,9 +177,22 @@ function NewBookingForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const dateOptions = useMemo(suggestedDates, []);
+
   useEffect(() => {
     if (!getToken()) router.replace('/login');
   }, [router]);
+
+  useEffect(() => {
+    if (!roomId) {
+      setRoomError(true);
+      return;
+    }
+    apiClient
+      .get<RoomDetail>(`/rooms/${roomId}`)
+      .then(setRoom)
+      .catch(() => setRoomError(true));
+  }, [roomId]);
 
   useEffect(() => {
     if (!user) return;
@@ -69,6 +203,10 @@ function NewBookingForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!contactName.trim() || !contactPhone.trim() || !checkInDate) {
+      setError(t.fillRequired);
+      return;
+    }
     setSubmitting(true);
     try {
       const booking = await apiClient.post<Booking>('/bookings', {
@@ -85,60 +223,292 @@ function NewBookingForm() {
     }
   }
 
-  return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="text-xl font-bold text-ink-strong dark:text-white">{t.title}</h1>
-      <p className="mt-1 text-sm text-ink-subtitle">{t.subtitle}</p>
+  if (roomError) {
+    return (
+      <main className="mx-auto max-w-md p-10 text-center">
+        <p className="text-sm text-danger">{t.roomError}</p>
+      </main>
+    );
+  }
+  if (!room) return <PageLoader />;
 
-      <form
-        onSubmit={handleSubmit}
-        className="mt-5 flex flex-col gap-3 rounded-card border border-card-border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#1a1a19]"
-      >
-        <input
-          type="text"
-          placeholder={t.namePlaceholder}
-          value={contactName}
-          onChange={(e) => setContactName(e.target.value)}
-          className={inputClass}
-          required
-        />
-        <div>
-          <input
-            type="tel"
-            placeholder={t.phonePlaceholder}
-            value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
-            className={`${inputClass} w-full font-sans`}
-            required
-          />
-          <p className="mt-1 text-xs text-ink-faint">{t.phoneHint}</p>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-ink-subtitle">{t.checkInLabel}</label>
-          <input
-            type="date"
-            value={checkInDate}
-            onChange={(e) => setCheckInDate(e.target.value)}
-            className={`${inputClass} w-full font-sans`}
-            required
-          />
-        </div>
-        <textarea
-          placeholder={t.notePlaceholder}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className={`${inputClass} resize-none`}
-          rows={3}
-        />
-        {error && <p className="text-sm text-danger">{error}</p>}
+  // API คืน enum เป็นตัวใหญ่ (AIR/FAN) แต่ type ใน shared เป็นตัวเล็ก — เทียบแบบ toUpperCase ตามที่หน้าอื่นทำ
+  const roomLabel = room.name || (room.type.toUpperCase() === 'AIR' ? t.roomAir : t.roomFan);
+  const deposit = room.deposit ?? room.dorm.deposit ?? 0;
+  const cover = room.images?.[0] ?? room.dorm.images?.[0] ?? null;
+  const locale = t.dateLocale;
+
+  return (
+    <main className="mx-auto max-w-[1120px] px-4 pb-16 pt-7 sm:px-6">
+      {/* back + title */}
+      <div className="mb-5 flex items-center gap-3">
         <button
-          type="submit"
-          disabled={submitting}
-          className="mt-1 rounded-btn bg-tenant py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-tenant-dark disabled:opacity-60"
+          type="button"
+          onClick={() => router.back()}
+          className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl border border-card-border bg-white text-ink-body hover:bg-surface-canvas"
+          aria-label="back"
         >
-          {submitting ? t.submitting : t.submit}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
-        <p className="text-center text-xs leading-relaxed text-ink-faint">{t.flowNote}</p>
+        <div>
+          <h1 className="text-[25px] font-bold tracking-tight text-ink-strong">{t.title}</h1>
+          <p className="mt-0.5 text-[13.5px] text-ink-muted">{t.subtitle}</p>
+        </div>
+      </div>
+
+      <Stepper t={t} current={1} />
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_400px]">
+        {/* ---- LEFT: form ---- */}
+        <div className="rounded-[20px] border border-card-border bg-white p-7 shadow-card">
+          <h2 className="text-[17px] font-bold text-ink-strong">{t.tenantInfo}</h2>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.nameLabel}</label>
+              <div className={`${fieldBase} ${contactName ? fieldActive : fieldIdle}`}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <circle cx="12" cy="8" r="4" stroke={contactName ? '#2F6FE0' : '#9AA0AB'} strokeWidth="1.8" />
+                  <path
+                    d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1"
+                    stroke={contactName ? '#2F6FE0' : '#9AA0AB'}
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  placeholder={t.namePlaceholder}
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  className={inputBase}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.phoneLabel}</label>
+              <div className={`${fieldBase} ${contactPhone ? fieldActive : fieldIdle}`}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <path
+                    d="M5 4h4l2 5-3 2a12 12 0 005 5l2-3 5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"
+                    stroke={contactPhone ? '#2F6FE0' : '#9AA0AB'}
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <input
+                  type="tel"
+                  placeholder={t.phonePlaceholder}
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  className={`${inputBase} font-sans`}
+                  required
+                />
+              </div>
+              <p className="mt-1.5 text-[11.5px] text-ink-faint">{t.phoneHint}</p>
+            </div>
+          </div>
+
+          {/* check-in date */}
+          <div className="mt-5">
+            <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.checkInLabel}</label>
+            <div className="grid grid-cols-3 gap-3">
+              {dateOptions.map((d) => {
+                const iso = toISODate(d);
+                const picked = checkInDate === iso;
+                return (
+                  <button
+                    key={iso}
+                    type="button"
+                    onClick={() => setCheckInDate(iso)}
+                    className={`flex h-[66px] flex-col items-center justify-center gap-0.5 rounded-[13px] border-2 ${
+                      picked ? 'border-tenant bg-tenant-tint' : 'border-card-border bg-white hover:border-ink-faint'
+                    }`}
+                  >
+                    <span className="text-xs text-ink-muted">
+                      {d.toLocaleDateString(locale, { month: 'short' })}
+                    </span>
+                    <span
+                      className={`font-sans text-lg font-bold ${picked ? 'text-tenant' : 'text-ink-strong'}`}
+                    >
+                      {d.getDate()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3">
+              <label className="mb-1.5 block text-[11.5px] font-medium text-ink-faint">{t.otherDate}</label>
+              <div
+                className={`${fieldBase} ${
+                  checkInDate && !dateOptions.some((d) => toISODate(d) === checkInDate) ? fieldActive : fieldIdle
+                }`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <rect x="3" y="5" width="18" height="16" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
+                  <path d="M3 10h18M8 3v4M16 3v4" stroke="#9AA0AB" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="date"
+                  value={checkInDate}
+                  min={toISODate(new Date())}
+                  onChange={(e) => setCheckInDate(e.target.value)}
+                  className={`${inputBase} font-sans`}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* note */}
+          <div className="mt-5">
+            <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.noteLabel}</label>
+            <textarea
+              placeholder={t.notePlaceholder}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              className="w-full resize-none rounded-xl border-[1.5px] border-card-border bg-[#F7F9FC] px-4 py-3.5 text-[14.5px] text-ink outline-none placeholder:text-ink-faint focus:border-tenant"
+            />
+          </div>
+
+          {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+        </div>
+
+        {/* ---- RIGHT: summary ---- */}
+        <div className="lg:sticky lg:top-6">
+          <div className="overflow-hidden rounded-[20px] border border-card-border bg-white shadow-card-hover">
+            <div className="flex gap-3.5 p-[18px]">
+              {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={cover}
+                  alt={room.dorm.name}
+                  className="h-[74px] w-[88px] shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="h-[74px] w-[88px] shrink-0 rounded-xl bg-gradient-to-br from-[#3E5C8A] to-tenant-dark" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-1.5">
+                  {room.dorm.avgRating ? (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="#E0902F">
+                        <path d="M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z" />
+                      </svg>
+                      <span className="font-sans text-[12.5px] font-bold text-ink-strong">
+                        {room.dorm.avgRating.toFixed(1)}
+                      </span>
+                      <span className="font-sans text-[11.5px] text-ink-faint">({room.dorm.reviewCount ?? 0})</span>
+                    </>
+                  ) : (
+                    <span className="text-[11.5px] text-ink-faint">{t.noReview}</span>
+                  )}
+                </div>
+                <div className="truncate text-[15px] font-bold tracking-tight text-ink-strong">{room.dorm.name}</div>
+                <div className="mt-0.5 truncate text-xs text-ink-muted">
+                  {roomLabel}
+                  {room.dorm.address ? ` · ${room.dorm.address}` : ` · ${room.dorm.province}`}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-[18px] pb-[18px]">
+              <div className="mb-3.5 h-px bg-hairline" />
+              <div className="mb-3 text-sm font-bold text-ink-strong">{t.summaryTitle}</div>
+
+              <div className="mb-2.5 flex items-center justify-between">
+                <span className="text-[13.5px] text-ink-subtitle">{t.firstMonth}</span>
+                <span className="font-sans text-sm font-semibold tabular-nums text-ink-strong">
+                  ฿{room.pricePerMonth.toLocaleString()}
+                </span>
+              </div>
+
+              {deposit > 0 && (
+                <div className="mb-2.5 flex items-start justify-between gap-3">
+                  <span className="text-[13.5px] text-ink-subtitle">
+                    {t.deposit}
+                    <span className="block text-[11px] text-ink-faint">{t.depositNote}</span>
+                  </span>
+                  <span className="font-sans text-sm font-semibold tabular-nums text-ink-strong">
+                    ฿{deposit.toLocaleString()}
+                  </span>
+                </div>
+              )}
+
+              <div className="mb-2.5 flex items-center justify-between">
+                <span className="text-[13.5px] text-ink-subtitle">{t.bookingFee}</span>
+                <span className="text-sm font-semibold text-success">{t.free}</span>
+              </div>
+
+              <div className="my-3.5 h-px bg-hairline" />
+
+              <div className="flex items-baseline justify-between">
+                <span className="text-[15px] font-bold text-ink-strong">{t.payNow}</span>
+                <span className="font-sans text-2xl font-bold tabular-nums text-tenant">
+                  ฿{room.pricePerMonth.toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-1 text-right text-[11.5px] text-ink-faint">{t.payNowNote}</p>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-4 flex h-[52px] w-full items-center justify-center gap-2.5 rounded-[13px] bg-gradient-to-br from-tenant to-[#5B9DFF] text-base font-bold text-white shadow-btn-tenant hover:brightness-105 disabled:opacity-60"
+              >
+                {!submitting && (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 12l16-8-6 16-3-6-7-2z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+                  </svg>
+                )}
+                {submitting ? t.submitting : t.submit}
+              </button>
+              <p className="mt-2 text-center text-[11.5px] text-ink-faint">{t.ctaHint}</p>
+            </div>
+          </div>
+
+          {/* reassurance */}
+          <div className="mt-3.5 rounded-card-lg border border-card-border bg-white px-[18px] py-4">
+            {t.reassure.map((text, i) => (
+              <div key={text} className={`flex items-center gap-3 ${i < t.reassure.length - 1 ? 'mb-3' : ''}`}>
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${
+                    ['bg-tenant-tint', 'bg-warning-tint', 'bg-success-tint'][i]
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d={
+                        [
+                          'M9 11l3 3 8-8M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9',
+                          'M4 12l16-8-6 16-3-6-7-2z',
+                          'M8 3h8l4 4v14H4V3h4zM9 12h6M9 16h6',
+                        ][i]
+                      }
+                      stroke={['#2F6FE0', '#C77C1E', '#12A150'][i]}
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span className="text-[12.5px] leading-snug text-ink-subtitle">{text}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3.5 flex items-center justify-center gap-2 text-xs text-ink-faint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="10" width="16" height="10" rx="2" stroke="#9AA0AB" strokeWidth="1.7" />
+              <path d="M8 10V7a4 4 0 018 0v3" stroke="#9AA0AB" strokeWidth="1.7" />
+            </svg>
+            {t.secure}
+          </div>
+        </div>
       </form>
     </main>
   );

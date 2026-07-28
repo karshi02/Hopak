@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
@@ -192,7 +193,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 className={inputClass}
-              />
+              />  
             </div>
 
             <div>
@@ -218,9 +219,9 @@ export default function LoginPage() {
                 </button>
               </div>
               <div className="mt-1.5 text-right">
-                <a href="#" className="text-xs font-semibold text-tenant">
+                <Link href="/forgot-password" className="text-xs font-semibold text-tenant">
                   {t.forgotPassword}
-                </a>
+                </Link>
               </div>
             </div>
 

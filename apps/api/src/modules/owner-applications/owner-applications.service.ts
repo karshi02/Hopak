@@ -10,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma.service';
 import { MailService } from '../mail/mail.service';
 import { UploadsService } from '../uploads/uploads.service';
@@ -83,10 +84,23 @@ export class OwnerApplicationsService {
       throw new ConflictException('อีเมลนี้สมัครเปิดหอพักไปแล้ว กรุณาเข้าสู่ระบบ');
     }
 
+    // ใบสมัครเก่าที่ยังไม่เสร็จ (อีเมลเดิม กลับมากรอกใหม่) ต้องเริ่มรูป/เอกสาร/สถานะยืนยันเมลใหม่หมด
+    // ห้ามพกข้อมูล/ไฟล์จากความพยายามครั้งก่อนมาโชว์ทับ — ไม่งั้นเหมือนเห็นรูปของใบสมัครอื่นที่ไม่เกี่ยวกัน
     const app = existing
       ? await this.prisma.ownerApplication.update({
           where: { id: existing.id },
-          data: { name: dto.name, phone: dto.phone },
+          data: {
+            name: dto.name,
+            phone: dto.phone,
+            images: [],
+            documents: [],
+            status: 'DRAFT',
+            otpCodeHash: null,
+            otpExpiresAt: null,
+            otpSentAt: null,
+            otpAttempts: 0,
+            verifiedAt: null,
+          },
           select: SAFE_SELECT,
         })
       : await this.prisma.ownerApplication.create({
@@ -229,15 +243,13 @@ export class OwnerApplicationsService {
       const { accessToken } = await this.prisma.$transaction(async (tx) => {
         const user = await tx.user.create({
           data: {
-            role: 'TENANT',
+            role: 'OWNER',
             name: app.name ?? app.email,
             email: app.email,
             phone: app.phone,
             password: passwordHash,
           },
         });
-
-        await tx.ownerRequest.create({ data: { userId: user.id } });
 
         const dorm = await tx.dorm.create({
           data: {
@@ -265,7 +277,12 @@ export class OwnerApplicationsService {
 
         await tx.ownerApplication.update({ where: { id }, data: { status: 'COMPLETED' } });
 
-        return { accessToken: this.jwt.sign({ sub: user.id, role: user.role.toLowerCase() }) };
+        // ผูก session ให้เหมือน login ปกติ (jti ใหม่) — เพื่อให้โผล่ใน "อุปกรณ์ที่เข้าสู่ระบบ"
+        // และเตะออกได้เหมือนบัญชีอื่นทุกทาง ไม่ใช่แค่ทาง auth.service ปกติ
+        const jti = randomUUID();
+        await tx.session.create({ data: { userId: user.id, jti } });
+
+        return { accessToken: this.jwt.sign({ sub: user.id, role: user.role.toLowerCase(), jti }) };
       });
 
       return { accessToken };

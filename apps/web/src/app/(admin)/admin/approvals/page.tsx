@@ -392,7 +392,7 @@ export default function AdminApprovalsPage() {
           {pendingRooms.length > 0 && <Badge label={`${pendingRooms.length}`} variant="warning" />}
         </div>
         <div className="mt-3 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs text-ink-faint">
                 <th className="p-3 font-normal">{t.room}</th>
@@ -439,7 +439,7 @@ export default function AdminApprovalsPage() {
       <div className="mt-8">
         <h2 className="text-base font-bold text-ink-strong">{t.allDormsTitle}</h2>
         <div className="mt-3 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs text-ink-faint">
                 <th className="p-3 font-normal">{t.dorm}</th>
@@ -506,7 +506,7 @@ export default function AdminApprovalsPage() {
       <div className="mt-8">
         <h2 className="text-base font-bold text-ink-strong">{t.logTitle}</h2>
         <div className="mt-3 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs text-ink-faint">
                 <th className="p-3 font-normal">{t.status}</th>
@@ -553,8 +553,8 @@ export default function AdminApprovalsPage() {
       )}
 
       {roomsModalDorm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-lg rounded-card-lg border border-card-border bg-white p-5 shadow-card">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
             <h2 className="font-bold text-ink-strong">{t.roomsModalTitle(roomsModalDorm.name)}</h2>
             <div className="mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto">
               {dormRooms.map((r) => (
@@ -672,8 +672,8 @@ function EditDormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-      <div className="w-full max-w-sm rounded-card-lg border border-card-border bg-white p-5 shadow-card">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
+      <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
         <h2 className="font-bold text-ink-strong">{t.modalTitle}</h2>
         <div className="mt-4 flex flex-col gap-3">
           <div>
@@ -836,7 +836,7 @@ function EditRoomModal({
   const inputClass = 'h-11 w-full rounded-lg border border-card-border px-3.5 text-sm outline-none focus:border-tenant';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
       <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-card-lg border border-card-border bg-white p-5 shadow-card">
         <h2 className="font-bold text-ink-strong">{t.editRoomTitle}</h2>
         <div className="mt-4 flex flex-col gap-3">

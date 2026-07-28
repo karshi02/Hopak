@@ -13,8 +13,19 @@ export class NotificationsController {
     return this.notificationsService.listForUser(user.id);
   }
 
+  // ต้องมาก่อน @Patch(':id/read') ไม่งั้น 'read-all' จะถูกจับเป็น :id
+  @Patch('read-all')
+  markAllRead(@CurrentUser() user: { id: string }) {
+    return this.notificationsService.markAllRead(user.id);
+  }
+
   @Patch(':id/read')
-  markRead(@Param('id') id: string) {
-    return this.notificationsService.markRead(id);
+  markRead(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.notificationsService.markRead(id, user.id);
+  }
+
+  @Get(':id/attachment')
+  getAttachment(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.notificationsService.getAttachmentUrl(id, user.id);
   }
 }

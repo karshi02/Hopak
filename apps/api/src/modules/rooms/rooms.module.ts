@@ -4,9 +4,10 @@ import { RoomsService } from './rooms.service';
 import { UploadsService } from '../uploads/uploads.service';
 import { PrismaService } from '../../prisma.service';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 
 @Module({
-  imports: [RealtimeModule],
+  imports: [RealtimeModule, ReviewsModule],
   controllers: [RoomsController],
   providers: [RoomsService, UploadsService, PrismaService],
   exports: [RoomsService],

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
@@ -18,6 +19,12 @@ export class UsersController {
   @Patch('me')
   updateProfile(@CurrentUser() user: { id: string }, @Body() body: UpdateProfileDto) {
     return this.usersService.updateProfile(user.id, body);
+  }
+
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('avatar'))
+  updateAvatar(@CurrentUser() user: { id: string }, @UploadedFile() file: Express.Multer.File) {
+    return this.usersService.updateAvatar(user.id, file);
   }
 
   @Patch('me/password')
@@ -43,5 +50,15 @@ export class UsersController {
   @Post('me/verify-email-otp')
   verifyEmailOtp(@CurrentUser() user: { id: string }, @Body('code') code: string) {
     return this.usersService.verifyEmailOtp(user.id, code);
+  }
+
+  @Get('me/sessions')
+  listSessions(@CurrentUser() user: { id: string }) {
+    return this.usersService.listSessions(user.id);
+  }
+
+  @Delete('me/sessions/:id')
+  revokeSession(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.usersService.revokeSession(user.id, id);
   }
 }

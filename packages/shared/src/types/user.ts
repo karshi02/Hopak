@@ -17,6 +17,7 @@ export interface User {
   reviewCount?: number;
   emailVerified?: boolean;
   bankName?: string | null;
+  bankAccountName?: string | null;
   bankAccountNumber?: string | null;
   promptpayId?: string | null;
 }

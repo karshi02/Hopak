@@ -27,6 +27,8 @@ services:
       - "4000:4000"
     volumes:
       - api_uploads:/app/uploads
+      # เอกสารส่วนตัว (บัตร ปชช./โฉนด/สลิปโอนเงิน) — ต้องมี volume แยก ไม่งั้นหายทุกครั้งที่ redeploy
+      - api_private:/app/private-uploads
 
   web:
     build:
@@ -44,3 +46,4 @@ services:
 volumes:
   postgres_data:
   api_uploads:
+  api_private:

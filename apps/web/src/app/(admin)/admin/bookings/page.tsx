@@ -127,7 +127,7 @@ export default function AdminBookingsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <FilterTabs options={FILTERS} value={statusFilter} onChange={setStatusFilter} />
         <button
           onClick={handleExport}
@@ -138,7 +138,7 @@ export default function AdminBookingsPage() {
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.bookingId}</th>

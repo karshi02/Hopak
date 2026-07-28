@@ -3,6 +3,8 @@ import { PrismaService } from '../../../prisma.service';
 import { UploadsService } from '../../uploads/uploads.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { MailService } from '../../mail/mail.service';
+import { RealtimeGateway } from '../../realtime/realtime.gateway';
+import { generateCheckInToken, checkInTokenExpiry } from '../../bookings/bookings.service';
 
 @Injectable()
 export class FinanceService {
@@ -11,7 +13,45 @@ export class FinanceService {
     private uploads: UploadsService,
     private notifications: NotificationsService,
     private mail: MailService,
+    private realtime: RealtimeGateway,
   ) {}
+
+  // แอดมินเคลียร์บิลเอง (เช็คสลิปลูกค้า/ยืนยันลูกค้าเข้าหอแล้วด้วยตาตัวเอง) — ไม่มีระบบอัตโนมัติ
+  // ตั้งใจตัดออก กันเคสสลิปปลอม/ลูกค้ายังไม่เข้าหอจริงแต่ระบบเผลอโอนให้เจ้าของหอไปแล้ว
+  async settlePayment(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('ไม่พบรายการชำระเงิน');
+    if (payment.status !== 'PENDING') throw new BadRequestException('รายการนี้เคลียร์บิลไปแล้ว');
+
+    await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: { status: 'SETTLED', settledAt: new Date() },
+    });
+    // ใบเสร็จเกิดขึ้นตรงนี้ จึงออกโค้ดยืนยันการเข้าพักพร้อมกันไปเลย
+    // เช็ค checkInToken เดิมก่อน กันกรณีถูกเรียกซ้ำแล้วออกโค้ดใหม่ทับของที่ผู้เช่าถืออยู่
+    const existing = await this.prisma.booking.findUniqueOrThrow({ where: { id: payment.bookingId } });
+    const booking = await this.prisma.booking.update({
+      where: { id: payment.bookingId },
+      data: {
+        status: 'PAID',
+        ...(existing.checkInToken
+          ? {}
+          : {
+              checkInToken: generateCheckInToken(),
+              checkInTokenExpiresAt: checkInTokenExpiry(existing.checkInDate),
+            }),
+      },
+    });
+    this.realtime.emitToUser(booking.tenantId, 'booking:updated', booking);
+    await this.notifications.create(
+      booking.tenantId,
+      'payment',
+      'ยืนยันการชำระเงินสำเร็จ',
+      `สลิปของคุณผ่านการตรวจสอบแล้ว ยอด ฿${booking.amount.toLocaleString()} — ใบเสร็จและโทเค็นยืนยันการเข้าพักพร้อมแล้ว`,
+    );
+
+    return { settled: true };
+  }
 
   private periodRange(year?: number, month?: number) {
     if (!year) return undefined;
@@ -34,6 +74,23 @@ export class FinanceService {
     const totalReceived = settled.reduce((sum, p) => sum + p.amount, 0);
     const totalTransferred = transferred.reduce((sum, p) => sum + p.ownerPayout, 0);
     const totalPending = pending.reduce((sum, p) => sum + p.ownerPayout, 0);
+
+    // ยอดคงเหลือในบัญชีกลางจริง — ไม่ผูกกับ filter ช่วงเวลาที่เลือก (บัญชีจริงไม่มีทาง "รีเซ็ต" ทุกเดือน)
+    // = เงินเข้าทั้งหมดตลอดเวลา - เงินที่โอนออกให้เจ้าของหอไปแล้วทั้งหมด (นับรวม transfer แบบ ad-hoc ที่ไม่ผูก payment ด้วย
+    // โดยอ่านจาก ApprovalLog ที่บันทึกไว้ทุกครั้งที่กดโอนเงิน ไม่ใช่แค่นับจาก Payment.status=TRANSFERRED)
+    const [allTimeReceived, transferLogs] = await Promise.all([
+      this.prisma.payment.aggregate({
+        where: { status: { in: ['SETTLED', 'TRANSFERRED'] } },
+        _sum: { amount: true },
+      }),
+      this.prisma.approvalLog.findMany({ where: { entityType: 'PAYOUT' }, select: { snapshot: true } }),
+    ]);
+    const totalTransferredOutAllTime = transferLogs.reduce((sum, log) => {
+      const snap = log.snapshot as { amount?: number } | null;
+      return sum + (snap?.amount ?? 0);
+    }, 0);
+    const centralBalance = (allTimeReceived._sum.amount ?? 0) - totalTransferredOutAllTime;
+
     return {
       totalCommission,
       totalChamberShare,
@@ -42,15 +99,49 @@ export class FinanceService {
       totalReceived,
       totalTransferred,
       totalPending,
+      centralBalance,
       count: settled.length,
     };
+  }
+
+  // ประวัติการโอนเงินทั้งหมด (ทุกครั้งที่แอดมินกดโอน ไม่ว่าจะผูกกับ payment หรือ ad-hoc) — ใครโอน โอนให้ใคร วันเวลา ยอดเท่าไหร่
+  async transferHistory() {
+    const logs = await this.prisma.approvalLog.findMany({
+      where: { entityType: 'PAYOUT' },
+      include: { admin: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return logs.map((log) => {
+      const snap = (log.snapshot ?? {}) as {
+        dormId?: string;
+        dormName?: string;
+        ownerId?: string;
+        amount?: number;
+        baseAmount?: number;
+        bonusAmount?: number;
+        note?: string | null;
+        transferSlipKey?: string;
+      };
+      return {
+        id: log.id,
+        dormName: snap.dormName ?? '—',
+        amount: snap.amount ?? 0,
+        baseAmount: snap.baseAmount ?? 0,
+        bonusAmount: snap.bonusAmount ?? 0,
+        note: snap.note ?? null,
+        adminName: log.admin.name,
+        slipUrl: snap.transferSlipKey ? this.uploads.getPrivateUrl(snap.transferSlipKey) : null,
+        createdAt: log.createdAt,
+      };
+    });
   }
 
   // ดูรายการย้อนหลังต่อรอบพร้อมสลิปโอนเงินของลูกค้า (สลิปเป็นไฟล์ private เซ็น URL ชั่วคราวทุกครั้งที่เรียก)
   async listDetailed(year?: number, month?: number) {
     const createdAt = this.periodRange(year, month);
+    // รวม PENDING ด้วย — แอดมินต้องเห็นรายการรอเคลียร์บิลในตารางนี้ถึงจะกดเคลียร์ได้
     const payments = await this.prisma.payment.findMany({
-      where: { status: { in: ['SETTLED', 'TRANSFERRED'] }, ...(createdAt ? { createdAt } : {}) },
+      where: { status: { in: ['PENDING', 'SETTLED', 'TRANSFERRED'] }, ...(createdAt ? { createdAt } : {}) },
       include: { booking: { include: { room: { include: { dorm: { include: { owner: true } } } } } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -87,53 +178,62 @@ export class FinanceService {
       .sort((a, b) => b.year - a.year || b.month - a.month);
   }
 
-  // ยอดที่ยังไม่ได้โอน (SETTLED) แยกตามเจ้าของหอ — พร้อมข้อมูลบัญชีรับเงิน ให้แอดมินเลือกโอนทีละคน
+  // แสดงหอที่อนุมัติแล้วทั้งหมด (เลือกดูได้ทุกหอ ไม่ใช่แค่หอที่มียอดค้างโอน) พร้อมยอดค้างโอนจริง
+  // (SETTLED เท่านั้น — ถ้าไม่มียอด totalPayout เป็น 0 ปุ่มโอนฝั่ง frontend ต้อง disable เพราะ
+  // การโอนต้องผูกกับ payment จริงเสมอ ห้ามโอนแบบไม่มีที่มา)
   async listPendingPayouts() {
-    const payments = await this.prisma.payment.findMany({
-      where: { status: 'SETTLED' },
-      include: { booking: { include: { room: { include: { dorm: { include: { owner: true } } } } } } },
-    });
+    const [dorms, payments] = await Promise.all([
+      this.prisma.dorm.findMany({
+        where: { status: 'APPROVED' },
+        include: { owner: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.payment.findMany({
+        where: { status: 'SETTLED' },
+        include: { booking: { include: { room: true } } },
+      }),
+    ]);
 
-    const byOwner = new Map<
-      string,
-      {
-        ownerId: string;
-        ownerName: string;
-        bankName: string | null;
-        bankAccountNumber: string | null;
-        promptpayId: string | null;
-        dormNames: Set<string>;
-        totalPayout: number;
-        paymentCount: number;
-      }
-    >();
-
+    const totalsByDorm = new Map<string, { totalPayout: number; paymentCount: number }>();
     for (const p of payments) {
-      const owner = p.booking.room.dorm.owner;
-      const entry = byOwner.get(owner.id) ?? {
-        ownerId: owner.id,
-        ownerName: owner.name,
-        bankName: owner.bankName,
-        bankAccountNumber: owner.bankAccountNumber,
-        promptpayId: owner.promptpayId,
-        dormNames: new Set<string>(),
-        totalPayout: 0,
-        paymentCount: 0,
-      };
-      entry.dormNames.add(p.booking.room.dorm.name);
+      const dormId = p.booking.room.dormId;
+      const entry = totalsByDorm.get(dormId) ?? { totalPayout: 0, paymentCount: 0 };
       entry.totalPayout += p.ownerPayout;
       entry.paymentCount += 1;
-      byOwner.set(owner.id, entry);
+      totalsByDorm.set(dormId, entry);
     }
 
-    return Array.from(byOwner.values()).map((e) => ({ ...e, dormNames: Array.from(e.dormNames) }));
+    return dorms.map((dorm) => {
+      const totals = totalsByDorm.get(dorm.id) ?? { totalPayout: 0, paymentCount: 0 };
+      return {
+        dormId: dorm.id,
+        dormName: dorm.name,
+        ownerId: dorm.owner.id,
+        ownerName: dorm.owner.name,
+        bankName: dorm.owner.bankName,
+        bankAccountName: dorm.owner.bankAccountName,
+        bankAccountNumber: dorm.owner.bankAccountNumber,
+        promptpayId: dorm.owner.promptpayId,
+        totalPayout: totals.totalPayout,
+        paymentCount: totals.paymentCount,
+      };
+    });
   }
 
   // ประวัติการจ่ายทั้งหมดของเจ้าของหอคนเดียว (ทุกสถานะ ทุกช่วงเวลา) — ใช้ในหน้ารายละเอียดที่กดจากการ์ด "รอโอน"
   async getOwnerDetail(ownerId: string) {
     const owner = await this.prisma.user.findUnique({
       where: { id: ownerId },
-      select: { id: true, name: true, email: true, phone: true, bankName: true, bankAccountNumber: true, promptpayId: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        bankName: true,
+        bankAccountName: true,
+        bankAccountNumber: true,
+        promptpayId: true,
+      },
     });
     if (!owner) throw new NotFoundException('ไม่พบเจ้าของหอ');
 
@@ -163,47 +263,97 @@ export class FinanceService {
     };
   }
 
-  // โอนยอด payout ให้เจ้าของหอคนเดียว ครบทุกรายการ SETTLED ของเขา พร้อมแนบสลิปที่แอดมินโอนจริง แล้วแจ้งเตือน+ส่งอีเมลเจ้าของหอ
-  // confirmedAmount: ยอดที่แอดมินพิมพ์ยืนยันว่าโอนจริงเท่าไหร่ (ปกติ = ยอดที่ระบบคำนวณ แต่แก้ไขได้กรณีปัดเศษ/โอนเพิ่ม) ใช้แสดงในอีเมล/แจ้งเตือนเท่านั้น ไม่กระทบยอด ownerPayout ที่บันทึกไว้ต่อรายการจอง
-  async transferToOwner(ownerId: string, slip: Express.Multer.File, confirmedAmount?: number) {
+  // โอนยอด payout ให้เจ้าของหอทีละหอ — โอนได้ทุกหอทันทีแม้ไม่มียอด SETTLED ในระบบเลย
+  // (แอดมินพิมพ์ยอดเองอิสระ ไม่ผูกกับ payment ใดๆ ก็ได้ เผื่อโอนพิเศษ/โบนัส/ปรับยอดเอง)
+  // ถ้ามี payment SETTLED ค้างอยู่จริง จะ mark เป็น TRANSFERRED ให้ด้วยตามปกติ
+  // ทุกครั้งที่โอน (ไม่ว่าจะผูกกับ payment หรือไม่) บันทึกลง ApprovalLog เก็บ audit trail ไว้เสมอ
+  async transferForDorm(
+    dormId: string,
+    adminId: string,
+    slip: Express.Multer.File,
+    confirmedAmount?: number,
+    note?: string,
+  ) {
     if (!slip) throw new BadRequestException('กรุณาแนบสลิปการโอนเงิน');
 
+    const dorm = await this.prisma.dorm.findUnique({ where: { id: dormId }, include: { owner: true } });
+    if (!dorm) throw new NotFoundException('ไม่พบหอพัก');
+
     const payments = await this.prisma.payment.findMany({
-      where: { status: 'SETTLED', booking: { room: { dorm: { ownerId } } } },
-      include: { booking: { include: { room: { include: { dorm: true } } } } },
+      where: { status: 'SETTLED', booking: { room: { dormId } } },
     });
-    if (payments.length === 0) throw new BadRequestException('ไม่มียอดค้างโอนสำหรับเจ้าของหอนี้');
-
     const calculatedTotal = payments.reduce((sum, p) => sum + p.ownerPayout, 0);
-    const transferAmount = confirmedAmount && confirmedAmount > 0 ? confirmedAmount : calculatedTotal;
-    const dormName = payments[0].booking.room.dorm.name;
 
-    const transferSlipKey = `payouts/${ownerId}/${Date.now()}-${slip.originalname}`;
+    if (payments.length === 0 && !(confirmedAmount && confirmedAmount > 0)) {
+      throw new BadRequestException('หอนี้ไม่มียอดค้างโอนในระบบ กรุณาระบุยอดที่จะโอนเอง');
+    }
+    const transferAmount = confirmedAmount && confirmedAmount > 0 ? confirmedAmount : calculatedTotal;
+    const bonusAmount = Math.max(0, transferAmount - calculatedTotal);
+    const dormName = dorm.name;
+    const ownerId = dorm.ownerId;
+
+    const transferSlipKey = `payouts/${dormId}/${Date.now()}-${slip.originalname}`;
     await this.uploads.upload(transferSlipKey, slip.buffer, slip.mimetype, 'private');
 
     const now = new Date();
-    await this.prisma.payment.updateMany({
-      where: { id: { in: payments.map((p) => p.id) } },
-      data: { status: 'TRANSFERRED', transferSlipKey, transferredAt: now },
+    if (payments.length > 0) {
+      await this.prisma.payment.updateMany({
+        where: { id: { in: payments.map((p) => p.id) } },
+        data: { status: 'TRANSFERRED', transferSlipKey, transferredAt: now },
+      });
+    }
+
+    await this.prisma.approvalLog.create({
+      data: {
+        entityType: 'PAYOUT',
+        entityId: dormId,
+        action: 'MANUAL_TRANSFER',
+        adminId,
+        snapshot: {
+          dormId,
+          dormName,
+          ownerId,
+          amount: transferAmount,
+          baseAmount: calculatedTotal,
+          bonusAmount,
+          note: note ?? null,
+          linkedPaymentIds: payments.map((p) => p.id),
+          transferSlipKey,
+        },
+        note: payments.length === 0 ? 'โอนแบบไม่ผูกกับ payment ในระบบ (แอดมินระบุยอดเอง)' : null,
+      },
     });
 
-    const owner = await this.prisma.user.findUnique({ where: { id: ownerId } });
+    const owner = dorm.owner;
     const dormsNote = payments.length > 1 ? ` (รวม ${payments.length} รายการจอง)` : '';
+    const breakdownLines = [
+      `ยอดรวมทั้งหมดที่โอน: ฿${transferAmount.toLocaleString()}`,
+      bonusAmount > 0 ? `  (ยอดปกติ ฿${calculatedTotal.toLocaleString()} + โบนัสเพิ่มเติม ฿${bonusAmount.toLocaleString()})` : null,
+    ].filter(Boolean);
     const title = 'ได้รับโอนเงินจาก Hopak';
-    const body = `โอนยอด payout ฿${transferAmount.toLocaleString()} เข้าบัญชีของคุณแล้ว (${dormName}${dormsNote})`;
-    await this.notifications.create(ownerId, 'payout', title, body);
+    const body = [...breakdownLines, `หอ: ${dormName}${dormsNote}`, note ? `หมายเหตุ: ${note}` : null]
+      .filter(Boolean)
+      .join(' — ');
+    await this.notifications.create(ownerId, 'payout', title, body, transferSlipKey);
 
     if (owner?.email) {
       await this.mail.send(
         owner.email,
         'แจ้งโอนเงิน payout จาก Hopak',
         `<p>สวัสดีคุณ ${owner.name},</p>
-         <p>ทีมงาน Hopak ได้โอนยอด payout <b>฿${transferAmount.toLocaleString()}</b> เข้าบัญชีของคุณเรียบร้อยแล้ว${dormsNote}</p>
+         <p>ทีมงาน Hopak ได้โอนเงินเข้าบัญชีของคุณเรียบร้อยแล้ว (${dormName}${dormsNote})</p>
+         <p><b>ยอดรวมทั้งหมดที่โอน: ฿${transferAmount.toLocaleString()}</b></p>
+         ${
+           bonusAmount > 0
+             ? `<p>แยกเป็น: ยอดปกติ ฿${calculatedTotal.toLocaleString()} + โบนัสเพิ่มเติม ฿${bonusAmount.toLocaleString()}</p>`
+             : ''
+         }
+         ${note ? `<p>หมายเหตุจากแอดมิน: ${note}</p>` : ''}
          <p>แนบสลิปการโอนมาพร้อมอีเมลนี้ครับ</p>`,
         [{ filename: slip.originalname, content: slip.buffer, contentType: slip.mimetype }],
       );
     }
 
-    return { transferred: payments.length, totalPayout: transferAmount };
+    return { transferred: payments.length, totalPayout: transferAmount, bonusAmount };
   }
 }

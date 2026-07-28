@@ -107,6 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -132,6 +133,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       socket.off('room:new', reloadPending);
     };
   }, [isAdmin]);
+
+  // เปลี่ยนหน้าแล้วปิดลิ้นชักเมนูเสมอ ไม่งั้นบนมือถือเมนูจะค้างทับหน้าใหม่
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -180,8 +186,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-canvas">
+      {/* ฉากหลังทึบตอนเปิดเมนูบนจอเล็ก — กดที่ไหนก็ปิดเมนูได้ */}
+      {navOpen && (
+        <div
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          aria-hidden
+        />
+      )}
+
       {/* ===== SIDEBAR ===== */}
-      <aside className="flex w-64 shrink-0 flex-col bg-admin-sidebar px-4 py-5">
+      {/* จอเล็ก = ลิ้นชักเลื่อนเข้าออก, จอ lg ขึ้นไป = คอลัมน์ติดอยู่กับที่เหมือนเดิม */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col bg-admin-sidebar px-4 py-5 transition-transform duration-200 lg:static lg:translate-x-0 ${
+          navOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="flex items-center gap-2.5 px-1 pb-5">
           <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] bg-gradient-to-br from-tenant to-tenant-dark shadow-[0_6px_16px_rgba(47,111,224,0.4)]">
             <AdminIcon name="home" size={19} className="text-white" />
@@ -244,13 +264,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* ===== MAIN ===== */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-[72px] shrink-0 items-center gap-4 border-b border-card-border bg-white px-7">
-          <div>
-            <div className="text-xl font-bold leading-none text-ink-strong">{t.title}</div>
-            <div className="mt-1 text-[12.5px] text-ink-muted">{t.subtitle}</div>
+        <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-card-border bg-white px-4 sm:px-7">
+          <button
+            onClick={() => setNavOpen(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-card-border text-ink-subtitle lg:hidden"
+            aria-label="menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <div className="truncate text-lg font-bold leading-none text-ink-strong sm:text-xl">{t.title}</div>
+            <div className="mt-1 hidden text-[12.5px] text-ink-muted sm:block">{t.subtitle}</div>
           </div>
           <div className="ml-auto flex items-center gap-2.5">
-            <div ref={searchRef} className="relative">
+            <div ref={searchRef} className="relative hidden md:block">
               <div className="flex h-10 items-center gap-2 rounded-[11px] bg-surface-canvas px-3.5 text-[13.5px] text-ink-muted focus-within:ring-1 focus-within:ring-tenant">
                 <AdminIcon name="search" size={17} />
                 <input
@@ -258,7 +287,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => searchResults && setSearchOpen(true)}
                   placeholder={lang === 'th' ? 'ค้นหาหอพัก / ผู้ใช้ / การจอง…' : 'Search dorms / users / bookings…'}
-                  className="w-56 bg-transparent text-ink placeholder:text-ink-faint focus:outline-none"
+                  className="w-36 bg-transparent text-ink placeholder:text-ink-faint focus:outline-none lg:w-56"
                 />
               </div>
               {searchOpen && searchResults && (
@@ -347,14 +376,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </div>
               )}
             </div>
-            <div className="h-[26px] w-px bg-card-border" />
-            <span className="flex h-10 w-10 items-center justify-center rounded-pill bg-gradient-to-br from-admin to-[#8B7BEA] font-sans text-[13px] font-bold text-white">
+            <div className="hidden h-[26px] w-px bg-card-border sm:block" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-gradient-to-br from-admin to-[#8B7BEA] font-sans text-[13px] font-bold text-white">
               {initials}
             </span>
           </div>
         </div>
 
-        <main className="flex-1 overflow-auto px-7 py-6">{children}</main>
+        <main className="flex-1 overflow-auto px-4 py-5 sm:px-7 sm:py-6">{children}</main>
       </div>
     </div>
   );

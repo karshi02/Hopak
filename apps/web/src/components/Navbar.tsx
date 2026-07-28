@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken, clearToken } from '@/lib/auth';
-import { resetSocket } from '@/lib/ws';
+import { resetSocket, getSocket } from '@/lib/ws';
 import { useLang } from '@/hooks/useLang';
+import { useTypewriter } from '@/hooks/useTypewriter';
 import { LangSwitch } from '@/components/LangSwitch';
 import type { User } from '@hopak/shared';
 
@@ -16,30 +17,35 @@ const TEXT = {
     bookings: 'การจองของฉัน',
     saved: 'บันทึก',
     refresh: 'รีเฟรช',
+    notifications: 'การแจ้งเตือน',
     dashboard: 'แดชบอร์ด',
     logout: 'ออกจากระบบ',
     login: 'เข้าสู่ระบบ',
-    searchPlaceholder: 'ค้นหาจังหวัด / มหาวิทยาลัย / ชื่อหอพัก',
+    searchPhrases: ['ค้นหาจังหวัด', 'หอพักใกล้มหาวิทยาลัย', 'ชื่อหอพักใกล้ฉัน'],
   },
   en: {
     home: 'Home',
     bookings: 'My Bookings',
     saved: 'Saved',
     refresh: 'Refresh',
+    notifications: 'Notifications',
     dashboard: 'Dashboard',
     logout: 'Log out',
     login: 'Log in',
-    searchPlaceholder: 'Search province / university / dorm name',
+    searchPhrases: ['Search by province', 'Dorms near your university', 'Dorm name near me'],
   },
 };
 
 export function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { lang, setLang } = useLang();
   const t = TEXT[lang];
   const [user, setUser] = useState<User | null>(null);
   const [checked, setChecked] = useState(false);
   const [q, setQ] = useState('');
+  const [unreadNotif, setUnreadNotif] = useState(0);
+  const animatedPlaceholder = useTypewriter(t.searchPhrases);
 
   useEffect(() => {
     if (!getToken()) {
@@ -52,6 +58,33 @@ export function Navbar() {
       .catch(() => clearToken())
       .finally(() => setChecked(true));
   }, []);
+
+  // กระดิ่งแจ้งเตือน — เฉพาะผู้เช่า (tenant) ที่ล็อกอินอยู่เท่านั้น
+  // นับจำนวนที่ยังไม่อ่าน + ฟังเรียลไทม์เพิ่มทันทีเมื่อมีแจ้งเตือนใหม่
+  const isTenant = user?.role.toLowerCase() === 'tenant';
+  useEffect(() => {
+    if (!isTenant) return;
+    const socket = getSocket();
+    const onNew = () => setUnreadNotif((c) => c + 1);
+    socket.on('notification:new', onNew);
+    return () => {
+      socket.off('notification:new', onNew);
+    };
+  }, [isTenant]);
+
+  // โหลด/รีเฟรชจำนวนที่ยังไม่อ่านทุกครั้งที่เปลี่ยนหน้า + เมื่อผู้ใช้กดอ่านในหน้าแจ้งเตือน
+  // (custom event 'hopak:notif-read' กันตัวนับค้างขณะอยู่หน้าเดียวกัน)
+  useEffect(() => {
+    if (!isTenant) return;
+    const refetch = () =>
+      apiClient
+        .get<{ readAt: string | null }[]>('/notifications')
+        .then((list) => setUnreadNotif(list.filter((n) => !n.readAt).length))
+        .catch(() => {});
+    refetch();
+    window.addEventListener('hopak:notif-read', refetch);
+    return () => window.removeEventListener('hopak:notif-read', refetch);
+  }, [isTenant, pathname]);
 
   function handleLogout() {
     clearToken();
@@ -86,7 +119,7 @@ export function Navbar() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={t.searchPlaceholder}
+            placeholder={animatedPlaceholder}
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint dark:text-white"
           />
         </form>
@@ -128,7 +161,37 @@ export function Navbar() {
                   {t.dashboard}
                 </Link>
               )}
-              <Link href="/profile" className="text-ink hover:text-tenant dark:text-white">
+              {isTenant && (
+                <Link
+                  href="/notifications"
+                  title={t.notifications}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-[11px] bg-tenant-tint text-tenant hover:brightness-95 dark:bg-white/10"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {unreadNotif > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-pill border-2 border-white bg-danger px-1 text-[11px] font-bold text-white dark:border-[#1a1a19]">
+                      {unreadNotif > 99 ? '99+' : unreadNotif}
+                    </span>
+                  )}
+                </Link>
+              )}
+              <Link href="/profile" className="flex items-center gap-2 text-ink hover:text-tenant dark:text-white">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-tenant/15 text-xs font-bold text-tenant">
+                  {user.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    user.name.charAt(0)
+                  )}
+                </span>
                 {user.name}
               </Link>
               <button onClick={handleLogout} className="text-danger hover:underline">

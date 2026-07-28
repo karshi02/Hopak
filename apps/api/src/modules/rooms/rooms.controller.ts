@@ -27,6 +27,11 @@ export class RoomsController {
     return this.roomsService.listByDorm(dormId);
   }
 
+  @Get('rooms/:id')
+  findOne(@Param('id') id: string) {
+    return this.roomsService.findOne(id);
+  }
+
   @Post('dorms/:dormId/rooms')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('owner')
