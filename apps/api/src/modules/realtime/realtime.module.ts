@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { RealtimeGateway } from './realtime.gateway';
+import { requireEnv } from '../../common/env.util';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret',
+      secret: requireEnv('JWT_SECRET'),
     }),
   ],
   providers: [RealtimeGateway],

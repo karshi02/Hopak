@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { requireEnv } from './env.util';
 
-const SECRET = process.env.FILE_SIGNING_SECRET || process.env.JWT_SECRET || 'dev-secret';
+// FILE_SIGNING_SECRET แยกได้ (ไม่บังคับ) แต่ถ้าไม่ตั้ง ต้องมี JWT_SECRET เสมอ — ห้าม fallback 'dev-secret'
+const SECRET = process.env.FILE_SIGNING_SECRET || requireEnv('JWT_SECRET');
 
 function sign(key: string, exp: number): string {
   return createHmac('sha256', SECRET).update(`${key}:${exp}`).digest('hex').slice(0, 32);

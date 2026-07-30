@@ -7,12 +7,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { PrismaService } from '../../prisma.service';
 import { MailService } from '../mail/mail.service';
+import { requireEnv } from '../../common/env.util';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret',
+      secret: requireEnv('JWT_SECRET'),
       signOptions: { expiresIn: '7d' },
     }),
   ],

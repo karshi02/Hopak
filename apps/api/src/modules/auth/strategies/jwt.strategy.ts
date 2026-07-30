@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma.service';
+import { requireEnv } from '../../../common/env.util';
 
 // ไม่มี activity เกิน 30 นาที = session หมดอายุ auto-logout (กัน session ค้างถูกขโมยใช้ต่อ)
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -12,7 +13,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET ?? 'dev-secret',
+      secretOrKey: requireEnv('JWT_SECRET'),
     });
   }
 

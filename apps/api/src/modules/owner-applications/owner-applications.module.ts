@@ -5,11 +5,12 @@ import { OwnerApplicationsService } from './owner-applications.service';
 import { MailService } from '../mail/mail.service';
 import { UploadsService } from '../uploads/uploads.service';
 import { PrismaService } from '../../prisma.service';
+import { requireEnv } from '../../common/env.util';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret',
+      secret: requireEnv('JWT_SECRET'),
       signOptions: { expiresIn: '7d' },
     }),
   ],

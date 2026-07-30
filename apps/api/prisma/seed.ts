@@ -3,14 +3,24 @@ import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-const SEED_PASSWORD = 'hopak1234';
+// รหัส seed: prod ต้องส่งผ่าน env SEED_PASSWORD (บังคับ ห้ามใช้ค่า default ที่เดาได้)
+// dev เท่านั้นที่ fallback 'hopak1234' ได้เพื่อความสะดวก
+const isProd = process.env.NODE_ENV === 'production';
+const SEED_PASSWORD = process.env.SEED_PASSWORD || (isProd ? '' : 'hopak1234');
+if (isProd && !SEED_PASSWORD) {
+  throw new Error(
+    '[SECURITY] การ seed บน production ต้องตั้ง env SEED_PASSWORD — ปฏิเสธการ seed ด้วยรหัส default ที่เดาได้',
+  );
+}
 
 async function main() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
 
+  // สำคัญ: upsert ไม่รีเซ็ต password ของบัญชีที่มีอยู่แล้ว (update ไม่แตะ password)
+  // ป้องกัน re-seed แล้วรหัสที่ admin เปลี่ยนไว้เองถูกดีดกลับเป็นรหัส seed
   const admin = await prisma.user.upsert({
     where: { email: 'admin@hopak.com' },
-    update: { password: passwordHash },
+    update: {},
     create: {
       role: 'ADMIN',
       name: 'Hopak Admin',
@@ -22,7 +32,7 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: 'owner@hopak.com' },
-    update: { password: passwordHash },
+    update: {},
     create: {
       role: 'OWNER',
       name: 'เจ้าของหอทดสอบ',
