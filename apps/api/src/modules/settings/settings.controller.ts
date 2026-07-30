@@ -17,7 +17,7 @@ import { extname, join } from 'path';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { SettingsService, type PromoCard } from './settings.service';
+import { SettingsService, type PromoCard, type HomeContent } from './settings.service';
 
 const posterStorage = diskStorage({
   destination: join(process.cwd(), 'uploads'),
@@ -118,5 +118,19 @@ export class SettingsController {
   @Roles('admin')
   setPromos(@Body('cards') cards: PromoCard[]) {
     return this.settingsService.setPromoCards(cards ?? []);
+  }
+
+  @Post('admin/settings/home-content')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  setHomeContent(@Body() content: HomeContent) {
+    return this.settingsService.setHomeContent(content ?? {});
+  }
+
+  @Delete('admin/settings/hero')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  clearHero() {
+    return this.settingsService.clearHero();
   }
 }

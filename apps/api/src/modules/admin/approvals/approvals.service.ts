@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { UploadsService } from '../../uploads/uploads.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class ApprovalsService {
@@ -10,6 +11,7 @@ export class ApprovalsService {
     private prisma: PrismaService,
     private mail: MailService,
     private uploads: UploadsService,
+    private notifications: NotificationsService,
   ) {}
 
   async listPending() {
@@ -62,16 +64,19 @@ export class ApprovalsService {
   async approve(dormId: string, adminId: string) {
     const dorm = await this.prisma.dorm.update({
       where: { id: dormId },
-      data: { status: 'APPROVED' },
-      include: { owner: { select: { name: true, email: true } } },
+      data: { status: 'APPROVED', rejectionReason: null },
+      include: { owner: { select: { id: true, name: true, email: true } } },
     });
+
+    // อนุมัติหอ = คืนสิทธิ์เจ้าของหอ (เผื่อโดนลดเป็น TENANT ตอนถูกปฏิเสธก่อนหน้า)
+    await this.prisma.user.update({ where: { id: dorm.owner.id }, data: { role: 'OWNER' } });
 
     await this.logAction({ entityType: 'DORM', entityId: dormId, action: 'APPROVED', adminId, snapshot: dorm });
 
     if (dorm.owner.email) {
       await this.mail.send(
         dorm.owner.email,
-        'หอพักของคุณได้รับการอนุมัติแล้ว — Hopak Seller',
+        'หอพักของคุณได้รับการอนุมัติแล้ว — Hoprak Seller',
         `<p>สวัสดีคุณ ${dorm.owner.name},</p><p>หอพัก "${dorm.name}" ของคุณได้รับการอนุมัติแล้ว สามารถเข้าใช้งาน Owner Console เพื่อจัดการห้องพักและรับคำขอจองได้ทันที</p>`,
       );
     }
@@ -79,9 +84,57 @@ export class ApprovalsService {
     return dorm;
   }
 
-  async reject(dormId: string, adminId: string) {
-    const dorm = await this.prisma.dorm.update({ where: { id: dormId }, data: { status: 'REJECTED' } });
-    await this.logAction({ entityType: 'DORM', entityId: dormId, action: 'REJECTED', adminId, snapshot: dorm });
+  // ปฏิเสธหอ: ต้องแนบเหตุผล (สาเหตุ + วิธีแก้) เสมอ — เจ้าของหอเอาไปแก้แล้วส่งใหม่ได้
+  // นับจำนวนครั้งที่ถูกปฏิเสธ ครบ 3 ครั้งแอดมินสั่งระงับได้ทันที (แจ้งเตือนบอกด้วย)
+  async reject(dormId: string, adminId: string, reason: string) {
+    const trimmed = (reason ?? '').trim();
+    if (!trimmed) throw new BadRequestException('กรุณาระบุเหตุผลที่ปฏิเสธ + วิธีแก้ไข');
+
+    const existing = await this.prisma.dorm.findUnique({
+      where: { id: dormId },
+      include: { owner: { select: { id: true, name: true, email: true } } },
+    });
+    if (!existing) throw new NotFoundException('ไม่พบหอพัก');
+
+    const dorm = await this.prisma.dorm.update({
+      where: { id: dormId },
+      data: { status: 'REJECTED', rejectionReason: trimmed, rejectionCount: { increment: 1 } },
+    });
+
+    await this.logAction({ entityType: 'DORM', entityId: dormId, action: 'REJECTED', adminId, snapshot: dorm, note: trimmed });
+
+    // ลดสิทธิ์เจ้าของหอกลับเป็นผู้ใช้ปกติ (TENANT) — เฉพาะกรณีไม่มีหออื่นที่อนุมัติแล้ว (กันเจ้าของหลายหอเสียสิทธิ์หอที่ดีอยู่)
+    // ต้องสมัคร/ขอเป็นเจ้าของหอใหม่ ถึงจะกลับมาแก้แล้วส่งอนุมัติได้ (แอดมินอนุมัติ = คืนสิทธิ์ OWNER)
+    const otherApproved = await this.prisma.dorm.count({
+      where: { ownerId: existing.owner.id, status: 'APPROVED', id: { not: dormId } },
+    });
+    let demoted = false;
+    if (otherApproved === 0) {
+      await this.prisma.user.update({ where: { id: existing.owner.id }, data: { role: 'TENANT' } });
+      demoted = true;
+    }
+
+    const nearLimit = dorm.rejectionCount >= 3;
+    const title = `หอพัก "${existing.name}" ไม่ผ่านการตรวจสอบ (ครั้งที่ ${dorm.rejectionCount})`;
+    const demoteNote = demoted
+      ? '\n\nบัญชีของคุณถูกปรับกลับเป็นผู้ใช้ทั่วไปชั่วคราว กรุณาแก้ไขข้อมูลแล้ว "ขอเป็นเจ้าของหออีกครั้ง" เพื่อให้แอดมินตรวจสอบใหม่'
+      : '\n\nกรุณาแก้ไขข้อมูลหอพักตามที่แจ้ง แล้วกด "ส่งอนุมัติใหม่" เพื่อให้แอดมินตรวจสอบอีกครั้ง';
+    const body = nearLimit
+      ? `เหตุผล: ${trimmed}\n\nหอพักนี้ถูกปฏิเสธครบ 3 ครั้งแล้ว หากยังไม่แก้ไขตามที่แจ้ง หออาจถูกระงับ${demoteNote}`
+      : `เหตุผล: ${trimmed}${demoteNote}`;
+
+    // แจ้งเตือนในระบบ (realtime) ให้เจ้าของหอ
+    await this.notifications.create(existing.owner.id, 'DORM_REJECTED', title, body);
+
+    // แจ้งทางอีเมลด้วย
+    if (existing.owner.email) {
+      await this.mail.send(
+        existing.owner.email,
+        `${title} — Hoprak Seller`,
+        `<p>สวัสดีคุณ ${existing.owner.name},</p><p>หอพัก "${existing.name}" ไม่ผ่านการตรวจสอบ</p><p><b>เหตุผล / วิธีแก้:</b><br>${trimmed.replace(/\n/g, '<br>')}</p><p>เข้าสู่ระบบเพื่อแก้ไขข้อมูลแล้วส่งอนุมัติใหม่ได้ทันที</p>`,
+      );
+    }
+
     return dorm;
   }
 

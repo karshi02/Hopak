@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { IBM_Plex_Sans_Thai, IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
+import { SessionWatcher } from '@/components/SessionWatcher';
 
 const plexSansThai = IBM_Plex_Sans_Thai({
   subsets: ['thai', 'latin'],
@@ -21,14 +22,17 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Hopak — จองหอพักออนไลน์',
+  title: 'Hoprak — จองหอพักออนไลน์',
   description: 'ค้นหา จอง และจัดการหอพักออนไลน์',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th" className={`${plexSansThai.variable} ${plexSans.variable} ${plexMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <SessionWatcher />
+        {children}
+      </body>
     </html>
   );
 }

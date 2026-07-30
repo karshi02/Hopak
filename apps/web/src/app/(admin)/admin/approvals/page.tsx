@@ -38,6 +38,11 @@ const TEXT = {
     noDocuments: 'ยังไม่มีเอกสารแนบ',
     approve: 'อนุมัติ',
     reject: 'ปฏิเสธ',
+    rejectReasonPrompt: 'ระบุเหตุผลที่ปฏิเสธ + วิธีแก้ไข (เจ้าของหอจะได้รับแจ้งเตือน แก้แล้วส่งใหม่ได้):',
+    rejectedTimes: (n: number) => `ถูกปฏิเสธมาแล้ว ${n} ครั้ง`,
+    prevReason: 'เหตุผลครั้งก่อน',
+    suspendNow: 'ระงับหอนี้ทันที',
+    over3: 'ปฏิเสธครบ 3 ครั้ง — ระงับได้ทันที',
     edit: 'แก้ไขข้อมูล',
     none: 'ไม่มีหอรออนุมัติ',
 
@@ -114,6 +119,11 @@ const TEXT = {
     noDocuments: 'No documents attached',
     approve: 'Approve',
     reject: 'Reject',
+    rejectReasonPrompt: 'Reason for rejection + how to fix (the owner is notified and can fix & resubmit):',
+    rejectedTimes: (n: number) => `Rejected ${n} time(s)`,
+    prevReason: 'Previous reason',
+    suspendNow: 'Suspend this dorm now',
+    over3: 'Rejected 3 times — can suspend now',
     edit: 'Edit info',
     none: 'No dorms pending approval',
 
@@ -225,9 +235,11 @@ export default function AdminApprovalsPage() {
   }
 
   async function reject(id: string) {
+    const reason = window.prompt(t.rejectReasonPrompt)?.trim();
+    if (!reason) return; // ยกเลิก/ไม่กรอกเหตุผล = ไม่ปฏิเสธ
     setBusyId(id);
     try {
-      await apiClient.patch(`/admin/approvals/${id}/reject`);
+      await apiClient.patch(`/admin/approvals/${id}/reject`, { reason });
       reload();
     } catch {
       // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
@@ -357,6 +369,20 @@ export default function AdminApprovalsPage() {
                 )}
               </div>
 
+              {(dorm.rejectionCount ?? 0) > 0 && (
+                <div className="mt-2.5 rounded-lg border border-[#E0902F]/40 bg-[#E0902F]/10 p-2.5">
+                  <p className="text-xs font-semibold text-[#B4791A]">
+                    {t.rejectedTimes(dorm.rejectionCount ?? 0)}
+                    {(dorm.rejectionCount ?? 0) >= 3 && ` · ${t.over3}`}
+                  </p>
+                  {dorm.rejectionReason && (
+                    <p className="mt-1 whitespace-pre-line text-xs text-ink-subtitle">
+                      {t.prevReason}: {dorm.rejectionReason}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="mt-3.5 flex gap-2">
                 <button
                   onClick={() => approve(dorm.id)}
@@ -372,6 +398,15 @@ export default function AdminApprovalsPage() {
                 >
                   {t.reject}
                 </button>
+                {(dorm.rejectionCount ?? 0) >= 3 && (
+                  <button
+                    onClick={() => toggleSuspend(dorm.id, false)}
+                    disabled={busyId === dorm.id}
+                    className="flex-1 rounded-lg bg-danger py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {t.suspendNow}
+                  </button>
+                )}
                 <button
                   onClick={() => setEditTarget(dorm)}
                   className="flex-1 rounded-lg bg-surface-canvas py-2 text-sm font-semibold text-ink-body"

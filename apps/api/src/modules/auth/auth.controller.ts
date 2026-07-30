@@ -50,6 +50,21 @@ export class AuthController {
     return this.authService.resetPassword(dto.token, dto.password);
   }
 
+  // heartbeat ฝั่ง client เรียกเช็คว่า session ยังใช้ได้ไหม (ไม่มี guard — รับ token ผ่าน header เอง
+  // เพื่อไม่ให้ JwtStrategy bump lastSeenAt ซึ่งจะกันไม่ให้ session idle หมดอายุ)
+  @Get('session')
+  checkSession(@Req() req: Request) {
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    return this.authService.checkSession(token);
+  }
+
+  // web callback เอาโค้ดจาก ?code= มาแลกเป็น JWT จริงผ่าน POST (ไม่ผ่าน URL/log)
+  @Post('google/exchange')
+  @RateLimit(20, 60_000)
+  googleExchange(@Body() body: { code: string }) {
+    return this.authService.exchangeGoogleCode(body.code);
+  }
+
   @Get('google')
   @UseGuards(AuthGuard('google'))
   googleAuth() {}
@@ -59,9 +74,10 @@ export class AuthController {
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
     try {
       const { accessToken } = await this.authService.loginWithGoogle(req.user, deviceFromReq(req));
-      // ส่ง token ผ่าน URL fragment (#) ไม่ใช่ query (?) — fragment เบราว์เซอร์ไม่ส่งไป server
-      // จึงไม่หลุดเข้า nginx access log และไม่รั่วผ่าน Referer header ไปยัง resource บนหน้านั้น
-      res.redirect(`${FRONTEND_URL}/auth/google/callback#token=${accessToken}`);
+      // ส่ง "โค้ดแลก token" ชั่วคราวผ่าน query (?code=) ไม่ใช่ JWT ตรงๆ — query รอด redirect ข้าม origin
+      // (fragment # หายตอน 302) โค้ดใช้ครั้งเดียว/หมดอายุ 2 นาที หลุด log ก็ไร้ค่า ต่างจาก JWT 7 วัน
+      const code = this.authService.createGoogleExchangeCode(accessToken);
+      res.redirect(`${FRONTEND_URL}/auth/google/callback?code=${code}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'google_login_failed';
       res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(message)}`);

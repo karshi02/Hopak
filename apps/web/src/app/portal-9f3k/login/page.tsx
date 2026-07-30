@@ -9,7 +9,7 @@ import { LangSwitch } from '@/components/LangSwitch';
 
 const TEXT = {
   th: {
-    title: 'Hopak Admin Portal',
+    title: 'Hoprak Admin Portal',
     subtitle: 'สำหรับผู้ดูแลระบบเท่านั้น',
     emailPlaceholder: 'อีเมล',
     passwordPlaceholder: 'รหัสผ่าน',
@@ -18,7 +18,7 @@ const TEXT = {
     submit: 'เข้าสู่ระบบ',
   },
   en: {
-    title: 'Hopak Admin Portal',
+    title: 'Hoprak Admin Portal',
     subtitle: 'For administrators only',
     emailPlaceholder: 'Email',
     passwordPlaceholder: 'Password',

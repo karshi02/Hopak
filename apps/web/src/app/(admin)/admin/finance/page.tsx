@@ -40,6 +40,8 @@ interface PaymentRow {
   dormName: string;
   contactName: string;
   amount: number;
+  roomPrice: number;
+  deposit: number;
   commission: number;
   chamberShare: number;
   platformShare: number;
@@ -60,6 +62,7 @@ interface PendingPayout {
   dormName: string;
   ownerId: string;
   ownerName: string;
+  ownerPhone: string | null;
   bankName: string | null;
   bankAccountName: string | null;
   bankAccountNumber: string | null;
@@ -77,15 +80,17 @@ const TEXT = {
     invoiceTooltip: 'ยังไม่เชื่อมระบบออกใบกำกับภาษี',
     invoice: 'ออกใบกำกับภาษี',
     received: 'ยอดคงเหลือบัญชีกลาง',
-    chamber: 'หอการค้ามหาสารคาม (10%)',
-    platform: 'รายได้แพลตฟอร์ม (10%)',
+    chamber: 'หอการค้ามหาสารคาม (10% ของค่าคอม)',
+    platform: 'รายได้แพลตฟอร์ม (90% ของค่าคอม)',
     pendingAmount: 'คงค้างรอโอน',
     owner: 'เจ้าของหอ',
     dorm: 'หอพัก',
-    paidAmount: 'ยอดขาย',
+    paidAmount: 'ยอดรวม',
+    rentCol: 'ค่าห้อง',
+    depositCol: 'มัดจำ',
     commissionCut: 'คอม 20%',
-    chamberCut: 'หอการค้า 10%',
-    platformCut: 'แพลตฟอร์ม 10%',
+    chamberCut: 'หอการค้า',
+    platformCut: 'แพลตฟอร์ม',
     ownerPayout: 'โอนเจ้าของ 80%',
     status: 'สถานะ',
     statusLabel: { PENDING: 'รอเคลียร์บิล', SETTLED: 'รอโอน', TRANSFERRED: 'โอนแล้ว' } as Record<string, string>,
@@ -140,15 +145,17 @@ const TEXT = {
     invoiceTooltip: 'Tax invoice system not connected yet',
     invoice: 'Issue tax invoice',
     received: 'Central account balance',
-    chamber: 'Mahasarakham Chamber (10%)',
-    platform: 'Platform revenue (10%)',
+    chamber: 'Mahasarakham Chamber (10% of commission)',
+    platform: 'Platform revenue (90% of commission)',
     pendingAmount: 'Pending transfer',
     owner: 'Owner',
     dorm: 'Dorm',
-    paidAmount: 'Gross amount',
+    paidAmount: 'Total',
+    rentCol: 'Rent',
+    depositCol: 'Deposit',
     commissionCut: '20% commission',
-    chamberCut: '10% chamber',
-    platformCut: '10% platform',
+    chamberCut: 'Chamber',
+    platformCut: 'Platform',
     ownerPayout: '80% owner payout',
     status: 'Status',
     statusLabel: { PENDING: 'Awaiting review', SETTLED: 'Pending transfer', TRANSFERRED: 'Transferred' } as Record<
@@ -320,7 +327,10 @@ export default function AdminFinancePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-bold text-ink-strong">{p.dormName}</div>
-                      <div className="mt-0.5 truncate text-xs text-ink-muted">{p.ownerName}</div>
+                      <div className="mt-0.5 truncate text-xs text-ink-muted">
+                        {p.ownerName}
+                        {p.ownerPhone && <span className="text-tenant"> · 📞 {p.ownerPhone}</span>}
+                      </div>
                       <div className="mt-0.5 text-xs text-ink-faint">
                         {hasPayout ? t.bookingsCount(p.paymentCount) : t.noPayoutAmount}
                       </div>
@@ -415,6 +425,8 @@ export default function AdminFinancePage() {
               <th className="p-3 font-normal">{t.owner}</th>
               <th className="p-3 font-normal">{t.dorm}</th>
               <th className="p-3 font-normal">{t.paidAmount}</th>
+              <th className="p-3 font-normal">{t.rentCol}</th>
+              <th className="p-3 font-normal">{t.depositCol}</th>
               <th className="p-3 font-normal">{t.commissionCut}</th>
               <th className="p-3 font-normal">{t.chamberCut}</th>
               <th className="p-3 font-normal">{t.platformCut}</th>
@@ -434,6 +446,8 @@ export default function AdminFinancePage() {
                   <td className="p-3 font-medium text-ink-strong">{p.ownerName}</td>
                   <td className="p-3 text-ink-subtitle">{p.dormName}</td>
                   <td className="p-3 font-sans tabular-nums">฿{p.amount.toLocaleString()}</td>
+                  <td className="p-3 font-sans tabular-nums text-ink-subtitle">฿{p.roomPrice.toLocaleString()}</td>
+                  <td className="p-3 font-sans tabular-nums text-ink-subtitle">฿{p.deposit.toLocaleString()}</td>
                   <td className="p-3 font-sans tabular-nums text-danger">−฿{p.commission.toLocaleString()}</td>
                   <td className="p-3 font-sans tabular-nums text-warning-dark">฿{p.chamberShare.toLocaleString()}</td>
                   <td className="p-3 font-sans tabular-nums text-tenant">฿{p.platformShare.toLocaleString()}</td>
@@ -562,6 +576,9 @@ function TransferModal({
         <p className="mt-1 text-sm text-ink-subtitle">
           {target.dormName} &middot; {target.ownerName}
         </p>
+        {target.ownerPhone && (
+          <p className="mt-1 text-sm font-semibold text-tenant">📞 {target.ownerPhone}</p>
+        )}
 
         <div className="mt-4 rounded-lg bg-surface-canvas p-3.5 text-sm">
           <div className="flex justify-between gap-3">

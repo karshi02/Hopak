@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { hasShownLoaderThisSession, isAuthPage, markLoaderShown } from '@/lib/loaderVisibility';
 
-const WORD = 'Hopak.com';
+const WORD = 'Hoprak.com';
 const DOTS = ['•', '•', '•'];
 const REVEAL_DELAY_MS = 2000;
 
@@ -110,7 +110,7 @@ function SellerLoader() {
         </div>
 
         <div className="mt-[30px] flex items-baseline gap-2.5">
-          <span className="font-sans text-[34px] font-bold tracking-[-0.5px] text-white">Hopak</span>
+          <span className="font-sans text-[34px] font-bold tracking-[-0.5px] text-white">Hoprak</span>
           <span className="font-sans text-[34px] font-semibold tracking-[-0.5px] text-seller-muted">Seller</span>
         </div>
         <div className="mt-2 text-[15px] text-white/85">คอนโซลสำหรับเจ้าของหอพัก</div>

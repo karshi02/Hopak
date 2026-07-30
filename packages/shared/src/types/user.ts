@@ -28,6 +28,12 @@ export interface OwnerRequest {
   id: string;
   userId: string;
   status: OwnerRequestStatus;
+  phone?: string | null;
+  dormName?: string | null;
+  province?: string | null;
+  address?: string | null;
+  note?: string | null;
+  documents?: string[];
   createdAt: string;
   decidedAt?: string | null;
   user?: { id: string; name: string; email?: string; phone?: string; createdAt: string };

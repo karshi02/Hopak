@@ -12,6 +12,8 @@ interface OwnerPaymentRow {
   dormName: string;
   contactName: string;
   amount: number;
+  roomPrice: number;
+  deposit: number;
   commission: number;
   chamberShare: number;
   platformShare: number;
@@ -46,10 +48,12 @@ const TEXT = {
     totalPayout: 'รวมยอดโอนสะสม (โอนแล้ว)',
     totalPending: 'ยอดค้างโอน',
     dorm: 'หอพัก',
-    paidAmount: 'ยอดขาย',
+    paidAmount: 'ยอดรวม',
+    rentCol: 'ค่าห้อง',
+    depositCol: 'มัดจำ',
     commissionCut: 'คอม 20%',
-    chamberCut: 'หอการค้า 10%',
-    platformCut: 'แพลตฟอร์ม 10%',
+    chamberCut: 'หอการค้า',
+    platformCut: 'แพลตฟอร์ม',
     ownerPayout: 'โอนเจ้าของ 80%',
     status: 'สถานะ',
     statusLabel: { SETTLED: 'รอโอน', TRANSFERRED: 'โอนแล้ว' } as Record<string, string>,
@@ -68,10 +72,12 @@ const TEXT = {
     totalPayout: 'Total transferred',
     totalPending: 'Pending transfer',
     dorm: 'Dorm',
-    paidAmount: 'Gross amount',
+    paidAmount: 'Total',
+    rentCol: 'Rent',
+    depositCol: 'Deposit',
     commissionCut: '20% commission',
-    chamberCut: '10% chamber',
-    platformCut: '10% platform',
+    chamberCut: 'Chamber',
+    platformCut: 'Platform',
     ownerPayout: '80% owner payout',
     status: 'Status',
     statusLabel: { SETTLED: 'Pending transfer', TRANSFERRED: 'Transferred' } as Record<string, string>,
@@ -149,6 +155,8 @@ export default function AdminFinanceOwnerDetailPage() {
             <tr className="border-b border-hairline text-xs text-ink-faint">
               <th className="p-3 font-normal">{t.dorm}</th>
               <th className="p-3 font-normal">{t.paidAmount}</th>
+              <th className="p-3 font-normal">{t.rentCol}</th>
+              <th className="p-3 font-normal">{t.depositCol}</th>
               <th className="p-3 font-normal">{t.commissionCut}</th>
               <th className="p-3 font-normal">{t.chamberCut}</th>
               <th className="p-3 font-normal">{t.platformCut}</th>
@@ -166,6 +174,8 @@ export default function AdminFinanceOwnerDetailPage() {
                 <tr key={p.id} className="border-b border-hairline last:border-0">
                   <td className="p-3 font-medium text-ink-strong">{p.dormName}</td>
                   <td className="p-3 font-sans tabular-nums">฿{p.amount.toLocaleString()}</td>
+                  <td className="p-3 font-sans tabular-nums text-ink-subtitle">฿{p.roomPrice.toLocaleString()}</td>
+                  <td className="p-3 font-sans tabular-nums text-ink-subtitle">฿{p.deposit.toLocaleString()}</td>
                   <td className="p-3 font-sans tabular-nums text-danger">−฿{p.commission.toLocaleString()}</td>
                   <td className="p-3 font-sans tabular-nums text-warning-dark">฿{p.chamberShare.toLocaleString()}</td>
                   <td className="p-3 font-sans tabular-nums text-tenant">฿{p.platformShare.toLocaleString()}</td>

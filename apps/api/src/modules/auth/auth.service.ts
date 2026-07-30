@@ -9,6 +9,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 const SALT_ROUNDS = 10;
+// ต้องตรงกับ IDLE_TIMEOUT_MS ใน jwt.strategy.ts — ไม่ใช้งานเกิน 30 นาที = session หมดอายุ
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
 const RESET_RESEND_COOLDOWN_MS = 60 * 1000;
 const MIN_PASSWORD_LENGTH = 6;
@@ -20,9 +22,32 @@ export interface DeviceInfo {
   ip?: string;
 }
 
+const GOOGLE_CODE_TTL_MS = 2 * 60 * 1000;
+
 @Injectable()
 export class AuthService {
   private logger = new Logger(AuthService.name);
+  // โค้ดแลก token ชั่วคราวสำหรับ Google login — ส่งผ่าน query (?code=) ซึ่งรอด redirect ข้าม origin
+  // ต่างจาก JWT ที่ส่งผ่าน fragment (#) แล้วหายตอน 302. โค้ดใช้ครั้งเดียว + หมดอายุ 2 นาที
+  // จึงไม่อันตรายแม้หลุดเข้า log (ต่างจาก JWT อายุ 7 วันที่หลุดแล้วใช้เข้าบัญชีได้เลย)
+  private googleCodes = new Map<string, { token: string; expiresAt: number }>();
+
+  createGoogleExchangeCode(token: string): string {
+    const code = randomBytes(24).toString('hex');
+    this.googleCodes.set(code, { token, expiresAt: Date.now() + GOOGLE_CODE_TTL_MS });
+    // กวาดโค้ดหมดอายุทิ้ง กัน map โตไม่มีที่สิ้นสุด
+    for (const [k, v] of this.googleCodes) if (v.expiresAt < Date.now()) this.googleCodes.delete(k);
+    return code;
+  }
+
+  exchangeGoogleCode(code: string): { accessToken: string } {
+    const entry = this.googleCodes.get(code);
+    this.googleCodes.delete(code); // ใช้ครั้งเดียวเสมอ
+    if (!entry || entry.expiresAt < Date.now()) {
+      throw new UnauthorizedException('รหัสเข้าสู่ระบบไม่ถูกต้องหรือหมดอายุ');
+    }
+    return { accessToken: entry.token };
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -30,13 +55,20 @@ export class AuthService {
     private mail: MailService,
   ) {}
 
-  // jti ใหม่ทุกครั้งที่ login ผูกกับ Session แถวใหม่ — ให้เตะออกจากอุปกรณ์นั้นได้จริงทีหลัง
-  // (ไม่กระทบ token เก่าของอุปกรณ์อื่นที่ login ค้างอยู่ก่อนหน้า)
+  // 1 บัญชี = 1 session (ตัวใหม่เตะตัวเก่า): ก่อนออก token ใหม่ revoke ทุก session เดิม
+  // ที่ยัง active ของ user คนนี้ทิ้ง แล้วค่อยสร้างแถวใหม่ — อุปกรณ์เก่าจะโดน 401 request ถัดไป
+  // (jwt.strategy เช็ค revokedAt) กันคนอื่นที่รู้รหัสเดียวกัน login ค้างพร้อมกันหลายเครื่อง
   private async sign(user: { id: string; role: string }, device?: DeviceInfo) {
     const jti = randomUUID();
-    await this.prisma.session.create({
-      data: { userId: user.id, jti, userAgent: device?.userAgent, ip: device?.ip },
-    });
+    await this.prisma.$transaction([
+      this.prisma.session.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.session.create({
+        data: { userId: user.id, jti, userAgent: device?.userAgent, ip: device?.ip },
+      }),
+    ]);
     return this.jwt.sign({ sub: user.id, role: user.role.toLowerCase(), jti });
   }
 
@@ -147,8 +179,8 @@ export class AuthService {
         const link = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
         const sent = await this.mail.send(
           email,
-          'ตั้งรหัสผ่านใหม่ Hopak',
-          `<p>มีคำขอตั้งรหัสผ่านใหม่สำหรับบัญชี Hopak ของคุณ</p>
+          'ตั้งรหัสผ่านใหม่ Hoprak',
+          `<p>มีคำขอตั้งรหัสผ่านใหม่สำหรับบัญชี Hoprak ของคุณ</p>
            <p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#2F6FE0;color:#fff;border-radius:8px;text-decoration:none">ตั้งรหัสผ่านใหม่</a></p>
            <p>ลิงก์นี้ใช้ได้ครั้งเดียวและหมดอายุใน 30 นาที</p>
            <p style="color:#888">ถ้าคุณไม่ได้เป็นคนขอ ไม่ต้องทำอะไร รหัสผ่านเดิมยังใช้งานได้ตามปกติ</p>`,
@@ -158,6 +190,30 @@ export class AuthService {
     }
 
     return { ok: true };
+  }
+
+  // เช็คว่า session ของ token นี้ยังใช้ได้ไหม (ถูกเตะจาก login ที่อื่น / idle หมดอายุ / revoke)
+  // สำคัญ: ไม่อัปเดต lastSeenAt — ให้ heartbeat ฝั่ง client เรียกถี่ๆ ได้โดยไม่กันไม่ให้ session idle
+  // (ต่างจาก request ปกติผ่าน JwtStrategy ที่ bump lastSeenAt ทุกครั้ง) client เอา val:false ไปเด้งออก
+  async checkSession(token?: string): Promise<{ valid: boolean }> {
+    if (!token) return { valid: false };
+    let payload: { jti?: string };
+    try {
+      payload = this.jwt.verify(token);
+    } catch {
+      return { valid: false }; // หมดอายุจริง (7 วัน) หรือ signature ผิด
+    }
+    if (!payload?.jti) return { valid: true }; // token เก่าไม่มี jti — ปล่อยผ่านเหมือน JwtStrategy
+
+    const session = await this.prisma.session.findUnique({ where: { jti: payload.jti } });
+    if (!session || session.revokedAt) return { valid: false };
+    if (Date.now() - session.lastSeenAt.getTime() > IDLE_TIMEOUT_MS) {
+      await this.prisma.session
+        .update({ where: { jti: payload.jti }, data: { revokedAt: new Date() } })
+        .catch(() => {});
+      return { valid: false };
+    }
+    return { valid: true };
   }
 
   async resetPassword(token: string, newPassword: string) {

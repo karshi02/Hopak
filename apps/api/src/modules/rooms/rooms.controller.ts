@@ -67,15 +67,12 @@ export class RoomsController {
     );
   }
 
+  // ตัด/คืนห้องด้วยมือ — เฉพาะแอดมิน (ย้ายจากเจ้าของหอ กันทุจริต)
   @Patch('rooms/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('owner')
-  setStatus(
-    @CurrentUser() user: { id: string },
-    @Param('id') id: string,
-    @Body() body: { status: 'AVAILABLE' | 'OCCUPIED' },
-  ) {
-    return this.roomsService.setStatus(user.id, id, body.status);
+  @Roles('admin')
+  setStatus(@Param('id') id: string, @Body() body: { status: 'AVAILABLE' | 'OCCUPIED' }) {
+    return this.roomsService.setStatus(id, body.status);
   }
 
   @Patch('rooms/:id')

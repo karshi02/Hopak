@@ -55,10 +55,12 @@ const TEXT = {
     photos: 'รูปภาพห้องพัก',
     photosSub: 'รูปแรกจะเป็นรูปปกที่ผู้เช่าเห็น · แนะนำ 4–8 รูป',
     addPhoto: 'เพิ่มรูป',
+    inheritedTitle: 'รูปจากหอพัก (ใช้อัตโนมัติ)',
+    inheritedNote: 'ถ้าไม่อัปรูปเฉพาะห้อง ห้องนี้จะใช้รูปหอพักด้านบน และอัปเดตตามหอแบบเรียลไทม์ (ไม่กระทบโปรไฟล์หอ)',
     cover: 'ปก',
     basicInfo: 'ข้อมูลห้องพัก',
-    name: 'ชื่อห้อง / ประเภท',
-    namePlaceholder: 'เช่น ห้องสตูดิโอ A',
+    name: 'ชื่อห้อง (ไม่บังคับ)',
+    namePlaceholder: 'เว้นว่าง = สุ่มชื่อให้อัตโนมัติ',
     quantity: 'จำนวนห้องประเภทนี้',
     roomKind: 'ประเภทห้อง',
     air: 'แอร์',
@@ -79,6 +81,9 @@ const TEXT = {
     error: 'เพิ่มห้องพักไม่สำเร็จ',
     needDorm: 'ยังไม่มีหอพักที่อนุมัติแล้ว — ต้องสมัครเปิดหอพักและรอแอดมินอนุมัติก่อน',
     previewLabel: 'ตัวอย่างที่ผู้เช่าเห็น',
+    previewAir: 'ห้องแอร์',
+    previewFan: 'ห้องพัดลม',
+    changeImage: 'คลิกเพื่อเปลี่ยนรูป',
     perMonth: '/ด.',
     bookBtn: 'จองห้องนี้',
   },
@@ -87,10 +92,12 @@ const TEXT = {
     photos: 'Room photos',
     photosSub: 'First photo is the cover tenants see · 4–8 recommended',
     addPhoto: 'Add photo',
+    inheritedTitle: 'Photos from the dorm (used automatically)',
+    inheritedNote: 'If you don’t upload room-specific photos, this room uses the dorm photos above and updates in realtime (does not affect the dorm profile)',
     cover: 'Cover',
     basicInfo: 'Room info',
-    name: 'Room name / type',
-    namePlaceholder: 'e.g. Studio A',
+    name: 'Room name (optional)',
+    namePlaceholder: 'Leave blank to auto-generate',
     quantity: 'How many rooms of this type',
     roomKind: 'Room kind',
     air: 'Air-conditioned',
@@ -111,6 +118,8 @@ const TEXT = {
     error: 'Failed to add room',
     needDorm: 'No approved dorm yet — register and wait for admin approval first',
     previewLabel: 'Tenant preview',
+    previewAir: 'Air-con room',
+    previewFan: 'Fan room',
     perMonth: '/mo',
     bookBtn: 'Book this room',
   },
@@ -122,7 +131,6 @@ export default function NewRoomPage() {
   const t = TEXT[lang];
   const [dorms, setDorms] = useState<Dorm[]>([]);
   const [dormId, setDormId] = useState('');
-  const [name, setName] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [roomType, setRoomType] = useState<'AIR' | 'FAN'>('AIR');
   const [description, setDescription] = useState('');
@@ -133,6 +141,7 @@ export default function NewRoomPage() {
   const [amenities, setAmenities] = useState<Set<string>>(new Set(['ac', 'bath', 'wifi', 'bed']));
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [previewIdx, setPreviewIdx] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,7 +186,7 @@ export default function NewRoomPage() {
       const formData = new FormData();
       formData.append('type', roomType);
       formData.append('pricePerMonth', String(price));
-      formData.append('name', name);
+      formData.append('name', ''); // เว้นว่างเสมอ — backend สุ่มชื่อห้องให้อัตโนมัติ
       formData.append('description', description);
       formData.append('deposit', String(deposit));
       formData.append('waterRate', String(waterRate));
@@ -205,6 +214,8 @@ export default function NewRoomPage() {
 
   const inputClass = 'h-[46px] w-full rounded-[11px] border border-card-border px-3.5 text-sm text-ink outline-none focus:border-tenant';
   const selectedDorm = dorms.find((d) => d.id === dormId);
+  // รูปที่ผู้เช่าเห็นจริงในตัวอย่าง: รูปเฉพาะห้อง (ถ้าอัป) ไม่งั้นรูปหอ
+  const previewImages = photoUrls.length ? photoUrls : selectedDorm?.images ?? [];
 
   if (dorms.length === 0) {
     return <p className="text-ink-faint">{t.needDorm}</p>;
@@ -231,6 +242,28 @@ export default function NewRoomPage() {
         <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
           <div className="text-[15.5px] font-bold text-ink-strong">{t.photos}</div>
           <p className="mb-4 mt-1 text-[12.5px] text-ink-muted">{t.photosSub}</p>
+
+          {/* รูปหอพัก (ดึงมาอัตโนมัติ) — ใช้เมื่อไม่อัปรูปเฉพาะห้อง อัปเดตตามหอแบบเรียลไทม์ */}
+          {selectedDorm?.images && selectedDorm.images.length > 0 && photos.length === 0 && (
+            <div className="mb-4 rounded-[13px] border border-dashed border-tenant/40 bg-tenant-tint/40 p-3">
+              <div className="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-tenant-dark">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 10l9-6 9 6M5 9v10h14V9M9 19v-6h6v6" stroke="#1E4FB0" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {t.inheritedTitle}
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {selectedDorm.images.slice(0, 8).map((url) => (
+                  <div key={url} className="relative aspect-square overflow-hidden rounded-lg bg-surface-canvas">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11.5px] leading-snug text-ink-muted">{t.inheritedNote}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-3">
             {photoUrls.map((url, i) => (
               <div key={url} className="relative aspect-square overflow-hidden rounded-xl bg-surface-canvas">
@@ -261,22 +294,16 @@ export default function NewRoomPage() {
         {/* basic info */}
         <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
           <div className="mb-4 text-[15.5px] font-bold text-ink-strong">{t.basicInfo}</div>
-          <div className="grid grid-cols-[1.4fr_1fr] gap-3.5">
-            <div>
-              <label className="mb-1.5 block text-xs text-ink-muted">{t.name}</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.namePlaceholder} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-ink-muted">{t.quantity}</label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                className={`${inputClass} font-sans`}
-              />
-            </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-ink-muted">{t.quantity}</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={quantity}
+              onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+              className={`${inputClass} font-sans`}
+            />
           </div>
           <div className="mt-3.5">
             <label className="mb-1.5 block text-xs text-ink-muted">{t.roomKind}</label>
@@ -404,7 +431,7 @@ export default function NewRoomPage() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !name || !dormId}
+            disabled={submitting || !dormId}
             className="flex-[1.6] rounded-[13px] bg-success py-3 text-[14.5px] font-bold text-white disabled:opacity-50"
           >
             {submitting ? t.submitting : t.submit}
@@ -416,15 +443,46 @@ export default function NewRoomPage() {
       <div className="sticky top-0 hidden xl:block">
         <div className="mb-3 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-muted">{t.previewLabel}</div>
         <div className="w-full overflow-hidden rounded-[26px] border-8 border-admin-sidebar bg-white shadow-[0_20px_50px_rgba(0,0,0,0.2)]">
-          <div className="relative h-[180px] bg-gradient-to-br from-tenant-tint to-tenant/30">
-            {photoUrls[0] && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrls[0]} alt="" className="h-full w-full object-cover" />
-            )}
+          {/* รูปตัวอย่าง = แกลเลอรี่ที่ผู้เช่าเห็นจริง (รูปเฉพาะห้องถ้าอัป / ไม่งั้นรูปหอ) — คลิกเลื่อนดูรูปอื่นได้ */}
+          <div className="relative h-[180px] overflow-hidden bg-gradient-to-br from-tenant-tint to-tenant/30">
+            {previewImages.length > 0 ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewImages[previewIdx % previewImages.length]}
+                  alt=""
+                  onClick={() => setPreviewIdx((i) => (i + 1) % previewImages.length)}
+                  className="h-full w-full cursor-pointer object-cover"
+                />
+                {previewImages.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewIdx((i) => (i - 1 + previewImages.length) % previewImages.length)}
+                      className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/60"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewIdx((i) => (i + 1) % previewImages.length)}
+                      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/60"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                    <div className="absolute bottom-2.5 left-1/2 flex -translate-x-1/2 gap-1.5">
+                      {previewImages.map((_, i) => (
+                        <span key={i} className={`h-1.5 rounded-full transition-all ${i === previewIdx % previewImages.length ? 'w-4 bg-white' : 'w-1.5 bg-white/60'}`} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : null}
           </div>
           <div className="p-[18px]">
             <div className="flex items-baseline justify-between">
-              <div className="text-[17px] font-bold text-ink-strong">{name || t.namePlaceholder}</div>
+              <div className="text-[17px] font-bold text-ink-strong">{roomType === 'AIR' ? t.previewAir : t.previewFan}</div>
               <div className="font-sans text-lg font-bold text-tenant">
                 ฿{price.toLocaleString()}
                 <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>

@@ -20,6 +20,16 @@ interface PromoCardData {
   titleEn: string;
   subEn: string;
 }
+
+interface HomeContent {
+  heroTitleTh?: string;
+  heroSubtitleTh?: string;
+  heroColor?: string;
+  heroPos?: string;
+  zonesTitleTh?: string;
+  zonesSubTh?: string;
+  trust?: { titleTh: string; subTh: string }[];
+}
 import { resetSocket } from '@/lib/ws';
 import { apiClient } from '@/lib/api-client';
 import { loadGoogleMaps } from '@/lib/googleMaps';
@@ -70,7 +80,7 @@ const TEXT = {
     register: 'สมัครสมาชิก',
     logout: 'ออกจากระบบ',
     heroTitle: 'หาหอพักใกล้มหาวิทยาลัย ราคาโปร่งใส จองได้ทันที',
-    heroSubtitle: 'เปรียบเทียบค่าน้ำค่าไฟก่อนจอง · ไม่มีค่าธรรมเนียมผู้เช่า',
+    heroSubtitle: 'เปรียบเทียบค่าน้ำค่าไฟก่อนจอง',
     tabMonthly: 'หอพักรายเดือน',
     tabDaily: 'หอพักรายวัน',
     comingSoon: 'เร็วๆ นี้',
@@ -85,7 +95,7 @@ const TEXT = {
     popularLabel: 'ยอดนิยม:',
     promos: [
       { tag: 'ยืนยันตัวตนแล้ว', title: 'หอพักทุกแห่งผ่านการตรวจสอบโดยแอดมิน', sub: 'ปลอดภัย ไม่โดนหลอก' },
-      { tag: 'สมาชิกใหม่', title: 'สมัครฟรี เริ่มค้นหาหอได้ทันที', sub: 'ไม่มีค่าธรรมเนียมผู้เช่า' },
+      { tag: 'สมาชิกใหม่', title: 'สมัครฟรี เริ่มค้นหาหอได้ทันที', sub: 'เริ่มใช้งานได้ทันที' },
       { tag: 'โปร่งใส', title: 'เห็นค่าน้ำ ค่าไฟ ค่ามัดจำครบก่อนจอง', sub: 'ไม่มีค่าใช้จ่ายแอบแฝง' },
     ],
     zonesTitle: 'ทำเลยอดนิยม',
@@ -106,11 +116,10 @@ const TEXT = {
       { title: 'ราคาโปร่งใส', desc: 'เห็นค่าน้ำค่าไฟ ค่ามัดจำครบ ไม่มีค่าแอบแฝง' },
       { title: 'จองปลอดภัย', desc: 'ชำระเงินผ่านระบบ มีหลักฐานการจองครบถ้วน' },
       { title: 'รีวิวจริงจากผู้เช่า', desc: 'อ่านรีวิวจากคนที่เคยเข้าพักจริงก่อนตัดสินใจ' },
-      { title: 'ไม่มีค่าหน้าหอ', desc: 'ผู้เช่าใช้ Hopak ฟรี ไม่มีค่าธรรมเนียม' },
     ],
     footerHelp: 'ช่วยเหลือ',
     helpLinks: ['ศูนย์ช่วยเหลือ', 'คำถามที่พบบ่อย', 'วิธีจองหอพัก', 'นโยบายการยกเลิก', 'ติดต่อเรา'],
-    footerAbout: 'เกี่ยวกับ Hopak',
+    footerAbout: 'เกี่ยวกับ Hoprak',
     aboutLinks: ['เกี่ยวกับเรา', 'ร่วมงานกับเรา', 'ข่าวสาร & โปรโมชัน', 'บล็อก'],
     footerOwner: 'สำหรับเจ้าของหอ',
     listDorm: 'ลงประกาศหอพัก',
@@ -129,7 +138,7 @@ const TEXT = {
     register: 'Sign up',
     logout: 'Log out',
     heroTitle: 'Find dorms near your university — transparent pricing, book instantly',
-    heroSubtitle: 'Compare water & electric rates before booking · No tenant fees',
+    heroSubtitle: 'Compare water & electric rates before booking',
     tabMonthly: 'Monthly Dorms',
     tabDaily: 'Daily Rentals',
     comingSoon: 'Coming soon',
@@ -144,7 +153,7 @@ const TEXT = {
     popularLabel: 'Popular:',
     promos: [
       { tag: 'Verified', title: 'Every dorm is reviewed by our admin team', sub: 'Safe, no scams' },
-      { tag: 'New members', title: 'Free sign-up, start searching instantly', sub: 'No fees for tenants' },
+      { tag: 'New members', title: 'Free sign-up, start searching instantly', sub: 'Start using it right away' },
       { tag: 'Transparent', title: 'See water, electric & deposit fees upfront', sub: 'No hidden costs' },
     ],
     zonesTitle: 'Popular Areas',
@@ -165,11 +174,10 @@ const TEXT = {
       { title: 'Transparent pricing', desc: 'Water, electric, and deposit fees shown upfront' },
       { title: 'Safe booking', desc: 'Pay through the platform with a full booking record' },
       { title: 'Real tenant reviews', desc: 'Read reviews from people who actually stayed' },
-      { title: 'No tenant fees', desc: 'Hopak is free for tenants to use' },
     ],
     footerHelp: 'Help',
     helpLinks: ['Help Center', 'FAQ', 'How to book', 'Cancellation policy', 'Contact us'],
-    footerAbout: 'About Hopak',
+    footerAbout: 'About Hoprak',
     aboutLinks: ['About us', 'Careers', 'News & Promotions', 'Blog'],
     footerOwner: 'For Dorm Owners',
     listDorm: 'List your dorm',
@@ -219,20 +227,31 @@ export default function HomePage() {
   const [selectedPlace, setSelectedPlace] = useState<{ lat: number; lng: number; name: string } | null>(null);
   const [areaImages, setAreaImages] = useState<Record<string, string>>({});
   const [promoCards, setPromoCards] = useState<PromoCardData[]>([]);
+  const [homeContent, setHomeContent] = useState<HomeContent>({});
+  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [topSearchQ, setTopSearchQ] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiClient
-      .get<{ areaImages: Record<string, string>; promoCards: PromoCardData[] }>('/settings/hero')
+      .get<{
+        heroImageUrl: string | null;
+        areaImages: Record<string, string>;
+        promoCards: PromoCardData[];
+        homeContent: HomeContent;
+      }>('/settings/hero')
       .then((data) => {
+        setHeroImageUrl(data.heroImageUrl ?? null);
         setAreaImages(data.areaImages ?? {});
         setPromoCards(data.promoCards ?? []);
+        setHomeContent(data.homeContent ?? {});
       })
       .catch(() => {
+        setHeroImageUrl(null);
         setAreaImages({});
         setPromoCards([]);
+        setHomeContent({});
       });
   }, []);
 
@@ -278,6 +297,16 @@ export default function HomePage() {
   }, []);
 
   const t = TEXT[lang];
+  // ข้อความหน้าแรกที่แอดมินแก้ได้ (เฉพาะภาษาไทย) — ทับ default เมื่อดูภาษาไทยและแอดมินตั้งค่าไว้
+  const isTh = lang === 'th';
+  const heroTitle = (isTh && homeContent.heroTitleTh) || t.heroTitle;
+  const heroSubtitle = (isTh && homeContent.heroSubtitleTh) || t.heroSubtitle;
+  const zonesTitle = (isTh && homeContent.zonesTitleTh) || t.zonesTitle;
+  const zonesSub = (isTh && homeContent.zonesSubTh) || t.zonesSub;
+  const trustCards = t.trust.map((tr, i) => {
+    const o = isTh ? homeContent.trust?.[i] : undefined;
+    return { title: (o?.titleTh || tr.title) as string, desc: (o?.subTh || tr.desc) as string };
+  });
   const topSearchPlaceholder = useTypewriter(t.topSearchPhrases);
   const roomTypeOptions = ROOM_TYPE_OPTIONS[lang];
   const priceRangeOptions = PRICE_RANGE_OPTIONS[lang];
@@ -375,7 +404,7 @@ export default function HomePage() {
               H
             </span>
             <span className="whitespace-nowrap text-[17px] font-bold tracking-tight text-white sm:text-[19px]">
-              Hopak<span className="text-[#6BA0F5]">.com</span>
+              Hoprak<span className="text-[#6BA0F5]">.com</span>
             </span>
           </Link>
 
@@ -472,133 +501,157 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ===== HERO + SEARCH ===== */}
+      {/* ===== HERO ===== */}
+      {/* รูปที่อัปโหลด = โชว์ภาพจริงไม่มีฟิลเตอร์ (ใส่เงาตัวอักษรให้ยังอ่านออก) · ไม่มีรูป = สีที่แอดมินเลือก หรือ gradient เริ่มต้น */}
       <div
-        className="relative overflow-hidden bg-[linear-gradient(165deg,#1E4FB0_0%,#173A87_55%,#0E1220_130%)] pb-14"
+        className={`relative bg-cover bg-center px-4 pb-[150px] pt-11 text-center sm:pb-[190px] sm:pt-14 ${
+          heroImageUrl || homeContent.heroColor ? '' : 'bg-[linear-gradient(120deg,#2F6FE0,#2456B8)]'
+        }`}
+        style={
+          heroImageUrl
+            ? { backgroundImage: `url('${heroImageUrl}')`, backgroundPosition: homeContent.heroPos || 'center' }
+            : homeContent.heroColor
+              ? { background: homeContent.heroColor }
+              : undefined
+        }
       >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(47,111,224,0.5),transparent_68%)] blur-xl" />
-        <div className="pointer-events-none absolute -bottom-10 left-24 h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(23,143,90,0.32),transparent_66%)] blur-lg" />
+        <h1
+          className="mx-auto max-w-3xl text-[26px] font-bold leading-tight tracking-tight text-white text-balance sm:text-[36px]"
+          style={heroImageUrl ? { textShadow: '0 2px 12px rgba(0,0,0,0.55)' } : undefined}
+        >
+          {heroTitle}
+        </h1>
+        <p
+          className="mt-2 text-[15px] text-[#EAF1FD] sm:text-[16px]"
+          style={heroImageUrl ? { textShadow: '0 1px 8px rgba(0,0,0,0.6)' } : undefined}
+        >
+          {heroSubtitle}
+        </p>
+      </div>
 
-        <div className="relative mx-auto max-w-[1240px] px-6 pt-9">
-          <div className="mb-5 text-center">
-            <div className="text-[28px] font-bold tracking-tight text-white sm:text-[34px]">{t.heroTitle}</div>
-            <div className="mt-2 text-[15px] text-[#BFCDE6] sm:text-[15.5px]">{t.heroSubtitle}</div>
+      {/* ===== SEARCH CARD (floats over hero) ===== */}
+      <div className="relative z-[2] mx-auto -mt-[120px] w-full max-w-[880px] px-4 sm:-mt-[140px]">
+        {/* category tabs */}
+        <div className="flex gap-1.5 pl-3.5">
+          <div className="flex items-center gap-2 rounded-t-xl bg-white px-6 py-3.5 text-[15px] font-semibold text-tenant shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
+            <span className="h-[9px] w-[9px] rounded-full bg-tenant" />
+            {t.tabMonthly}
           </div>
-
-          {/* category tabs */}
-          <div className="mx-auto flex max-w-[860px] gap-1.5">
-            <div className="flex items-center gap-2 rounded-t-xl bg-white px-5 py-3 text-sm font-semibold text-tenant">
-              <span className="h-[9px] w-[9px] rounded-full bg-tenant" />
-              {t.tabMonthly}
-            </div>
-            <div
-              className="cursor-not-allowed rounded-t-xl bg-white/15 px-5 py-3 text-sm text-[#E4EBF7]"
-              title={t.comingSoon}
-            >
-              {t.tabDaily}
-            </div>
+          <div
+            className="cursor-not-allowed rounded-t-xl bg-white/55 px-6 py-3.5 text-[15px] text-[#3A3F49]"
+            title={t.comingSoon}
+          >
+            {t.tabDaily}
           </div>
+        </div>
 
-          {/* SEARCH CARD */}
-          <div className="mx-auto max-w-[860px] rounded-[0_14px_14px_14px] border-[3px] border-[#E0902F] bg-white p-3.5 shadow-[0_24px_50px_rgba(8,12,24,0.4)] sm:p-4">
-            <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row">
-              <div className="flex min-w-0 flex-[1.6] items-center gap-2.5 rounded-[11px] border-2 border-[#E4E7EC] px-3.5 py-2.5">
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                  <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#2F6FE0" strokeWidth="1.8" />
-                  <circle cx="12" cy="10" r="3" stroke="#2F6FE0" strokeWidth="1.8" />
-                </svg>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold text-[#9AA0AB]">{t.fieldLabel}</div>
-                  <input
-                    ref={searchInputRef}
-                    value={q}
-                    onChange={(e) => {
-                      setQ(e.target.value);
-                      setSelectedPlace(null);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder={`${provinceLabel(province)} · ${currentDorms.length} ${t.dormsUnit}`}
-                    className="w-full truncate bg-transparent text-[15px] font-bold text-ink-strong outline-none placeholder:font-bold placeholder:text-ink-strong"
-                  />
-                </div>
-              </div>
-
-              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-[11px] border-2 border-[#E4E7EC] px-3.5 py-2.5">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                  <path d="M4 20v-9l8-6 8 6v9" stroke="#5B616C" strokeWidth="1.7" strokeLinejoin="round" />
-                  <rect x="9" y="13" width="6" height="7" stroke="#5B616C" strokeWidth="1.7" />
-                </svg>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold text-[#9AA0AB]">{t.roomType}</div>
-                  <select
-                    value={roomType}
-                    onChange={(e) => setRoomType(e.target.value)}
-                    className="w-full appearance-none truncate overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-[13.5px] font-bold text-ink-strong outline-none"
-                  >
-                    {roomTypeOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </label>
-
-              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-[11px] border-2 border-[#E4E7EC] px-3.5 py-2.5">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                  <path d="M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6" stroke="#5B616C" strokeWidth="1.7" strokeLinecap="round" />
-                </svg>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold text-[#9AA0AB]">{t.budget}</div>
-                  <select
-                    value={priceRange}
-                    onChange={(e) => setPriceRange(e.target.value)}
-                    className="w-full appearance-none truncate overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-[13.5px] font-bold text-ink-strong outline-none"
-                  >
-                    {priceRangeOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </label>
-
-              <button
-                onClick={handleSearch}
-                className="flex shrink-0 items-center justify-center gap-2 rounded-[11px] bg-tenant px-7 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.4)] hover:bg-tenant-dark"
-              >
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                  <circle cx="11" cy="11" r="7" stroke="#fff" strokeWidth="2.2" />
-                  <path d="M21 21l-4-4" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                {t.searchBtn}
-              </button>
-            </div>
-
-            <label className="mt-2.5 flex cursor-pointer items-center gap-2 px-1">
+        {/* card */}
+        <div className="rounded-[0_18px_18px_18px] bg-white p-4 shadow-[0_12px_40px_rgba(20,40,80,0.18)] sm:p-6">
+          {/* main search field */}
+          <div className="flex min-w-0 items-center gap-3 rounded-[14px] border-2 border-tenant px-4 py-3">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
+              <circle cx="11" cy="11" r="7" stroke="#2F6FE0" strokeWidth="2.2" />
+              <path d="M16.5 16.5L21 21" stroke="#2F6FE0" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12px] text-[#8A909B]">{t.fieldLabel}</div>
               <input
-                type="checkbox"
-                checked={availableOnly}
-                onChange={(e) => setAvailableOnly(e.target.checked)}
-                className="h-[18px] w-[18px] rounded accent-tenant"
+                ref={searchInputRef}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setSelectedPlace(null);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder={`${provinceLabel(province)} · ${currentDorms.length} ${t.dormsUnit}`}
+                className="w-full truncate bg-transparent text-[17px] font-semibold text-ink-strong outline-none placeholder:font-semibold placeholder:text-ink-strong"
               />
-              <span className="text-[13px] text-[#3A4050]">{t.availableOnly}</span>
+            </div>
+          </div>
+
+          {/* sub fields */}
+          <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[14px] border border-[#E4E7EC] px-4 py-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                <path d="M4 20v-9l8-6 8 6v9" stroke="#5B616C" strokeWidth="1.7" strokeLinejoin="round" />
+                <rect x="9" y="13" width="6" height="7" stroke="#5B616C" strokeWidth="1.7" />
+              </svg>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] text-[#8A909B]">{t.roomType}</div>
+                <select
+                  value={roomType}
+                  onChange={(e) => setRoomType(e.target.value)}
+                  className="w-full appearance-none truncate bg-transparent text-[15px] font-semibold text-ink-strong outline-none"
+                >
+                  {roomTypeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </label>
+
+            <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[14px] border border-[#E4E7EC] px-4 py-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                <circle cx="12" cy="12" r="9" stroke="#5B616C" strokeWidth="1.7" />
+                <path
+                  d="M12 7v10M9.5 9.5c0-1.1 1.1-1.8 2.5-1.8s2.5.7 2.5 1.8-1.1 1.8-2.5 1.8-2.5.7-2.5 1.8 1.1 1.8 2.5 1.8 2.5-.7 2.5-1.8"
+                  stroke="#5B616C"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] text-[#8A909B]">{t.budget}</div>
+                <select
+                  value={priceRange}
+                  onChange={(e) => setPriceRange(e.target.value)}
+                  className="w-full appearance-none truncate bg-transparent text-[15px] font-semibold text-ink-strong outline-none"
+                >
+                  {priceRangeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </label>
           </div>
 
-          {/* quick chips */}
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <span className="text-[13px] text-[#8FA0BE]">{t.popularLabel}</span>
-            {t.chips.map((c) => (
-              <span
-                key={c}
-                className="rounded-full border border-white/16 bg-white/[0.09] px-3.5 py-1.5 text-[13px] font-medium text-[#E4EBF7]"
-              >
-                {c}
-              </span>
-            ))}
-          </div>
+          <label className="mt-3 flex cursor-pointer items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              checked={availableOnly}
+              onChange={(e) => setAvailableOnly(e.target.checked)}
+              className="h-[18px] w-[18px] rounded accent-tenant"
+            />
+            <span className="text-[13px] text-[#3A4050]">{t.availableOnly}</span>
+          </label>
+
+          <button
+            onClick={handleSearch}
+            className="mt-4 flex h-[58px] w-full items-center justify-center gap-2 rounded-[14px] bg-tenant text-[19px] font-bold text-white hover:bg-tenant-dark"
+          >
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="#fff" strokeWidth="2.2" />
+              <path d="M21 21l-4-4" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+            {t.searchBtn}
+          </button>
+        </div>
+
+        {/* quick chips */}
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <span className="text-[13px] text-[#5B616C]">{t.popularLabel}</span>
+          {t.chips.map((c) => (
+            <span
+              key={c}
+              className="rounded-full border border-[#E4E7EC] bg-white px-3.5 py-1.5 text-[13px] font-medium text-[#3A4050]"
+            >
+              {c}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -638,8 +691,8 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1240px] px-6 pt-10">
           <div className="mb-4 flex items-end justify-between">
             <div>
-              <div className="text-2xl font-bold tracking-tight">{t.zonesTitle}</div>
-              <div className="mt-1 text-sm text-[#8A909F]">{t.zonesSub}</div>
+              <div className="text-2xl font-bold tracking-tight">{zonesTitle}</div>
+              <div className="mt-1 text-sm text-[#8A909F]">{zonesSub}</div>
             </div>
             <Link href="/search" className="text-sm font-semibold text-tenant">
               {t.viewAllZones}
@@ -843,8 +896,8 @@ export default function HomePage() {
       {/* ===== TRUST BADGES ===== */}
       <div className="mx-auto max-w-[1240px] px-6 pt-12">
         <div className="grid grid-cols-1 gap-6 rounded-[20px] border border-[#EAEDF2] bg-white p-7 shadow-[0_2px_8px_rgba(16,24,40,0.05)] sm:grid-cols-2 lg:grid-cols-4">
-          {t.trust.map((tr, i) => (
-            <div key={tr.title} className={`flex items-start gap-3.5 ${i < 3 ? 'sm:border-r sm:border-[#EEF1F6] sm:pr-5' : ''}`}>
+          {trustCards.map((tr, i) => (
+            <div key={i} className={`flex items-start gap-3.5 ${i < 3 ? 'sm:border-r sm:border-[#EEF1F6] sm:pr-5' : ''}`}>
               <div
                 className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] ${
                   ['bg-[#EAF1FF]', 'bg-[#E7F7EF]', 'bg-[#F3ECFF]', 'bg-[#FFF1EC]'][i % 4]
@@ -877,45 +930,45 @@ export default function HomePage() {
       </div>
 
       {/* ===== FOOTER ===== */}
-      <div className="mt-12 bg-[#0B0D12] pb-7 pt-11">
+      <div className="mt-14 border-t border-[#E4E7EC] bg-white pt-11">
         <div className="mx-auto max-w-[1240px] px-6">
-          <div className="grid grid-cols-2 gap-8 border-b border-[#1C2030] pb-8 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-5">
             <div className="col-span-2 max-w-[290px] sm:col-span-1">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-tenant font-sans text-xl font-extrabold text-white">
                   H
                 </span>
-                <span className="text-[18px] font-bold text-white">
-                  Hopak<span className="text-[#6BA0F5]">.com</span>
+                <span className="text-[18px] font-bold text-ink-strong">
+                  Hoprak<span className="text-tenant">.com</span>
                 </span>
               </div>
-              <div className="mt-3.5 text-[13px] leading-relaxed text-[#7A828F]">
+              <div className="mt-3.5 text-[13px] leading-relaxed text-[#7A808B]">
                 แพลตฟอร์มหาหอพักใกล้มหาวิทยาลัย โปร่งใส ปลอดภัย สนับสนุนโดยหอการค้าจังหวัดมหาสารคาม
               </div>
             </div>
             <div>
-              <div className="mb-3 text-sm font-bold text-white">{t.footerHelp}</div>
-              <div className="flex flex-col gap-2.5 text-[13px] text-[#8A909F]">
+              <div className="mb-4 text-[15px] font-bold text-ink-strong">{t.footerHelp}</div>
+              <div className="flex flex-col gap-3 text-[14px] text-[#5B616C]">
                 {t.helpLinks.map((s) => (
                   <span key={s}>{s}</span>
                 ))}
               </div>
             </div>
             <div>
-              <div className="mb-3 text-sm font-bold text-white">{t.footerAbout}</div>
-              <div className="flex flex-col gap-2.5 text-[13px] text-[#8A909F]">
+              <div className="mb-4 text-[15px] font-bold text-ink-strong">{t.footerAbout}</div>
+              <div className="flex flex-col gap-3 text-[14px] text-[#5B616C]">
                 {t.aboutLinks.map((s) => (
                   <span key={s}>{s}</span>
                 ))}
               </div>
             </div>
             <div>
-              <div className="mb-3 text-sm font-bold text-white">{t.footerOwner}</div>
-              <div className="flex flex-col gap-2.5 text-[13px] text-[#8A909F]">
-                <Link href="/partner-register" className="hover:text-white">
+              <div className="mb-4 text-[15px] font-bold text-ink-strong">{t.footerOwner}</div>
+              <div className="flex flex-col gap-3 text-[14px] text-[#5B616C]">
+                <Link href="/partner-register" className="hover:text-tenant">
                   {t.listDorm}
                 </Link>
-                <Link href="/partner-login" className="hover:text-white">
+                <Link href="/partner-login" className="hover:text-tenant">
                   {t.ownerLogin}
                 </Link>
                 {t.ownerLinksExtra.map((s) => (
@@ -924,8 +977,8 @@ export default function HomePage() {
               </div>
             </div>
             <div>
-              <div className="mb-3 text-sm font-bold text-white">{t.footerPolicy}</div>
-              <div className="flex flex-col gap-2.5 text-[13px] text-[#8A909F]">
+              <div className="mb-4 text-[15px] font-bold text-ink-strong">{t.footerPolicy}</div>
+              <div className="flex flex-col gap-3 text-[14px] text-[#5B616C]">
                 {t.policyLinks.map((s) => (
                   <span key={s}>{s}</span>
                 ))}
@@ -933,12 +986,21 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex flex-col items-start gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2.5 text-[12.5px] text-[#5C6478]">
-              <span>{t.sponsoredBy}</span>
-              <img src="/yec-mahasarakham.png" alt="YEC Mahasarakham" className="h-8 w-auto opacity-80" />
-            </div>
-            <div className="text-[12.5px] text-[#5C6478]">{t.copyright}</div>
+          <div className="mt-9 flex flex-wrap items-center gap-4 border-t border-[#EDEFF3] py-7">
+            <span className="text-[13px] text-[#8A909B]">{t.sponsoredBy}</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/yec-mahasarakham.png" alt="YEC Mahasarakham" className="h-14 w-auto" />
+          </div>
+        </div>
+
+        {/* dark bottom bar */}
+        <div className="bg-[#14171C] px-6 py-6">
+          <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-tenant font-sans font-bold text-white">
+              H
+            </span>
+            <span className="text-sm font-bold text-white">Hoprak.com</span>
+            <span className="ml-auto text-[13px] text-[#5B616C]">{t.copyright}</span>
           </div>
         </div>
       </div>

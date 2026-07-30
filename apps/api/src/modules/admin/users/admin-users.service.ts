@@ -35,6 +35,51 @@ export class AdminUsersService {
     return users.map((u) => ({ ...u, bookingCount: u._count.bookings, _count: undefined }));
   }
 
+  private sessionPeriodRange(year?: number, month?: number) {
+    if (!year) return undefined;
+    // month = 1-12 (frontend ส่งมาแบบนี้) — Date เดือนใน JS เริ่มที่ 0
+    if (month) return { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
+    return { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) };
+  }
+
+  // เดือน/ปีที่มีประวัติการเข้าสู่ระบบจริง — ใช้ทำ dropdown เลือกดูย้อนหลังทีละเดือน
+  async sessionPeriods() {
+    const sessions = await this.prisma.session.findMany({ select: { createdAt: true } });
+    const set = new Set(sessions.map((s) => `${s.createdAt.getFullYear()}-${s.createdAt.getMonth() + 1}`));
+    return Array.from(set)
+      .map((key) => {
+        const [year, month] = key.split('-').map(Number);
+        return { year, month };
+      })
+      .sort((a, b) => b.year - a.year || b.month - a.month);
+  }
+
+  // ประวัติการเข้าสู่ระบบทั้งระบบ — ทุก Session ที่เคยสร้าง (login ครั้งไหน จาก IP ไหน บราวเซอร์อะไร
+  // ใช้งานล่าสุดเมื่อไหร่ ยัง active หรือถูกเตะออกแล้ว) เรียงใหม่สุดก่อน
+  // ไม่เลือกเดือน = 200 รายการล่าสุดทั้งหมด · เลือกเดือน = ทุกรายการของเดือนนั้น (ดูย้อนหลัง)
+  async listSessions(year?: number, month?: number) {
+    const createdAt = this.sessionPeriodRange(year, month);
+    const sessions = await this.prisma.session.findMany({
+      where: createdAt ? { createdAt } : {},
+      orderBy: { createdAt: 'desc' },
+      take: createdAt ? 1000 : 200,
+      include: { user: { select: { name: true, email: true, phone: true, role: true } } },
+    });
+    return sessions.map((s) => ({
+      id: s.id,
+      userName: s.user.name,
+      userEmail: s.user.email,
+      userPhone: s.user.phone,
+      role: s.user.role,
+      ip: s.ip,
+      userAgent: s.userAgent,
+      loginAt: s.createdAt,
+      lastSeenAt: s.lastSeenAt,
+      active: !s.revokedAt,
+      revokedAt: s.revokedAt,
+    }));
+  }
+
   async setSuspended(id: string, suspended: boolean) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
@@ -153,8 +198,8 @@ export class AdminUsersService {
     if (user.email) {
       emailSent = await this.mailService.send(
         user.email,
-        `[Hopak] ${title}`,
-        `<p>เรียน ${user.name}</p><p>${message}</p><p>— ทีมงาน Hopak</p>`,
+        `[Hoprak] ${title}`,
+        `<p>เรียน ${user.name}</p><p>${message}</p><p>— ทีมงาน Hoprak</p>`,
       );
     }
 

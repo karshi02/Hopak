@@ -42,6 +42,10 @@ export class FinanceService {
             }),
       },
     });
+    // แอดมินเคลียร์บิล (ได้รับเงินแล้ว) → ระบบตัดห้องอัตโนมัติ (OCCUPIED) โชว์ "ไม่ว่าง" บนเว็บทันที
+    // ไม่ต้องรอเจ้าของหอกดตัดเอง (กันทุจริต/ห้องค้างว่างทั้งที่จองแล้ว)
+    await this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'OCCUPIED' } });
+
     this.realtime.emitToUser(booking.tenantId, 'booking:updated', booking);
     await this.notifications.create(
       booking.tenantId,
@@ -152,6 +156,8 @@ export class FinanceService {
       dormName: p.booking.room.dorm.name,
       contactName: p.booking.contactName,
       amount: p.amount,
+      roomPrice: p.booking.roomPrice,
+      deposit: p.booking.deposit,
       commission: p.commission,
       chamberShare: p.chamberShare,
       platformShare: p.platformShare,
@@ -210,6 +216,7 @@ export class FinanceService {
         dormName: dorm.name,
         ownerId: dorm.owner.id,
         ownerName: dorm.owner.name,
+        ownerPhone: dorm.owner.phone,
         bankName: dorm.owner.bankName,
         bankAccountName: dorm.owner.bankAccountName,
         bankAccountNumber: dorm.owner.bankAccountNumber,
@@ -250,6 +257,8 @@ export class FinanceService {
         dormName: p.booking.room.dorm.name,
         contactName: p.booking.contactName,
         amount: p.amount,
+        roomPrice: p.booking.roomPrice,
+        deposit: p.booking.deposit,
         commission: p.commission,
         chamberShare: p.chamberShare,
         platformShare: p.platformShare,
@@ -330,7 +339,7 @@ export class FinanceService {
       `ยอดรวมทั้งหมดที่โอน: ฿${transferAmount.toLocaleString()}`,
       bonusAmount > 0 ? `  (ยอดปกติ ฿${calculatedTotal.toLocaleString()} + โบนัสเพิ่มเติม ฿${bonusAmount.toLocaleString()})` : null,
     ].filter(Boolean);
-    const title = 'ได้รับโอนเงินจาก Hopak';
+    const title = 'ได้รับโอนเงินจาก Hoprak';
     const body = [...breakdownLines, `หอ: ${dormName}${dormsNote}`, note ? `หมายเหตุ: ${note}` : null]
       .filter(Boolean)
       .join(' — ');
@@ -339,9 +348,9 @@ export class FinanceService {
     if (owner?.email) {
       await this.mail.send(
         owner.email,
-        'แจ้งโอนเงิน payout จาก Hopak',
+        'แจ้งโอนเงิน payout จาก Hoprak',
         `<p>สวัสดีคุณ ${owner.name},</p>
-         <p>ทีมงาน Hopak ได้โอนเงินเข้าบัญชีของคุณเรียบร้อยแล้ว (${dormName}${dormsNote})</p>
+         <p>ทีมงาน Hoprak ได้โอนเงินเข้าบัญชีของคุณเรียบร้อยแล้ว (${dormName}${dormsNote})</p>
          <p><b>ยอดรวมทั้งหมดที่โอน: ฿${transferAmount.toLocaleString()}</b></p>
          ${
            bonusAmount > 0

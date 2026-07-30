@@ -12,6 +12,21 @@ export interface PromoCard {
   subEn: string;
 }
 
+export interface HomeTrustCard {
+  titleTh: string;
+  subTh: string;
+}
+
+export interface HomeContent {
+  heroTitleTh?: string;
+  heroSubtitleTh?: string;
+  heroColor?: string; // สีพื้นหลัง hero ตอนไม่มีรูป (hex เช่น #178F5A) ว่าง = ใช้ gradient เริ่มต้น
+  heroPos?: string; // ตำแหน่งรูป hero (background-position เช่น "50% 30%") ว่าง = center
+  zonesTitleTh?: string;
+  zonesSubTh?: string;
+  trust?: HomeTrustCard[];
+}
+
 @Injectable()
 export class SettingsService {
   constructor(private prisma: PrismaService) {}
@@ -23,7 +38,44 @@ export class SettingsService {
       posterUrls: settings?.posterUrls ?? [],
       areaImages: (settings?.areaImages as Record<string, string>) ?? {},
       promoCards: (settings?.promoCards as unknown as PromoCard[]) ?? [],
+      homeContent: (settings?.homeContent as unknown as HomeContent) ?? {},
     };
+  }
+
+  // ข้อความหน้าแรกที่แอดมินแก้แบบ inline — เก็บเฉพาะช่องที่กรอก (trim) ช่องว่าง = ลบ override กลับไปใช้ default
+  async setHomeContent(content: HomeContent) {
+    const s = (v: unknown) => String(v ?? '').trim();
+    const clean: HomeContent = {};
+    if (s(content.heroTitleTh)) clean.heroTitleTh = s(content.heroTitleTh);
+    if (s(content.heroSubtitleTh)) clean.heroSubtitleTh = s(content.heroSubtitleTh);
+    // รับเฉพาะ hex สั้น/ยาว กันค่าขยะ ว่าง = ลบ (กลับไปใช้ gradient)
+    if (/^#[0-9a-fA-F]{3,8}$/.test(s(content.heroColor))) clean.heroColor = s(content.heroColor);
+    // ตำแหน่งรูป "X% Y%" (0-100) กันค่าขยะ ว่าง/ผิดรูป = ไม่เก็บ (หน้าเว็บใช้ center)
+    if (/^\d{1,3}% \d{1,3}%$/.test(s(content.heroPos))) clean.heroPos = s(content.heroPos);
+    if (s(content.zonesTitleTh)) clean.zonesTitleTh = s(content.zonesTitleTh);
+    if (s(content.zonesSubTh)) clean.zonesSubTh = s(content.zonesSubTh);
+    if (Array.isArray(content.trust)) {
+      clean.trust = content.trust
+        .slice(0, 3)
+        .map((c) => ({ titleTh: s(c?.titleTh), subTh: s(c?.subTh) }))
+        .filter((c) => c.titleTh || c.subTh);
+    }
+    const settings = await this.prisma.siteSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, homeContent: clean as unknown as object },
+      update: { homeContent: clean as unknown as object },
+    });
+    return { homeContent: settings.homeContent as unknown as HomeContent };
+  }
+
+  // เอารูปพื้นหลัง hero ออก กลับไปใช้ gradient เริ่มต้น
+  async clearHero() {
+    const settings = await this.prisma.siteSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, heroImageUrl: null },
+      update: { heroImageUrl: null },
+    });
+    return { heroImageUrl: settings.heroImageUrl };
   }
 
   // รับการ์ดจุดขายทั้งชุด (แทนที่ของเดิมทั้งหมด) — เก็บได้สูงสุด 3 ใบตามดีไซน์หน้าแรก

@@ -28,8 +28,12 @@ export class ApprovalsController {
   }
 
   @Patch(':dormId/reject')
-  reject(@CurrentUser() admin: { id: string }, @Param('dormId') dormId: string) {
-    return this.approvalsService.reject(dormId, admin.id);
+  reject(
+    @CurrentUser() admin: { id: string },
+    @Param('dormId') dormId: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.approvalsService.reject(dormId, admin.id, reason);
   }
 
   @Patch(':dormId/suspend')

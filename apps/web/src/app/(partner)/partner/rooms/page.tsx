@@ -12,6 +12,47 @@ import type { Dorm, Room } from '@hopak/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
+// รูปการ์ดห้อง — คลิกที่รูป (หรือลูกศร) เลื่อนดูรูปอื่นได้ วนไปเรื่อยๆ
+function RoomCover({ images }: { images: string[] }) {
+  const [idx, setIdx] = useState(0);
+  if (!images.length) return null;
+  const cur = idx % images.length;
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={images[cur]}
+        alt=""
+        onClick={() => setIdx((i) => (i + 1) % images.length)}
+        className="h-full w-full cursor-pointer object-cover"
+      />
+      {images.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setIdx((i) => (i - 1 + images.length) % images.length); }}
+            className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setIdx((i) => (i + 1) % images.length); }}
+            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <div className="absolute bottom-1.5 left-1/2 flex -translate-x-1/2 gap-1">
+            {images.map((_, i) => (
+              <span key={i} className={`h-1.5 rounded-full transition-all ${i === cur ? 'w-3.5 bg-white' : 'w-1.5 bg-white/60'}`} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 type DormWithRooms = Dorm & { rooms: Room[] };
 
 const ROOM_TYPE_OPTIONS: Record<Lang, { value: 'AIR' | 'FAN'; label: string }[]> = {
@@ -121,16 +162,6 @@ export default function PartnerRoomsPage() {
     return normalizeStatus(r.status) === statusFilter;
   });
 
-  async function toggleStatus(roomId: string, current: string) {
-    const next = normalizeStatus(current) === 'available' ? 'OCCUPIED' : 'AVAILABLE';
-    try {
-      await apiClient.patch(`/rooms/${roomId}/status`, { status: next });
-      reload();
-    } catch {
-      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
-    }
-  }
-
   if (dorms.length === 0) {
     return <p className="text-ink-faint">{t.noDorms}</p>;
   }
@@ -173,7 +204,8 @@ export default function PartnerRoomsPage() {
       <div className="mt-[18px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3">
         {filteredRooms.map((room) => {
           const isAvailable = normalizeStatus(room.status) === 'available';
-          const cover = room.images?.[0];
+          // รูปที่ผู้เช่าเห็นจริง: รูปเฉพาะห้อง (ถ้ามี) ไม่งั้นรูปหอ — คลิกเลื่อนดูได้ทุกรูป
+          const coverImages = room.images?.length ? room.images : selectedDorm?.images ?? [];
           const pendingReview = room.approved === false;
           return (
             <div
@@ -182,11 +214,8 @@ export default function PartnerRoomsPage() {
                 pendingReview ? 'border-warning' : 'border-card-border'
               }`}
             >
-              <div className="relative h-[130px] bg-gradient-to-br from-tenant-tint to-tenant/25">
-                {cover && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cover} alt="" className="h-full w-full object-cover" />
-                )}
+              <div className="relative h-[130px] overflow-hidden bg-gradient-to-br from-tenant-tint to-tenant/25">
+                <RoomCover images={coverImages} />
                 <span
                   className={`absolute left-3 top-3 rounded-pill px-2.5 py-1 text-[11.5px] font-semibold ${
                     isAvailable ? 'bg-success-tint text-success' : 'bg-danger-tint text-danger'
@@ -224,14 +253,6 @@ export default function PartnerRoomsPage() {
                 )}
                 <div className="mt-3.5 flex gap-2">
                   <button
-                    onClick={() => toggleStatus(room.id, room.status)}
-                    className={`flex-1 rounded-[9px] py-2 text-[13px] font-semibold ${
-                      isAvailable ? 'bg-surface-canvas text-danger' : 'bg-surface-canvas text-success'
-                    }`}
-                  >
-                    {isAvailable ? t.markOccupied : t.markAvailable}
-                  </button>
-                  <button
                     onClick={() => setEditTarget(room)}
                     className="flex-1 rounded-[9px] bg-surface-canvas py-2 text-[13px] font-semibold text-ink-body"
                   >
@@ -265,6 +286,7 @@ export default function PartnerRoomsPage() {
       {editTarget && (
         <EditRoomModal
           room={editTarget}
+          dormImages={selectedDorm?.images ?? []}
           t={t}
           lang={lang}
           onClose={() => setEditTarget(null)}
@@ -280,12 +302,14 @@ export default function PartnerRoomsPage() {
 
 function EditRoomModal({
   room,
+  dormImages,
   t,
   lang,
   onClose,
   onSaved,
 }: {
   room: Room;
+  dormImages: string[];
   t: (typeof TEXT)['th'];
   lang: Lang;
   onClose: () => void;
@@ -298,7 +322,8 @@ function EditRoomModal({
   const [deposit, setDeposit] = useState(room.deposit);
   const [waterRate, setWaterRate] = useState(room.waterRate);
   const [electricRate, setElectricRate] = useState(room.electricRate);
-  const [images, setImages] = useState(room.images ?? []);
+  // โชว์รูปที่ผู้เช่าเห็นจริง: รูปเฉพาะห้อง (ถ้ามี) ไม่งั้นรูปหอ — เพิ่ม/ลบแล้ว backend จะ materialize ให้
+  const [images, setImages] = useState(room.images?.length ? room.images : dormImages);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

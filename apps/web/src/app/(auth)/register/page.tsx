@@ -29,10 +29,10 @@ const TEXT = {
     passwordPlaceholder: 'รหัสผ่าน',
     createAccountError: 'สร้างบัญชีไม่สำเร็จ',
     submit: 'สมัครสมาชิก',
-    acceptTerms: 'ฉันยอมรับเงื่อนไขการใช้งาน และนโยบายความเป็นส่วนตัว ของ Hopak',
+    acceptTerms: 'ฉันยอมรับเงื่อนไขการใช้งาน และนโยบายความเป็นส่วนตัว ของ Hoprak',
     haveAccount2: 'มีบัญชีแล้ว?',
     login: 'เข้าสู่ระบบ',
-    ownerLink: 'มีหอพักให้เช่า? สมัครเปิดหอพักกับ Hopak',
+    ownerLink: 'มีหอพักให้เช่า? สมัครเปิดหอพักกับ Hoprak',
     step2Title: 'ตั้งค่าโปรไฟล์',
     step2Subtitle: 'เพิ่มรูปโปรไฟล์ (ข้ามได้)',
     photoLabel: 'รูป',
@@ -44,7 +44,7 @@ const TEXT = {
     locationDenied: 'ไม่สามารถเข้าถึงตำแหน่งได้ กรุณากรอกที่อยู่เอง',
     locationUnsupported: 'เบราว์เซอร์นี้ไม่รองรับการค้นหาตำแหน่ง',
     saveProfileError: 'บันทึกโปรไฟล์ไม่สำเร็จ',
-    start: 'เริ่มใช้งาน Hopak',
+    start: 'เริ่มใช้งาน Hoprak',
   },
   en: {
     heroTitle1: 'Sign up for free',
@@ -65,10 +65,10 @@ const TEXT = {
     passwordPlaceholder: 'Password',
     createAccountError: 'Failed to create account',
     submit: 'Sign up',
-    acceptTerms: "I accept Hopak's Terms of Use and Privacy Policy",
+    acceptTerms: "I accept Hoprak's Terms of Use and Privacy Policy",
     haveAccount2: 'Already have an account?',
     login: 'Log in',
-    ownerLink: 'Have a dorm to rent? List it with Hopak',
+    ownerLink: 'Have a dorm to rent? List it with Hoprak',
     step2Title: 'Set up your profile',
     step2Subtitle: 'Add a profile photo (optional)',
     photoLabel: 'Photo',
@@ -80,7 +80,7 @@ const TEXT = {
     locationDenied: "Couldn't access your location — please enter your address manually",
     locationUnsupported: "This browser doesn't support location lookup",
     saveProfileError: 'Failed to save profile',
-    start: 'Get started with Hopak',
+    start: 'Get started with Hoprak',
   },
 };
 
@@ -96,7 +96,7 @@ function BrandPanel({ step, t }: { step: number; t: (typeof TEXT)['th'] }) {
             H
           </span>
           <span className="text-lg font-bold tracking-tight text-white">
-            Hopak<span className="text-[#6BA0F5]">.com</span>
+            Hoprak<span className="text-[#6BA0F5]">.com</span>
           </span>
         </div>
 
@@ -127,7 +127,7 @@ function BrandPanel({ step, t }: { step: number; t: (typeof TEXT)['th'] }) {
       </div>
 
       <div className="relative font-sans text-xs text-[#BFCDE6]">
-        © 2026 Hopak ·{' '}
+        © 2026 Hoprak ·{' '}
         <a href="/login" className="underline">
           {t.haveAccount}
         </a>
@@ -192,7 +192,7 @@ export default function RegisterPage() {
   }, []);
 
   // ทันทีที่มีบัญชี (เข้า step 2) และมีที่อยู่จากตำแหน่งแล้ว บันทึกให้อัตโนมัติครั้งเดียว
-  // จากนั้นผู้ใช้แก้ไขเองได้อีก โดยจะถูกบันทึกจริงตอนกด "เริ่มใช้งาน Hopak"
+  // จากนั้นผู้ใช้แก้ไขเองได้อีก โดยจะถูกบันทึกจริงตอนกด "เริ่มใช้งาน Hoprak"
   useEffect(() => {
     if (step === 2 && address && !autoSavedRef.current) {
       autoSavedRef.current = true;

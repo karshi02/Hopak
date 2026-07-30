@@ -45,7 +45,9 @@ export class DormsService {
       include: { rooms: { where: { approved: true } }, owner: { select: { name: true } } },
     });
     const ratings = await this.reviewsService.summaryForDorms([id]);
-    return { ...dorm, ...ratings.get(id) };
+    // ห้องไม่มีรูปเฉพาะ → ใช้รูปหอ (เรียลไทม์ ไม่ก็อป) เจ้าของเปลี่ยนรูปหอ ห้องอัปเดตตาม
+    const rooms = dorm.rooms.map((r) => ({ ...r, images: r.images.length ? r.images : dorm.images }));
+    return { ...dorm, rooms, ...ratings.get(id) };
   }
 
   async listMine(ownerId: string) {
@@ -71,6 +73,18 @@ export class DormsService {
     if (!dorm) throw new NotFoundException('Dorm not found');
     if (dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
     return this.prisma.dorm.update({ where: { id }, data: dto });
+  }
+
+  // เจ้าของหอแก้ไขหอที่ถูกปฏิเสธแล้วส่งอนุมัติใหม่ — กลับไป PENDING_APPROVAL ล้างเหตุผลเดิม (คง rejectionCount ไว้เป็นประวัติ)
+  async resubmit(ownerId: string, id: string) {
+    const dorm = await this.prisma.dorm.findUnique({ where: { id } });
+    if (!dorm) throw new NotFoundException('Dorm not found');
+    if (dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
+    if (dorm.status !== 'REJECTED') throw new ForbiddenException('ส่งอนุมัติใหม่ได้เฉพาะหอที่ถูกปฏิเสธ');
+    return this.prisma.dorm.update({
+      where: { id },
+      data: { status: 'PENDING_APPROVAL', rejectionReason: null },
+    });
   }
 
   // แอดมินแก้ข้อมูลหอพักได้ทุกหอ ไม่เช็ค ownership (เผื่อข้อมูลผิดพลาดตอนตรวจสอบ)

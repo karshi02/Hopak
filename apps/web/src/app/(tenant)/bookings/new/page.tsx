@@ -21,20 +21,22 @@ const TEXT = {
     nameLabel: 'ชื่อ-นามสกุล',
     namePlaceholder: 'ชื่อ-นามสกุลผู้เช่า',
     phoneLabel: 'เบอร์โทรศัพท์',
-    phonePlaceholder: '08X-XXX-XXXX',
+    phonePlaceholder: '0812345678',
     phoneHint: 'แก้ไขเบอร์ได้ถ้าต้องการใช้เบอร์อื่นสำหรับการจองนี้',
     checkInLabel: 'วันเข้าอยู่ที่ต้องการ',
     otherDate: 'เลือกวันอื่น',
+    leaseLabel: 'ระยะเวลาเช่า',
+    leaseUnit: (n: number) => `${n} เดือน`,
     noteLabel: 'หมายเหตุถึงเจ้าของหอ (ถ้ามี)',
     notePlaceholder: 'เช่น ต้องการเข้าดูห้องก่อน, สอบถามเรื่องสัตว์เลี้ยง...',
     summaryTitle: 'สรุปค่าใช้จ่าย',
     firstMonth: 'ค่าเช่าเดือนแรก',
     deposit: 'ค่ามัดจำ',
-    depositNote: 'ชำระกับหอโดยตรง',
-    bookingFee: 'ค่าจองผ่าน Hopak',
+    depositNote: 'ชำระผ่าน Hoprak พร้อมค่าเช่า (ปลอดภัย ไม่ต้องโอนตรงเจ้าของหอ)',
+    bookingFee: 'ค่าจองผ่าน Hoprak',
     free: 'ฟรี',
-    payNow: 'ยอดชำระผ่าน Hopak',
-    payNowNote: 'ค่าเช่าเดือนแรก · ชำระหลังเจ้าของหอยืนยัน',
+    payNow: 'ยอดชำระผ่าน Hoprak',
+    payNowNote: 'ค่าเช่าเดือนแรก + ค่ามัดจำ · ชำระหลังเจ้าของหอยืนยัน',
     submit: 'ส่งคำขอจอง',
     submitting: 'กำลังส่งคำขอ...',
     ctaHint: 'กดเพื่อส่งคำขอไปยังเจ้าของหอ',
@@ -61,20 +63,22 @@ const TEXT = {
     nameLabel: 'Full name',
     namePlaceholder: 'Tenant full name',
     phoneLabel: 'Phone number',
-    phonePlaceholder: '08X-XXX-XXXX',
+    phonePlaceholder: '0812345678',
     phoneHint: 'You can edit the number if you want to use a different one for this booking',
     checkInLabel: 'Preferred move-in date',
     otherDate: 'Pick another date',
+    leaseLabel: 'Lease term',
+    leaseUnit: (n: number) => `${n} month${n > 1 ? 's' : ''}`,
     noteLabel: 'Note to the owner (optional)',
     notePlaceholder: 'e.g. I would like to view the room first, question about pets...',
     summaryTitle: 'Cost summary',
     firstMonth: 'First month rent',
     deposit: 'Deposit',
-    depositNote: 'Paid directly to the dorm',
-    bookingFee: 'Hopak booking fee',
+    depositNote: 'Paid via Hoprak with the rent (safe — no direct transfer to the owner)',
+    bookingFee: 'Hoprak booking fee',
     free: 'Free',
-    payNow: 'Payable through Hopak',
-    payNowNote: 'First month rent · paid after the owner confirms',
+    payNow: 'Payable through Hoprak',
+    payNowNote: 'First month rent + deposit · paid after the owner confirms',
     submit: 'Send booking request',
     submitting: 'Sending request...',
     ctaHint: 'Tap to send the request to the dorm owner',
@@ -173,7 +177,7 @@ function NewBookingForm() {
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [checkInDate, setCheckInDate] = useState('');
-  const [note, setNote] = useState('');
+  const [leaseMonths, setLeaseMonths] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -197,7 +201,7 @@ function NewBookingForm() {
   useEffect(() => {
     if (!user) return;
     setContactName((prev) => prev || user.name);
-    setContactPhone((prev) => prev || user.phone || '');
+    setContactPhone((prev) => prev || (user.phone || '').replace(/\D/g, ''));
   }, [user]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -214,7 +218,7 @@ function NewBookingForm() {
         contactName,
         contactPhone,
         checkInDate,
-        note: note || undefined,
+        leaseMonths,
       });
       router.push(`/bookings/${booking.id}`);
     } catch (err) {
@@ -234,7 +238,10 @@ function NewBookingForm() {
 
   // API คืน enum เป็นตัวใหญ่ (AIR/FAN) แต่ type ใน shared เป็นตัวเล็ก — เทียบแบบ toUpperCase ตามที่หน้าอื่นทำ
   const roomLabel = room.name || (room.type.toUpperCase() === 'AIR' ? t.roomAir : t.roomFan);
-  const deposit = room.deposit ?? room.dorm.deposit ?? 0;
+  // มัดจำระดับห้องก่อน ถ้าไม่ได้ตั้ง (0) ตกไปใช้ระดับหอ — ตรงกับที่ backend เก็บ snapshot ตอนจอง
+  const roomDeposit = room.deposit ?? 0;
+  const deposit = roomDeposit > 0 ? roomDeposit : room.dorm.deposit ?? 0;
+  const payTotal = room.pricePerMonth + deposit; // ยอดจ่ายรวม = ค่าเช่า + มัดจำ (จ่ายผ่าน Hoprak)
   const cover = room.images?.[0] ?? room.dorm.images?.[0] ?? null;
   const locale = t.dateLocale;
 
@@ -302,9 +309,11 @@ function NewBookingForm() {
                 </svg>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   placeholder={t.phonePlaceholder}
                   value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
+                  onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, ''))}
                   className={`${inputBase} font-sans`}
                   required
                 />
@@ -364,16 +373,26 @@ function NewBookingForm() {
             </div>
           </div>
 
-          {/* note */}
+          {/* ระยะเวลาเช่า */}
           <div className="mt-5">
-            <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.noteLabel}</label>
-            <textarea
-              placeholder={t.notePlaceholder}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full resize-none rounded-xl border-[1.5px] border-card-border bg-[#F7F9FC] px-4 py-3.5 text-[14.5px] text-ink outline-none placeholder:text-ink-faint focus:border-tenant"
-            />
+            <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.leaseLabel}</label>
+            <div className="flex gap-2.5">
+              {[1, 3, 6].map((m) => {
+                const active = leaseMonths === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setLeaseMonths(m)}
+                    className={`flex-1 rounded-xl border-[1.5px] py-2.5 text-sm font-semibold ${
+                      active ? 'border-tenant bg-tenant-tint text-tenant' : 'border-card-border bg-white text-ink-body'
+                    }`}
+                  >
+                    {t.leaseUnit(m)}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {error && <p className="mt-4 text-sm text-danger">{error}</p>}
@@ -445,12 +464,17 @@ function NewBookingForm() {
                 <span className="text-sm font-semibold text-success">{t.free}</span>
               </div>
 
+              <div className="mb-2.5 flex items-center justify-between">
+                <span className="text-[13.5px] text-ink-subtitle">{t.leaseLabel}</span>
+                <span className="text-sm font-semibold text-ink-strong">{t.leaseUnit(leaseMonths)}</span>
+              </div>
+
               <div className="my-3.5 h-px bg-hairline" />
 
               <div className="flex items-baseline justify-between">
                 <span className="text-[15px] font-bold text-ink-strong">{t.payNow}</span>
                 <span className="font-sans text-2xl font-bold tabular-nums text-tenant">
-                  ฿{room.pricePerMonth.toLocaleString()}
+                  ฿{payTotal.toLocaleString()}
                 </span>
               </div>
               <p className="mt-1 text-right text-[11.5px] text-ink-faint">{t.payNowNote}</p>

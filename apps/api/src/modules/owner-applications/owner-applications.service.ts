@@ -193,7 +193,7 @@ export class OwnerApplicationsService {
 
     const sent = await this.mail.send(
       app.email,
-      'รหัสยืนยันอีเมล Hopak Seller',
+      'รหัสยืนยันอีเมล Hoprak Seller',
       `<p>รหัสยืนยันอีเมลของคุณคือ</p><h2 style="letter-spacing:4px">${code}</h2><p>รหัสนี้หมดอายุใน 10 นาที</p>`,
     );
     if (!sent) this.logger.warn(`[DEV fallback] ส่งอีเมลไม่สำเร็จ — OTP สำหรับ ${app.email} คือ ${code}`);

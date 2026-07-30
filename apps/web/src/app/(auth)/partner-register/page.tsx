@@ -40,15 +40,15 @@ const PROVINCE_LABEL = {
 
 const TEXT = {
   th: {
-    badge: 'Hopak Seller',
-    heroTitle1: 'เปิดหอพักกับ Hopak',
+    badge: 'Hoprak Seller',
+    heroTitle1: 'เปิดหอพักกับ Hoprak',
     heroTitle2: 'เริ่มรับจองได้ใน ไม่กี่ขั้นตอน',
     perks: [
       'สมัครฟรี ไม่มีค่าใช้จ่ายล่วงหน้า',
       'หอใหม่ต้องผ่านแอดมินอนุมัติครั้งแรกเท่านั้น หลังจากนั้นแก้ไขข้อมูลได้เองทันที',
       'หักค่าบริการ 20% เฉพาะยอดจองที่สำเร็จผ่านระบบ (แบ่งหอการค้ามหาสารคาม 10% + แพลตฟอร์ม 10%)',
     ],
-    footer: '© 2026 Hopak Seller · เปิดหอพักกับเรา',
+    footer: '© 2026 Hoprak Seller · เปิดหอพักกับเรา',
     haveAccount: 'มีบัญชีเจ้าของหอแล้ว? เข้าสู่ระบบ',
     stepLabel: (n: number) => `ขั้นตอนที่ ${n} จาก 4`,
 
@@ -109,7 +109,7 @@ const TEXT = {
     // step: pending
     pendingTitle: 'ส่งคำขอเรียบร้อยแล้ว',
     pendingBody:
-      'ทีมงาน Hopak กำลังตรวจสอบคำขอเปิดหอพักของคุณ ใช้เวลาประมาณ 1-3 วัน เมื่อได้รับอนุมัติจะสามารถเข้าใช้งาน Owner Console ได้ทันที',
+      'ทีมงาน Hoprak กำลังตรวจสอบคำขอเปิดหอพักของคุณ ใช้เวลาประมาณ 1-3 วัน เมื่อได้รับอนุมัติจะสามารถเข้าใช้งาน Owner Console ได้ทันที',
     backHome: 'กลับหน้าแรก',
 
     // step: already logged in
@@ -118,15 +118,15 @@ const TEXT = {
     goProfile: 'ไปหน้าโปรไฟล์',
   },
   en: {
-    badge: 'Hopak Seller',
-    heroTitle1: 'List your dorm on Hopak',
+    badge: 'Hoprak Seller',
+    heroTitle1: 'List your dorm on Hoprak',
     heroTitle2: 'Start accepting bookings in a few steps',
     perks: [
       'Free to sign up, no upfront cost',
       'A new dorm needs admin approval only once — after that you can edit it yourself instantly',
       '20% service fee on bookings completed through the platform (10% Mahasarakham Chamber of Commerce + 10% platform)',
     ],
-    footer: '© 2026 Hopak Seller · List your dorm with us',
+    footer: '© 2026 Hoprak Seller · List your dorm with us',
     haveAccount: 'Already have an owner account? Log in',
     stepLabel: (n: number) => `Step ${n} of 4`,
 
@@ -182,7 +182,7 @@ const TEXT = {
 
     pendingTitle: 'Request submitted',
     pendingBody:
-      'The Hopak team is reviewing your dorm-owner request. This usually takes 1-3 days. Once approved, you can start using the Owner Console right away.',
+      'The Hoprak team is reviewing your dorm-owner request. This usually takes 1-3 days. Once approved, you can start using the Owner Console right away.',
     backHome: 'Back to home',
 
     alreadyTitle: "You're already logged in",
@@ -210,7 +210,7 @@ function BrandPanel({ t }: { t: (typeof TEXT)['th'] }) {
             H
           </span>
           <span className="text-lg font-bold tracking-tight text-white">
-            Hopak<span className="text-[#8FE0BE]">.com</span>
+            Hoprak<span className="text-[#8FE0BE]">.com</span>
           </span>
         </div>
 

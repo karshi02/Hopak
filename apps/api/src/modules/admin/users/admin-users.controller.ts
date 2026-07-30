@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -16,6 +16,21 @@ export class AdminUsersController {
   @Get()
   listAll() {
     return this.adminUsersService.listAll();
+  }
+
+  // ประวัติการเข้าสู่ระบบ (IP + บราวเซอร์) — วางก่อน :id routes กัน 'sessions' ถูกจับเป็น id
+  // 'sessions/periods' ต้องมาก่อน 'sessions' กัน periods ถูกจับเป็น query ของ sessions
+  @Get('sessions/periods')
+  sessionPeriods() {
+    return this.adminUsersService.sessionPeriods();
+  }
+
+  @Get('sessions')
+  listSessions(@Query('year') year?: string, @Query('month') month?: string) {
+    return this.adminUsersService.listSessions(
+      year ? Number(year) : undefined,
+      month ? Number(month) : undefined,
+    );
   }
 
   @Post()

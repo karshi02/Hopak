@@ -38,9 +38,11 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/admin/approvals', icon: 'home', label: 'หอพัก (อนุมัติ)', badgeKey: 'approvals' },
     { href: '/admin/owner-requests', icon: 'shield', label: 'คำขอเป็นเจ้าของหอ' },
     { href: '/admin/users', icon: 'user', label: 'ผู้เช่า & ผู้ใช้' },
+    { href: '/admin/sessions', icon: 'shield', label: 'ประวัติการเข้าสู่ระบบ' },
     { href: '/admin/finance', icon: 'money', label: 'การเงิน & รวมบิล' },
     { href: '/admin/campaigns', icon: 'ad', label: 'โฆษณา & แคมเปญ' },
     { href: '/admin/admins', icon: 'shield', label: 'ผู้ดูแล (Admins)' },
+    { href: '/admin/website/edit', icon: 'gear', label: 'แก้ไขหน้าแรก (inline)' },
     { href: '/admin/website', icon: 'gear', label: 'ธีม & โปสเตอร์' },
   ],
   en: [
@@ -49,9 +51,11 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/admin/approvals', icon: 'home', label: 'Dorms (Approvals)', badgeKey: 'approvals' },
     { href: '/admin/owner-requests', icon: 'shield', label: 'Owner Requests' },
     { href: '/admin/users', icon: 'user', label: 'Users' },
+    { href: '/admin/sessions', icon: 'shield', label: 'Login History' },
     { href: '/admin/finance', icon: 'money', label: 'Finance & Payouts' },
     { href: '/admin/campaigns', icon: 'ad', label: 'Ads & Campaigns' },
     { href: '/admin/admins', icon: 'shield', label: 'Admins' },
+    { href: '/admin/website/edit', icon: 'gear', label: 'Edit Homepage (inline)' },
     { href: '/admin/website', icon: 'gear', label: 'Website Settings' },
   ],
 };
@@ -76,6 +80,10 @@ const PAGE_HEADER: Record<string, Record<'th' | 'en', { title: string; subtitle:
   '/admin/users': {
     th: { title: 'ผู้เช่า & ผู้ใช้', subtitle: 'เช็คสถานะผู้ใช้ · ส่งใบเตือน · จัดการบัญชี' },
     en: { title: 'Users', subtitle: 'Check status · send warnings · manage accounts' },
+  },
+  '/admin/sessions': {
+    th: { title: 'ประวัติการเข้าสู่ระบบ', subtitle: 'ทุกการเข้าใช้งาน · IP · บราวเซอร์ · สถานะ session' },
+    en: { title: 'Login History', subtitle: 'Every login · IP · browser · session status' },
   },
   '/admin/finance': {
     th: { title: 'การเงิน & รวมบิล', subtitle: 'ค่าคอมมิชชันและยอดโอนเจ้าของหอ' },
@@ -207,7 +215,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <AdminIcon name="home" size={19} className="text-white" />
           </span>
           <div>
-            <div className="text-[17px] font-bold leading-none text-white">Hopak</div>
+            <div className="text-[17px] font-bold leading-none text-white">Hoprak</div>
             <div className="mt-[3px] text-[11px] font-semibold tracking-[1.5px] text-admin-sidebarmuted">
               ADMIN CONSOLE
             </div>

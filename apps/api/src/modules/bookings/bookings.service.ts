@@ -48,12 +48,19 @@ export class BookingsService {
     }
 
     const now = new Date();
+    // เก็บค่าเช่า+มัดจำเป็น snapshot ตอนจอง (ราคาห้องอาจเปลี่ยนภายหลัง) — มัดจำใช้ระดับห้องก่อน
+    // ถ้าห้องไม่ได้ตั้ง (0) ตกไปใช้ค่ามัดจำระดับหอ. ผู้เช่าจ่ายรวมกับเรา (กันจ่ายมัดจำตรงเจ้าของหอแล้วโดนโกง)
+    const roomPrice = room.pricePerMonth;
+    const deposit = room.deposit > 0 ? room.deposit : room.dorm.deposit;
     const booking = await this.prisma.booking.create({
       data: {
         tenantId,
         roomId: dto.roomId,
         checkInDate: new Date(dto.checkInDate),
-        amount: room.pricePerMonth,
+        amount: roomPrice + deposit,
+        roomPrice,
+        deposit,
+        leaseMonths: dto.leaseMonths ?? 1,
         status: 'PENDING',
         contactName: dto.contactName,
         contactPhone: dto.contactPhone,
@@ -62,13 +69,24 @@ export class BookingsService {
       },
     });
     this.realtime.emitToUser(room.dorm.ownerId, 'booking:new', booking);
+
+    // แจ้งเตือนถาวรให้เจ้าของหอ (โผล่ในกระดิ่ง + หน้าแจ้งเตือน หมวด "การจอง") — เดิมมีแค่ socket ชั่วคราว
+    const roomLabel = room.type === 'AIR' ? 'ห้องแอร์' : 'ห้องพัดลม';
+    const checkIn = new Date(dto.checkInDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+    await this.notifications.create(
+      room.dorm.ownerId,
+      'booking',
+      'คำขอจองใหม่',
+      `${dto.contactName} ขอจอง${roomLabel} · เข้าอยู่ ${checkIn} · เช่า ${dto.leaseMonths ?? 1} เดือน — กดยืนยันในหน้าการจอง`,
+    );
+
     return booking;
   }
 
   listForTenant(tenantId: string) {
     return this.prisma.booking.findMany({
       where: { tenantId },
-      include: { room: { include: { dorm: true } } },
+      include: { room: { include: { dorm: true } }, payment: { select: { status: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -89,7 +107,12 @@ export class BookingsService {
   }
 
   async findOne(id: string) {
-    const booking = await this.prisma.booking.findUnique({ where: { id }, include: { room: { include: { dorm: true } } } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      // include payment.status ด้วย — หน้า detail ต้องรู้ว่าผู้เช่าจ่าย/แนบสลิปแล้วหรือยัง
+      // เพื่อโชว์ "รอแอดมินตรวจสลิป" (แทน confirmed+ปุ่มจ่ายซ้ำที่ดูเหมือนถอยกลับ)
+      include: { room: { include: { dorm: true } }, payment: { select: { status: true } } },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
     return booking;
   }
@@ -150,13 +173,22 @@ export class BookingsService {
     return updated;
   }
 
-  // admin ยกเลิก booking ไหนก็ได้ ไม่เช็ค ownership และไม่เช็ค 24h window (คนละสิทธิ์กับ cancel ของผู้เช่า)
+  // admin ยกเลิก/คืนห้อง booking ไหนก็ได้ (รวม PAID กรณีคืนเงิน) — override ไม่เช็ค state machine/
+  // ownership/24h. คืนห้องกลับ AVAILABLE ให้โชว์ว่างบนเว็บทันที (การคืนเงินจริงแอดมินทำเบื้องหลัง)
   async adminCancel(id: string) {
     const booking = await this.findOne(id);
-    assertTransition(booking.status.toLowerCase() as any, 'cancelled');
-    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } }),
+      this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'AVAILABLE' } }),
+    ]);
     this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
     this.realtime.emitToUser(booking.room.dorm.ownerId, 'booking:updated', updated);
+    await this.notifications.create(
+      booking.tenantId,
+      'booking',
+      'การจองถูกยกเลิก',
+      `การจอง ${booking.room.dorm.name} ถูกยกเลิกโดยแอดมิน หากชำระเงินไว้แล้ว ทีมงานจะติดต่อเรื่องการคืนเงิน`,
+    );
     return updated;
   }
 

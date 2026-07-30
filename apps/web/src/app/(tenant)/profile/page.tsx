@@ -11,7 +11,7 @@ import { useLang, type Lang } from '@/hooks/useLang';
 import { useBookings } from '@/hooks/useBookings';
 import { useFavorites } from '@/hooks/useFavorites';
 import { StarRating } from '@/components/StarRating';
-import type { OwnerRequest, User } from '@hopak/shared';
+import type { User } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -38,12 +38,33 @@ const TEXT = {
     navAdminDashboard: 'แดชบอร์ดแอดมิน',
     navNotifications: 'การแจ้งเตือน',
     logout: 'ออกจากระบบ',
-    becomeOwnerTitle: 'เปิดหอพักกับ Hopak',
+    becomeOwnerTitle: 'เปิดหอพักกับ Hoprak',
     ownerPending: 'ส่งคำขอแล้ว รอแอดมินอนุมัติ',
     ownerRejected: 'คำขอก่อนหน้าถูกปฏิเสธ ลองส่งคำขอใหม่ได้',
     ownerPitch: 'มีหอให้เช่า? ลงประกาศและรับการจอง',
     sendingRequest: 'กำลังส่ง...',
     requestOwner: 'ขอเป็นเจ้าของหอ',
+    ownerFormTitle: 'กรอกข้อมูลเพื่อขอเป็นเจ้าของหอ',
+    fDorm: 'ชื่อหอพัก',
+    fProvince: 'จังหวัด',
+    fPhone: 'เบอร์ติดต่อ',
+    fAddress: 'ที่อยู่หอพัก (ไม่บังคับ)',
+    fNote: 'หมายเหตุถึงแอดมิน (ไม่บังคับ)',
+    fDocs: 'เอกสารยืนยัน (บัตรประชาชน / โฉนด / ทะเบียนบ้าน)',
+    fDocsHint: 'แนบอย่างน้อย 1 ไฟล์ เพื่อให้แอดมินตรวจสอบ',
+    submitReq: 'ส่งคำขอ',
+    cancelReq: 'ยกเลิก',
+    formError: 'กรุณากรอกชื่อหอพัก จังหวัด เบอร์ติดต่อ และแนบเอกสารอย่างน้อย 1 ไฟล์',
+    wStep: (n: number) => `ขั้นตอนที่ ${n} จาก 3`,
+    wStep1: 'ข้อมูลหอพัก',
+    wStep2: 'เอกสารยืนยัน',
+    wStep3: 'ตรวจสอบและส่ง',
+    wNext: 'ถัดไป',
+    wBack: 'ย้อนกลับ',
+    wReview: 'ตรวจสอบข้อมูลก่อนส่ง',
+    wStep1Err: 'กรุณากรอกชื่อหอพัก จังหวัด และเบอร์ติดต่อ',
+    wStep2Err: 'กรุณาแนบเอกสารอย่างน้อย 1 ไฟล์',
+    wFilesN: (n: number) => `แนบแล้ว ${n} ไฟล์`,
     bookingsTitle: 'การจองของฉัน',
     viewDetail: 'ดูรายละเอียด',
     checkIn: 'เข้าอยู่',
@@ -126,12 +147,33 @@ const TEXT = {
     navAdminDashboard: 'Admin dashboard',
     navNotifications: 'Notifications',
     logout: 'Log out',
-    becomeOwnerTitle: 'List your dorm with Hopak',
+    becomeOwnerTitle: 'List your dorm with Hoprak',
     ownerPending: 'Request sent, awaiting admin approval',
     ownerRejected: 'Your previous request was rejected — you can try again',
     ownerPitch: 'Have a dorm to rent? List it and start receiving bookings',
     sendingRequest: 'Sending...',
     requestOwner: 'Request to become an owner',
+    ownerFormTitle: 'Fill in details to request owner access',
+    fDorm: 'Dorm name',
+    fProvince: 'Province',
+    fPhone: 'Contact phone',
+    fAddress: 'Dorm address (optional)',
+    fNote: 'Note to admin (optional)',
+    fDocs: 'Verification documents (ID card / deed / house registration)',
+    fDocsHint: 'Attach at least 1 file for admin review',
+    submitReq: 'Submit request',
+    cancelReq: 'Cancel',
+    formError: 'Please fill in dorm name, province, phone and attach at least 1 document',
+    wStep: (n: number) => `Step ${n} of 3`,
+    wStep1: 'Dorm details',
+    wStep2: 'Verification documents',
+    wStep3: 'Review & submit',
+    wNext: 'Next',
+    wBack: 'Back',
+    wReview: 'Review before submitting',
+    wStep1Err: 'Please fill in dorm name, province and phone',
+    wStep2Err: 'Please attach at least 1 document',
+    wFilesN: (n: number) => `${n} file(s) attached`,
     bookingsTitle: 'My bookings',
     viewDetail: 'View details',
     checkIn: 'Check-in',
@@ -489,7 +531,6 @@ export default function ProfilePage() {
         </aside>
 
         <section className="flex min-w-0 flex-col gap-5">
-          {isTenant && <OwnerPitch t={t} />}
           {isTenant && <BookingsSection t={t} lang={lang} />}
           {isTenant && <SavedSection t={t} />}
           <VerifySection user={user} onVerified={setUser} t={t} />
@@ -512,52 +553,6 @@ function ProfileStats({ user, t }: { user: User; t: T }) {
       <StatBox value={user.reviewCount ?? 0} label={t.statReviews} />
       <StatBox value={bookings.length} label={t.statTotal} last />
     </>
-  );
-}
-
-function OwnerPitch({ t }: { t: T }) {
-  const [ownerRequest, setOwnerRequest] = useState<OwnerRequest | null>(null);
-  const [requesting, setRequesting] = useState(false);
-
-  useEffect(() => {
-    apiClient.get<OwnerRequest | null>('/users/me/owner-request').then(setOwnerRequest).catch(() => {});
-  }, []);
-
-  async function requestOwner() {
-    setRequesting(true);
-    try {
-      const req = await apiClient.post<OwnerRequest>('/users/me/become-owner');
-      setOwnerRequest(req);
-    } finally {
-      setRequesting(false);
-    }
-  }
-
-  const requestStatus = ownerRequest ? normalizeStatus(ownerRequest.status) : null;
-
-  return (
-    <div className="flex flex-col gap-3 rounded-card-lg bg-seller p-4 text-white shadow-sm sm:flex-row sm:items-center sm:gap-4">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 font-bold">H</div>
-      <div className="flex-1">
-        <p className="font-semibold">{t.becomeOwnerTitle}</p>
-        {requestStatus === 'pending' ? (
-          <p className="text-sm text-white/85">{t.ownerPending}</p>
-        ) : requestStatus === 'rejected' ? (
-          <p className="text-sm text-white/85">{t.ownerRejected}</p>
-        ) : (
-          <p className="text-sm text-white/85">{t.ownerPitch}</p>
-        )}
-      </div>
-      {requestStatus !== 'pending' && (
-        <button
-          onClick={requestOwner}
-          disabled={requesting}
-          className="rounded-btn bg-white/15 px-4 py-2 text-sm font-medium hover:bg-white/25 disabled:opacity-60"
-        >
-          {requesting ? t.sendingRequest : t.requestOwner}
-        </button>
-      )}
-    </div>
   );
 }
 

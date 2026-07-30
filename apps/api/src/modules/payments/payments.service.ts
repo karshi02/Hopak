@@ -12,6 +12,44 @@ export class PaymentsService {
     private uploads: UploadsService,
   ) {}
 
+  // รายได้ payout ของเจ้าของหอ แยกตามสถานะ: SETTLED = รอโอน, TRANSFERRED = โอนแล้ว
+  // ใช้บนแดชบอร์ดเจ้าของหอ — เมื่อแอดมินโอน (status→TRANSFERRED) ยอดจะย้ายจาก "รอโอน" ไป "โอนแล้ว" อัตโนมัติ
+  async getOwnerIncome(ownerId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        status: { in: ['SETTLED', 'TRANSFERRED'] },
+        booking: { room: { dorm: { ownerId } } },
+      },
+      include: { booking: { include: { room: { include: { dorm: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let received = 0;
+    let pending = 0;
+    const rows = payments.map((p) => {
+      const transferred = p.status === 'TRANSFERRED';
+      if (transferred) received += p.ownerPayout;
+      else pending += p.ownerPayout;
+      return {
+        paymentId: p.id,
+        bookingId: p.bookingId,
+        ref: p.bookingId.slice(0, 8).toUpperCase(),
+        tenantName: p.booking.contactName,
+        dormName: p.booking.room.dorm.name,
+        roomType: p.booking.room.type,
+        roomPrice: p.booking.roomPrice,
+        deposit: p.booking.deposit,
+        ownerPayout: p.ownerPayout,
+        status: transferred ? 'transferred' : 'pending',
+        transferredAt: p.transferredAt,
+        // สลิปที่แอดมินโอน (private) — แปลงเป็นลิงก์ชั่วคราวให้เจ้าของหอเปิดดูได้
+        transferSlipUrl: p.transferSlipKey ? this.uploads.getPrivateUrl(p.transferSlipKey) : null,
+      };
+    });
+
+    return { received, pending, rows };
+  }
+
   async pay(userId: string, bookingId: string, method: string, slip: Express.Multer.File) {
     if (!slip) throw new BadRequestException('กรุณาแนบสลิปโอนเงิน');
 
@@ -34,6 +72,8 @@ export class PaymentsService {
     const slipKey = `payments/${bookingId}/${Date.now()}-${slip.originalname}`;
     await this.uploads.upload(slipKey, slip.buffer, slip.mimetype, 'private');
 
+    // ค่าคอมคิดจาก "ยอดรวม" (amount = ค่าห้อง+มัดจำ) — เจ้าของหอได้ 80% ของยอดรวม
+    // roomPrice/deposit เก็บไว้แค่โชว์แยกในแดชบอร์ด ไม่ใช่ฐานคิดคอม
     return this.prisma.payment.create({
       data: {
         bookingId,

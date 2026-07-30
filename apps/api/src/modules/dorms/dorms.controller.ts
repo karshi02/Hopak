@@ -44,6 +44,14 @@ export class DormsController {
     return this.dormsService.update(user.id, id, dto);
   }
 
+  // เจ้าของหอส่งหอที่ถูกปฏิเสธกลับมาให้แอดมินตรวจใหม่
+  @Patch(':id/resubmit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('owner')
+  resubmit(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.dormsService.resubmit(user.id, id);
+  }
+
   @Post(':id/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('owner')

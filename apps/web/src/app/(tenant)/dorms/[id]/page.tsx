@@ -19,6 +19,7 @@ const TEXT = {
   th: {
     search: 'ค้นหา',
     morePhotos: (n: number) => `+${n} รูป`,
+    nextPhoto: 'รูปถัดไป',
     noData: 'ไม่มีข้อมูล',
     costs: 'ค่าใช้จ่าย',
     electricRate: 'ค่าไฟ',
@@ -76,6 +77,7 @@ const TEXT = {
   en: {
     search: 'Search',
     morePhotos: (n: number) => `+${n} photos`,
+    nextPhoto: 'Next photo',
     noData: 'No data',
     costs: 'Costs',
     electricRate: 'Electricity',
@@ -253,6 +255,7 @@ export default function DormDetailPage() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [modalVariant, setModalVariant] = useState<RoomVariant | null>(null);
   const [modalPhotoIdx, setModalPhotoIdx] = useState(0);
+  const [thirdIdx, setThirdIdx] = useState(2); // ช่องรูปที่ 3 ในแกลเลอรี่ — คลิกวนดูรูปที่เหลือ (3,4,5...)
   const { favoriteIds, toggle } = useFavorites();
   const { user } = useCurrentUser();
   const isOwnerHere = !!user && !!dorm && user.role.toLowerCase() === 'owner' && user.id === dorm.ownerId;
@@ -376,15 +379,25 @@ export default function DormDetailPage() {
               <img src={dorm.images[1]} alt="" className="absolute inset-0 h-full w-full object-cover" />
             )}
           </div>
-          <div className="relative overflow-hidden rounded-[20px] bg-surface-canvas">
-            {dorm.images[2] && (
+          {/* ช่องที่ 3 — คลิกวนดูรูปที่เหลือ (รูป 3,4,5... แล้ววนกลับรูป 3) แทนป้าย +N */}
+          <div
+            onClick={() => dorm.images.length > 3 && setThirdIdx((i) => (i - 2 + 1) % (dorm.images.length - 2) + 2)}
+            className={`group relative overflow-hidden rounded-[20px] bg-surface-canvas ${dorm.images.length > 3 ? 'cursor-pointer' : ''}`}
+          >
+            {dorm.images[thirdIdx] && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={dorm.images[2]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <img src={dorm.images[thirdIdx]} alt="" className="absolute inset-0 h-full w-full object-cover" />
             )}
             {dorm.images.length > 3 && (
-              <span className="absolute inset-0 flex items-center justify-center bg-black/45 font-sans text-[15px] font-bold text-white">
-                {t.morePhotos(dorm.images.length - 3)}
-              </span>
+              <>
+                <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-[12.5px] font-bold text-white opacity-0 transition group-hover:opacity-100">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  {t.nextPhoto}
+                </span>
+                <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] font-bold text-white">
+                  {thirdIdx - 1}/{dorm.images.length - 2}
+                </span>
+              </>
             )}
           </div>
         </div>

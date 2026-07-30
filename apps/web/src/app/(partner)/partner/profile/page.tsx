@@ -43,7 +43,7 @@ const TEXT = {
     pwError: 'เปลี่ยนรหัสผ่านไม่สำเร็จ',
 
     payoutTitle: 'บัญชีรับเงิน',
-    payoutDesc: 'ตั้งค่าบัญชีที่ใช้รับยอดโอนจาก Hopak ได้ที่หน้าตั้งค่า',
+    payoutDesc: 'ตั้งค่าบัญชีที่ใช้รับยอดโอนจาก Hoprak ได้ที่หน้าตั้งค่า',
     payoutLink: 'ไปหน้าตั้งค่า →',
   },
   en: {
@@ -79,7 +79,7 @@ const TEXT = {
     pwError: 'Could not change password',
 
     payoutTitle: 'Payout account',
-    payoutDesc: 'Set up the account that receives your Hopak transfers on the settings page.',
+    payoutDesc: 'Set up the account that receives your Hoprak transfers on the settings page.',
     payoutLink: 'Go to settings →',
   },
 };

@@ -106,19 +106,54 @@ export class UsersService {
     return { success: true };
   }
 
-  async requestOwner(userId: string) {
+  async requestOwner(
+    userId: string,
+    dto: { dormName?: string; province?: string; phone?: string; address?: string; note?: string },
+    files: Express.Multer.File[],
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.role === 'OWNER') throw new ConflictException('บัญชีนี้เป็นเจ้าของหอแล้ว');
 
     const pending = await this.prisma.ownerRequest.findFirst({ where: { userId, status: 'PENDING' } });
-    if (pending) return pending;
+    if (pending) throw new ConflictException('คุณมีคำขอที่รอตรวจสอบอยู่แล้ว');
 
-    return this.prisma.ownerRequest.create({ data: { userId } });
+    // บังคับกรอกข้อมูล + แนบเอกสารอย่างน้อย 1 ไฟล์ ให้แอดมินตรวจสอบได้จริง (ไม่ใช่กดขอเปล่า)
+    const dormName = (dto.dormName ?? '').trim();
+    const province = (dto.province ?? '').trim();
+    const phone = (dto.phone ?? '').trim();
+    if (!dormName || !province || !phone) {
+      throw new BadRequestException('กรุณากรอกชื่อหอพัก จังหวัด และเบอร์ติดต่อให้ครบ');
+    }
+    if (!files?.length) {
+      throw new BadRequestException('กรุณาแนบเอกสารยืนยันอย่างน้อย 1 ไฟล์ (บัตรประชาชน/โฉนด/ทะเบียนบ้าน)');
+    }
+
+    const keys: string[] = [];
+    for (const file of files) {
+      const key = `owner-requests/${userId}/${Date.now()}-${file.originalname}`;
+      await this.uploads.upload(key, file.buffer, file.mimetype, 'private');
+      keys.push(key);
+    }
+
+    return this.prisma.ownerRequest.create({
+      data: {
+        userId,
+        dormName,
+        province,
+        phone,
+        address: (dto.address ?? '').trim() || null,
+        note: (dto.note ?? '').trim() || null,
+        documents: keys,
+      },
+    });
   }
 
-  myOwnerRequest(userId: string) {
-    return this.prisma.ownerRequest.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
+  async myOwnerRequest(userId: string) {
+    const req = await this.prisma.ownerRequest.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
+    if (!req) return null;
+    // เอกสารเก็บเป็น storage key (private) — แปลงเป็นลิงก์ชั่วคราวก่อนส่งออก
+    return { ...req, documents: req.documents.map((k) => this.uploads.getPrivateUrl(k)) };
   }
 
   async sendVerificationOtp(userId: string) {
@@ -141,7 +176,7 @@ export class UsersService {
 
     const sent = await this.mail.send(
       user.email,
-      'รหัสยืนยันอีเมล Hopak',
+      'รหัสยืนยันอีเมล Hoprak',
       `<p>รหัสยืนยันอีเมลของคุณคือ</p><h2 style="letter-spacing:4px">${code}</h2><p>รหัสนี้หมดอายุใน 10 นาที</p>`,
     );
     // ส่งไม่สำเร็จได้ทั้งเพราะ SMTP ยังไม่ตั้งค่า หรือ Resend sandbox mode reject โดเมนที่ไม่ verify

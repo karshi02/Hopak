@@ -11,7 +11,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 const TEXT = {
   th: {
-    badge: 'Hopak Seller',
+    badge: 'Hoprak Seller',
     heroTitle1: 'จัดการหอพักของคุณ',
     heroTitle2: 'ในที่เดียว',
     perks: [
@@ -19,7 +19,7 @@ const TEXT = {
       'แดชบอร์ดรายได้ ยอดจอง ห้องว่าง ครบในหน้าเดียว',
       'จัดการห้องพัก ราคา และสิ่งอำนวยความสะดวกได้เอง',
     ],
-    footer: '© 2026 Hopak Seller · คอนโซลสำหรับเจ้าของหอพัก',
+    footer: '© 2026 Hoprak Seller · คอนโซลสำหรับเจ้าของหอพัก',
     title: 'เข้าสู่ระบบเจ้าของหอ',
     subtitle: 'เข้าสู่บัญชี Owner Console ของคุณ',
     google: 'เข้าสู่ระบบด้วย Google',
@@ -31,12 +31,12 @@ const TEXT = {
     notOwnerError: 'บัญชีนี้ยังไม่ได้เป็นเจ้าของหอ กรุณาสมัครเปิดหอพักก่อน',
     submitting: 'กำลังเข้าสู่ระบบ...',
     submit: 'เข้าสู่ระบบ',
-    noAccount: 'ยังไม่มีหอพักกับ Hopak?',
+    noAccount: 'ยังไม่มีหอพักกับ Hoprak?',
     signUp: 'สมัครเปิดหอพัก',
     tenantLink: 'เป็นผู้เช่า? เข้าสู่ระบบที่นี่',
   },
   en: {
-    badge: 'Hopak Seller',
+    badge: 'Hoprak Seller',
     heroTitle1: 'Manage your dorms',
     heroTitle2: 'all in one place',
     perks: [
@@ -44,7 +44,7 @@ const TEXT = {
       'Revenue, bookings, and vacancy — all in one dashboard',
       'Manage rooms, pricing, and amenities yourself',
     ],
-    footer: '© 2026 Hopak Seller · Console for dorm owners',
+    footer: '© 2026 Hoprak Seller · Console for dorm owners',
     title: 'Owner log in',
     subtitle: 'Log in to your Owner Console',
     google: 'Log in with Google',
@@ -56,7 +56,7 @@ const TEXT = {
     notOwnerError: 'This account is not a dorm owner yet — please apply first',
     submitting: 'Logging in...',
     submit: 'Log in',
-    noAccount: "Don't have a dorm on Hopak yet?",
+    noAccount: "Don't have a dorm on Hoprak yet?",
     signUp: 'List your dorm',
     tenantLink: 'A tenant? Log in here',
   },

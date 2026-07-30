@@ -22,6 +22,9 @@ model SiteSettings {
   // การ์ดจุดขาย 3 ใบใต้ hero หน้าแรก — array [{ tagTh,titleTh,subTh,tagEn,titleEn,subEn }]
   // ว่าง = ใช้ข้อความ default ที่ hardcode ในหน้าเว็บ (ไม่บังคับให้แอดมินตั้งก่อนถึงจะโชว์)
   promoCards   Json     @default("[]")
+  // ข้อความหน้าแรกที่แอดมินแก้ไขได้แบบ inline — { heroTitleTh, heroSubtitleTh, zonesTitleTh, zonesSubTh, trust:[{titleTh,subTh}] }
+  // ว่าง = ใช้ข้อความ default ที่ hardcode ในหน้าเว็บ (แอดมินแก้เฉพาะภาษาไทย อังกฤษใช้ default)
+  homeContent  Json     @default("{}")
   updatedAt    DateTime @updatedAt
 }
 
@@ -159,6 +162,10 @@ model Dorm {
   images        String[]
   documents     String[]   @default([])
   status        DormStatus @default(PENDING_APPROVAL)
+  // เหตุผลที่แอดมินปฏิเสธล่าสุด (สาเหตุ + วิธีแก้) โชว์ให้เจ้าของหอเห็นเพื่อแก้แล้วส่งใหม่
+  rejectionReason String?
+  // จำนวนครั้งที่ถูกปฏิเสธ — ครบ 3 ครั้งแอดมินสั่งระงับได้ทันที
+  rejectionCount  Int      @default(0)
   // ถ้า true ห้องใหม่ที่เจ้าของหอนี้เพิ่มจะโชว์ให้ผู้เช่าเห็นทันทีไม่ต้องรอแอดมินตรวจ (แอดมินปรับได้ทุกเมื่อ)
   autoApproveRooms Boolean @default(false)
   createdAt     DateTime   @default(now())
@@ -198,7 +205,10 @@ model Booking {
   roomId         String
   room           Room          @relation(fields: [roomId], references: [id])
   checkInDate    DateTime
-  amount         Float
+  amount         Float         // ยอดที่ผู้เช่าจ่ายรวม = roomPrice + deposit
+  roomPrice      Float         @default(0) // ค่าเช่าห้อง snapshot ตอนจอง — ฐานคิดค่าคอม
+  deposit        Float         @default(0) // ค่ามัดจำ snapshot ตอนจอง — ส่งเจ้าของเต็ม ไม่โดนหักคอม
+  leaseMonths    Int           @default(1) // ระยะเวลาเช่าที่ผู้เช่าเลือก (เดือน) — 1/3/6
   status         BookingStatus @default(PENDING)
   contactName    String
   contactPhone   String
@@ -273,6 +283,14 @@ model OwnerRequest {
   userId    String
   user      User               @relation(fields: [userId], references: [id])
   status    OwnerRequestStatus @default(PENDING)
+  // ข้อมูลที่ผู้ขอกรอกให้แอดมินตรวจก่อนอนุมัติเป็นเจ้าของหอ
+  phone     String?
+  dormName  String?
+  province  String?
+  address   String?
+  note      String?
+  // เอกสารยืนยัน (บัตรประชาชน/โฉนด/ทะเบียนบ้าน) เก็บเป็น storage key (private)
+  documents String[]           @default([])
   createdAt DateTime           @default(now())
   decidedAt DateTime?
 }

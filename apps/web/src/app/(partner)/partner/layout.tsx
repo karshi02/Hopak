@@ -23,6 +23,7 @@ interface NavItem {
 const NAV: Record<'th' | 'en', NavItem[]> = {
   th: [
     { href: '/partner/dashboard', icon: 'dash', label: 'แดชบอร์ด' },
+    { href: '/partner/income', icon: 'money', label: 'รายได้จากแอป' },
     { href: '/partner/rooms', icon: 'bed', label: 'ห้องพัก' },
     { href: '/partner/requests', icon: 'book', label: 'การจอง', badgeKey: 'pending' },
     { href: '/partner/check-in', icon: 'shield', label: 'ยืนยันเข้าพัก' },
@@ -32,6 +33,7 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
   ],
   en: [
     { href: '/partner/dashboard', icon: 'dash', label: 'Dashboard' },
+    { href: '/partner/income', icon: 'money', label: 'App income' },
     { href: '/partner/rooms', icon: 'bed', label: 'Rooms' },
     { href: '/partner/requests', icon: 'book', label: 'Bookings', badgeKey: 'pending' },
     { href: '/partner/check-in', icon: 'shield', label: 'Check-in' },
@@ -45,6 +47,10 @@ const PAGE_HEADER: Record<string, Record<'th' | 'en', { title: string; subtitle:
   '/partner/dashboard': {
     th: { title: 'แดชบอร์ด', subtitle: 'ภาพรวมหอพักของคุณ' },
     en: { title: 'Dashboard', subtitle: 'Your dorm overview' },
+  },
+  '/partner/income': {
+    th: { title: 'รายได้จากแอป', subtitle: 'ค่าห้องที่ได้รับ · รอโอน · โอนแล้ว' },
+    en: { title: 'App income', subtitle: 'Room income · pending · transferred' },
   },
   '/partner/rooms': {
     th: { title: 'ห้องพัก', subtitle: 'จัดการห้องทั้งหมด' },
@@ -137,7 +143,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
             H
           </span>
           <div>
-            <div className="text-[17px] font-bold leading-none text-white">Hopak</div>
+            <div className="text-[17px] font-bold leading-none text-white">Hoprak</div>
             <div className="mt-[3px] text-[11px] font-semibold tracking-[1.5px] text-admin-sidebarmuted">
               SELLER · เจ้าของหอ
             </div>

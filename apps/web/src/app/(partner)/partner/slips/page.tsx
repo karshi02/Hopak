@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
@@ -90,13 +91,12 @@ export default function PartnerSlipsPage() {
                     <Badge label={badge.label} variant={badge.variant} />
                   </td>
                   <td className="p-3 text-right">
-                    <button
-                      disabled
-                      title={t.printTooltip}
-                      className="rounded-btn border border-card-border px-3 py-1.5 text-xs font-semibold opacity-50"
+                    <Link
+                      href={`/partner/receipt/${b.id}`}
+                      className="inline-block rounded-btn border border-card-border px-3 py-1.5 text-xs font-semibold text-ink-body hover:bg-surface-canvas"
                     >
                       {t.download}
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               );

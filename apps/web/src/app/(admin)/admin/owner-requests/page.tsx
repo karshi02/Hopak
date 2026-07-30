@@ -14,6 +14,10 @@ const TEXT = {
     approve: 'อนุมัติ',
     reject: 'ปฏิเสธ',
     none: 'ไม่มีคำขอรออนุมัติ',
+    dormName: 'ชื่อหอพัก',
+    address: 'ที่อยู่',
+    note: 'หมายเหตุ',
+    docItem: (n: number) => `เอกสาร ${n}`,
     dateLocale: 'th-TH',
   },
   en: {
@@ -23,6 +27,10 @@ const TEXT = {
     approve: 'Approve',
     reject: 'Reject',
     none: 'No requests pending',
+    dormName: 'Dorm name',
+    address: 'Address',
+    note: 'Note',
+    docItem: (n: number) => `Document ${n}`,
     dateLocale: 'en-US',
   },
 };
@@ -70,8 +78,33 @@ export default function AdminOwnerRequestsPage() {
               <p className="font-semibold text-ink-strong">{req.user?.name}</p>
               <p className="mt-0.5 text-sm text-ink-subtitle">
                 {req.user?.email}
-                {req.user?.phone && ` · ${req.user.phone}`}
+                {req.phone && ` · ${req.phone}`}
               </p>
+              {req.dormName && (
+                <p className="mt-1.5 text-sm text-ink-body">
+                  <span className="font-semibold">{t.dormName}:</span> {req.dormName}
+                  {req.province && ` · ${req.province}`}
+                </p>
+              )}
+              {req.address && (
+                <p className="mt-0.5 text-sm text-ink-subtitle">
+                  {t.address}: {req.address}
+                </p>
+              )}
+              {req.note && (
+                <p className="mt-0.5 text-sm text-ink-subtitle">
+                  {t.note}: {req.note}
+                </p>
+              )}
+              {req.documents && req.documents.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {req.documents.map((url, i) => (
+                    <a key={url} href={url} target="_blank" rel="noreferrer" className="text-sm text-tenant underline">
+                      {t.docItem(i + 1)}
+                    </a>
+                  ))}
+                </div>
+              )}
               <p className="mt-1 text-xs text-ink-faint">
                 {t.requestedAt} {new Date(req.createdAt).toLocaleString(t.dateLocale)}
               </p>

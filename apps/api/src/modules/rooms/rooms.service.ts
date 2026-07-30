@@ -44,12 +44,17 @@ export class RoomsService {
       images.push(url);
     }
 
+    // ไม่ต้องกรอกชื่อห้อง — สุ่มให้อัตโนมัติ (ต่อห้องเพื่อไม่ให้ชื่อซ้ำกันในล็อตเดียว)
+    const genName = () => {
+      const letter = 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)];
+      return `ห้อง ${letter}${100 + Math.floor(Math.random() * 900)}`;
+    };
     const quantity = Math.max(1, Math.min(50, data.quantity ?? 1));
     const rows = Array.from({ length: quantity }, () => ({
       dormId,
       type: data.type,
       pricePerMonth: data.pricePerMonth,
-      name: data.name,
+      name: data.name?.trim() || genName(),
       description: data.description,
       deposit: data.deposit ?? 0,
       waterRate: data.waterRate ?? 0,
@@ -80,13 +85,16 @@ export class RoomsService {
     if (!room) throw new NotFoundException('Room not found');
 
     const ratings = await this.reviews.summaryForDorms([room.dormId]);
-    return { ...room, dorm: { ...room.dorm, ...ratings.get(room.dormId) } };
+    // ห้องไม่มีรูปเฉพาะของตัวเอง → ใช้รูปหอพัก (คำนวณตอนแสดง ไม่ก็อปลง DB)
+    // = เจ้าของหอเปลี่ยนรูปหอเมื่อไหร่ ห้องอัปเดตตามทันที (เรียลไทม์) ไม่กระทบโปรไฟล์หอ
+    const images = room.images.length ? room.images : room.dorm.images;
+    return { ...room, images, dorm: { ...room.dorm, ...ratings.get(room.dormId) } };
   }
 
-  async setStatus(ownerId: string, roomId: string, status: 'AVAILABLE' | 'OCCUPIED') {
-    const room = await this.prisma.room.findUnique({ where: { id: roomId }, include: { dorm: true } });
+  // ตัด/คืนห้องด้วยมือ — เฉพาะแอดมิน (เดิมเป็นเจ้าของหอ ย้ายมาให้แอดมินคุมกันทุจริต)
+  async setStatus(roomId: string, status: 'AVAILABLE' | 'OCCUPIED') {
+    const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new NotFoundException('Room not found');
-    if (room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your room');
     return this.prisma.room.update({ where: { id: roomId }, data: { status } });
   }
 
@@ -119,17 +127,22 @@ export class RoomsService {
 
   async addImages(ownerId: string, roomId: string, files: Express.Multer.File[]) {
     const room = await this.assertOwnsRoom(ownerId, roomId);
+    // ถ้าห้องยังไม่มีรูปของตัวเอง (ใช้รูปหอ fallback) → ดึงรูปหอมาเป็นฐานก่อน แล้วค่อยเพิ่มรูปใหม่ต่อท้าย
+    // กันเคส "เพิ่มรูป 1 → รูปหอที่โชว์อยู่หายหมด" (เพราะเดิม base เป็น [] ทับด้วยรูปใหม่)
+    const base = room.images.length ? room.images : room.dorm.images;
     const urls: string[] = [];
     for (const file of files ?? []) {
       const key = `rooms/${room.dormId}/${Date.now()}-${file.originalname}`;
       urls.push(await this.uploads.upload(key, file.buffer, file.mimetype, 'public'));
     }
-    return this.prisma.room.update({ where: { id: roomId }, data: { images: [...room.images, ...urls] } });
+    return this.prisma.room.update({ where: { id: roomId }, data: { images: [...base, ...urls] } });
   }
 
   async removeImage(ownerId: string, roomId: string, index: number) {
     const room = await this.assertOwnsRoom(ownerId, roomId);
-    const images = room.images.filter((_, i) => i !== index);
+    // materialize รูปหอก่อนถ้ายังไม่มีรูปของตัวเอง แล้วค่อยลบรูปตาม index (กันรูปหายยกชุด)
+    const base = room.images.length ? room.images : room.dorm.images;
+    const images = base.filter((_, i) => i !== index);
     return this.prisma.room.update({ where: { id: roomId }, data: { images } });
   }
 }

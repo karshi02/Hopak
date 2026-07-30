@@ -88,6 +88,8 @@ const TEXT = {
     title: 'ตั้งค่า',
     ownerInfo: 'ข้อมูลเจ้าของหอพัก',
     ownerName: 'ชื่อเจ้าของ',
+    ownerPhone: 'เบอร์ติดต่อเจ้าของ',
+    ownerPhonePlaceholder: 'เบอร์โทรเจ้าของหอพัก',
     dormName: 'ชื่อหอพัก',
     payments: 'การรับเงิน',
     bankPlaceholder: 'ธนาคาร',
@@ -98,12 +100,14 @@ const TEXT = {
     saving: 'กำลังบันทึก...',
     saved: 'บันทึกแล้ว',
     saveError: 'บันทึกไม่สำเร็จ',
-    feeNote: 'Hopak หักค่าบริการ 20% จากยอดขายผ่านระบบ (หอการค้ามหาสารคาม 10% + แพลตฟอร์ม 10%) แล้วโอนส่วนที่เหลือ 80% เข้าบัญชีนี้',
+    feeNote: 'Hoprak หักค่าบริการ 20% จากยอดขายผ่านระบบ (หอการค้ามหาสารคาม 10% + แพลตฟอร์ม 10%) แล้วโอนส่วนที่เหลือ 80% เข้าบัญชีนี้',
   },
   en: {
     title: 'Settings',
     ownerInfo: 'Owner Info',
     ownerName: 'Owner name',
+    ownerPhone: 'Owner contact phone',
+    ownerPhonePlaceholder: 'Owner phone number',
     dormName: 'Dorm name',
     payments: 'Payments',
     bankPlaceholder: 'Bank',
@@ -114,7 +118,7 @@ const TEXT = {
     saving: 'Saving...',
     saved: 'Saved',
     saveError: 'Save failed',
-    feeNote: 'Hopak takes a 20% service fee from platform sales (10% Mahasarakham Chamber of Commerce + 10% platform), then transfers the remaining 80% to this account.',
+    feeNote: 'Hoprak takes a 20% service fee from platform sales (10% Mahasarakham Chamber of Commerce + 10% platform), then transfers the remaining 80% to this account.',
   },
 };
 
@@ -123,6 +127,7 @@ export default function PartnerSettingsPage() {
   const t = TEXT[lang];
   const [user, setUser] = useState<User | null>(null);
   const [dorms, setDorms] = useState<Dorm[]>([]);
+  const [phone, setPhone] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -136,6 +141,7 @@ export default function PartnerSettingsPage() {
       .get<User>('/users/me')
       .then((u) => {
         setUser(u);
+        setPhone(u.phone ?? '');
         setBankName(u.bankName ?? '');
         setAccountName(u.bankAccountName ?? '');
         setAccountNumber(u.bankAccountNumber ?? '');
@@ -152,6 +158,7 @@ export default function PartnerSettingsPage() {
     setError(null);
     try {
       await apiClient.patch('/users/me', {
+        phone,
         bankName,
         bankAccountName: accountName,
         bankAccountNumber: accountNumber,
@@ -174,9 +181,19 @@ export default function PartnerSettingsPage() {
             <span className="text-ink-subtitle">{t.ownerName}</span>
             <span className="font-medium text-ink-strong">{user?.name ?? '—'}</span>
           </div>
-          <div className="flex justify-between py-2.5">
+          <div className="flex justify-between border-b border-hairline py-2.5">
             <span className="text-ink-subtitle">{t.dormName}</span>
             <span className="font-medium text-ink-strong">{dorms.map((d) => d.name).join(', ') || '—'}</span>
+          </div>
+          <div className="flex flex-col gap-1.5 py-2.5">
+            <label className="text-ink-subtitle">{t.ownerPhone}</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={t.ownerPhonePlaceholder}
+              className={`${inputClass} font-sans`}
+            />
           </div>
         </div>
       </div>

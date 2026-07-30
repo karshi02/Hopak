@@ -7,7 +7,10 @@ export interface Booking {
   tenantId: string;
   roomId: string;
   checkInDate: string;
-  amount: number;
+  amount: number; // ยอดที่ผู้เช่าจ่ายรวม = roomPrice + deposit
+  roomPrice: number; // ค่าเช่าห้อง (snapshot ตอนจอง) — ฐานคิดค่าคอม
+  deposit: number; // ค่ามัดจำ (snapshot ตอนจอง) — ส่งเจ้าของเต็ม ไม่โดนหักคอม
+  leaseMonths?: number; // ระยะเวลาเช่า (เดือน) 1/3/6
   status: BookingStatus;
   contactName: string;
   contactPhone: string;
@@ -18,6 +21,8 @@ export interface Booking {
   checkInToken?: string | null;
   checkInTokenExpiresAt?: string | null;
   checkedInAt?: string | null;
+  // มีค่าเมื่อผู้เช่าจ่าย/แนบสลิปแล้ว (PENDING = รอแอดมินตรวจ, SETTLED/TRANSFERRED = เคลียร์แล้ว)
+  payment?: { status: string } | null;
   room?: Room & { dorm?: Dorm };
 }
 

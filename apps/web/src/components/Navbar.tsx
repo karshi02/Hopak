@@ -45,6 +45,8 @@ export function Navbar() {
   const [checked, setChecked] = useState(false);
   const [q, setQ] = useState('');
   const [unreadNotif, setUnreadNotif] = useState(0);
+  const [bellPulse, setBellPulse] = useState(false);
+  const [toast, setToast] = useState<{ title?: string; body?: string } | null>(null);
   const animatedPlaceholder = useTypewriter(t.searchPhrases);
 
   useEffect(() => {
@@ -65,7 +67,16 @@ export function Navbar() {
   useEffect(() => {
     if (!isTenant) return;
     const socket = getSocket();
-    const onNew = () => setUnreadNotif((c) => c + 1);
+    // แจ้งเตือนใหม่เรียลไทม์: เพิ่มตัวนับ + กระดิ่งเด้ง (ping) + เด้ง toast แดงสักครู่ (ไม่ต้องรีเฟรช)
+    const onNew = (n?: { title?: string; body?: string }) => {
+      setUnreadNotif((c) => c + 1);
+      setBellPulse(true);
+      setTimeout(() => setBellPulse(false), 2500);
+      if (n && (n.title || n.body)) {
+        setToast(n);
+        setTimeout(() => setToast(null), 6000);
+      }
+    };
     socket.on('notification:new', onNew);
     return () => {
       socket.off('notification:new', onNew);
@@ -108,7 +119,7 @@ export function Navbar() {
           <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-tenant font-sans text-base font-bold text-white">
             H
           </span>
-          <span className="hidden text-lg font-bold text-ink-strong dark:text-white sm:inline">Hopak</span>
+          <span className="hidden text-lg font-bold text-ink-strong dark:text-white sm:inline">Hoprak</span>
         </Link>
 
         <form onSubmit={handleSearch} className="flex max-w-xl flex-1 items-center gap-2 rounded-full border border-card-border bg-surface-canvas px-4 py-2 dark:border-white/10 dark:bg-white/5">
@@ -167,7 +178,14 @@ export function Navbar() {
                   title={t.notifications}
                   className="relative flex h-9 w-9 items-center justify-center rounded-[11px] bg-tenant-tint text-tenant hover:brightness-95 dark:bg-white/10"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  {bellPulse && <span className="absolute inset-0 animate-ping rounded-[11px] bg-danger/40" />}
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className={bellPulse ? 'origin-top animate-bounce' : ''}
+                  >
                     <path
                       d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"
                       stroke="currentColor"
@@ -208,6 +226,37 @@ export function Navbar() {
           )}
         </nav>
       </div>
+
+      {/* toast แจ้งเตือนใหม่เรียลไทม์ — เด้งมุมขวาบน กดไปหน้าแจ้งเตือน หายเองใน 6 วิ */}
+      {toast && (
+        <button
+          onClick={() => {
+            setToast(null);
+            router.push('/notifications');
+          }}
+          className="fixed right-4 top-4 z-[60] flex max-w-xs items-start gap-3 rounded-2xl border-l-4 border-danger bg-white px-4 py-3 text-left shadow-[0_12px_30px_rgba(16,24,40,0.18)] dark:bg-[#1a1a19]"
+        >
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <span className="min-w-0">
+            {toast.title && (
+              <span className="block truncate text-sm font-bold text-ink-strong dark:text-white">{toast.title}</span>
+            )}
+            {toast.body && (
+              <span className="mt-0.5 line-clamp-2 block text-xs text-ink-subtitle dark:text-white/70">{toast.body}</span>
+            )}
+          </span>
+        </button>
+      )}
     </header>
   );
 }

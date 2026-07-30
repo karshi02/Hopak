@@ -11,7 +11,7 @@ const MIN_PASSWORD_LENGTH = 6;
 const TEXT = {
   th: {
     title: 'ตั้งรหัสผ่านใหม่',
-    subtitle: 'ตั้งรหัสผ่านใหม่สำหรับบัญชี Hopak ของคุณ',
+    subtitle: 'ตั้งรหัสผ่านใหม่สำหรับบัญชี Hoprak ของคุณ',
     passwordLabel: 'รหัสผ่านใหม่',
     confirmLabel: 'ยืนยันรหัสผ่านใหม่',
     submit: 'บันทึกรหัสผ่านใหม่',
@@ -29,7 +29,7 @@ const TEXT = {
   },
   en: {
     title: 'Set a new password',
-    subtitle: 'Choose a new password for your Hopak account',
+    subtitle: 'Choose a new password for your Hoprak account',
     passwordLabel: 'New password',
     confirmLabel: 'Confirm new password',
     submit: 'Save new password',

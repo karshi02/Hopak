@@ -1,18 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma.service';
+import { UploadsService } from '../../uploads/uploads.service';
 
 @Injectable()
 export class OwnerRequestsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private uploads: UploadsService,
+  ) {}
 
-  listPending() {
-    return this.prisma.ownerRequest.findMany({
+  async listPending() {
+    const requests = await this.prisma.ownerRequest.findMany({
       where: { status: 'PENDING' },
       include: {
         user: { select: { id: true, name: true, email: true, phone: true, createdAt: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
+    // เอกสารเก็บเป็น storage key (private) — แปลงเป็นลิงก์ชั่วคราวก่อนส่งให้แอดมิน
+    return requests.map((r) => ({ ...r, documents: r.documents.map((k) => this.uploads.getPrivateUrl(k)) }));
   }
 
   async approve(id: string) {

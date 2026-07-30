@@ -19,6 +19,8 @@ export interface Dorm {
   images: string[];
   documents?: string[];
   status: DormStatus;
+  rejectionReason?: string | null;
+  rejectionCount?: number;
   avgRating?: number | null;
   reviewCount?: number;
   autoApproveRooms?: boolean;

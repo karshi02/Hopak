@@ -8,7 +8,7 @@ import { Badge, bookingStatusBadge } from '@/components/dashboard/Badge';
 import { FilterTabs } from '@/components/dashboard/FilterTabs';
 import type { Booking } from '@hopak/shared';
 
-type BookingWithDorm = Booking & { room?: { dorm?: { name?: string } } };
+type BookingWithDorm = Booking & { roomId: string; room?: { status?: string; dorm?: { name?: string } } };
 
 const TEXT = {
   th: {
@@ -34,6 +34,13 @@ const TEXT = {
     cancelling: 'กำลังยกเลิก...',
     restore: 'กู้คืน',
     restoring: 'กำลังกู้คืน...',
+    refundCancel: 'คืนห้อง (คืนเงิน)',
+    room: 'ห้อง',
+    roomFree: 'ว่าง',
+    roomOccupied: 'ไม่ว่าง',
+    cutRoom: 'ตัดห้อง',
+    returnRoom: 'คืนห้อง',
+    confirmRefund: 'ยืนยันคืนห้อง + ยกเลิกการจองนี้? (คืนเงินทำเบื้องหลัง)',
   },
   en: {
     title: 'Bookings & Status',
@@ -58,6 +65,13 @@ const TEXT = {
     cancelling: 'Cancelling...',
     restore: 'Restore',
     restoring: 'Restoring...',
+    refundCancel: 'Release (refund)',
+    room: 'Room',
+    roomFree: 'Free',
+    roomOccupied: 'Occupied',
+    cutRoom: 'Cut',
+    returnRoom: 'Release',
+    confirmRefund: 'Confirm release + cancel this booking? (refund handled manually)',
   },
 };
 
@@ -81,13 +95,27 @@ export default function AdminBookingsPage() {
 
   useEffect(reload, []);
 
-  async function handleCancel(id: string) {
+  async function handleCancel(id: string, needConfirm = false) {
+    if (needConfirm && !window.confirm(t.confirmRefund)) return;
     setBusyId(id);
     try {
       await apiClient.patch(`/bookings/${id}/admin-cancel`);
       reload();
     } catch {
       // เงียบไว้ก่อน — ปุ่มจะกลับมากดใหม่ได้ปกติ ไม่ต้องพังทั้งหน้า
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // ตัด/คืนห้องด้วยมือ (admin) — สะท้อนบนเว็บทันที ไม่แตะสถานะการจอง
+  async function handleRoomStatus(roomId: string, next: 'AVAILABLE' | 'OCCUPIED') {
+    setBusyId(roomId);
+    try {
+      await apiClient.patch(`/rooms/${roomId}/status`, { status: next });
+      reload();
+    } catch {
+      // เงียบไว้ก่อน
     } finally {
       setBusyId(null);
     }
@@ -147,6 +175,7 @@ export default function AdminBookingsPage() {
               <th className="p-3 font-normal">{t.checkIn}</th>
               <th className="p-3 font-normal">{t.amount}</th>
               <th className="p-3 font-normal">{t.status}</th>
+              <th className="p-3 font-normal">{t.room}</th>
               <th className="p-3 font-normal"></th>
             </tr>
           </thead>
@@ -154,8 +183,10 @@ export default function AdminBookingsPage() {
             {filtered.map((b) => {
               const status = normalizeStatus(b.status);
               const badge = bookingStatusBadge(status, lang);
-              const canCancel = status === 'pending' || status === 'confirmed';
+              const isPaid = status === 'paid';
+              const canCancel = status === 'pending' || status === 'confirmed' || isPaid;
               const canRestore = status === 'cancelled';
+              const roomOccupied = (b.room?.status ?? '').toUpperCase() === 'OCCUPIED';
               return (
                 <tr key={b.id} className="border-b border-hairline last:border-0">
                   <td className="p-3 font-sans text-ink-subtitle">#{b.id.slice(0, 8).toUpperCase()}</td>
@@ -167,13 +198,28 @@ export default function AdminBookingsPage() {
                     <Badge label={badge.label} variant={badge.variant} />
                   </td>
                   <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        label={roomOccupied ? t.roomOccupied : t.roomFree}
+                        variant={roomOccupied ? 'critical' : 'good'}
+                      />
+                      <button
+                        onClick={() => handleRoomStatus(b.roomId, roomOccupied ? 'AVAILABLE' : 'OCCUPIED')}
+                        disabled={busyId === b.roomId}
+                        className="text-xs font-semibold text-tenant hover:underline disabled:opacity-50"
+                      >
+                        {roomOccupied ? t.returnRoom : t.cutRoom}
+                      </button>
+                    </div>
+                  </td>
+                  <td className="p-3">
                     {canCancel && (
                       <button
-                        onClick={() => handleCancel(b.id)}
+                        onClick={() => handleCancel(b.id, isPaid)}
                         disabled={busyId === b.id}
                         className="text-sm font-semibold text-danger hover:underline disabled:opacity-50"
                       >
-                        {busyId === b.id ? t.cancelling : t.cancel}
+                        {busyId === b.id ? t.cancelling : isPaid ? t.refundCancel : t.cancel}
                       </button>
                     )}
                     {canRestore && (

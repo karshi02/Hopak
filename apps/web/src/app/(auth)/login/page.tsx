@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
-import { setToken } from '@/lib/auth';
+import { setToken, rememberLogin, getRememberedLogin, forgetLogin } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -20,12 +20,14 @@ const TEXT = {
     ],
     haveAccount: 'ยังไม่มีบัญชี? สมัครสมาชิก',
     title: 'เข้าสู่ระบบ',
-    subtitle: 'เข้าสู่บัญชี Hopak ของคุณ',
+    subtitle: 'เข้าสู่บัญชี Hoprak ของคุณ',
     google: 'เข้าสู่ระบบด้วย Google',
     or: 'หรือ',
     emailLabel: 'อีเมล หรือ เบอร์โทร',
     passwordLabel: 'รหัสผ่าน',
     forgotPassword: 'ลืมรหัสผ่าน?',
+    lastUsed: 'ใช้ล่าสุด',
+    notYou: 'ไม่ใช่คุณ?',
     fillRequired: 'กรุณากรอกอีเมลและรหัสผ่าน',
     genericError: 'เข้าสู่ระบบไม่สำเร็จ',
     sessionExpired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
@@ -45,12 +47,14 @@ const TEXT = {
     ],
     haveAccount: "Don't have an account? Sign up",
     title: 'Log in',
-    subtitle: 'Log in to your Hopak account',
+    subtitle: 'Log in to your Hoprak account',
     google: 'Log in with Google',
     or: 'or',
     emailLabel: 'Email or phone',
     passwordLabel: 'Password',
     forgotPassword: 'Forgot password?',
+    lastUsed: 'Last used',
+    notYou: 'Not you?',
     fillRequired: 'Please enter your email and password',
     genericError: 'Log in failed',
     sessionExpired: 'Your session expired — please log in again',
@@ -87,7 +91,7 @@ function BrandPanel({ t }: { t: (typeof TEXT)['th'] }) {
             H
           </span>
           <span className="text-lg font-bold tracking-tight text-white">
-            Hopak<span className="text-[#6BA0F5]">.com</span>
+            Hoprak<span className="text-[#6BA0F5]">.com</span>
           </span>
         </div>
 
@@ -112,7 +116,7 @@ function BrandPanel({ t }: { t: (typeof TEXT)['th'] }) {
       </div>
 
       <div className="relative font-sans text-xs text-[#BFCDE6]">
-        © 2026 Hopak ·{' '}
+        © 2026 Hoprak ·{' '}
         <a href="/register" className="underline">
           {t.haveAccount}
         </a>
@@ -131,11 +135,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [remembered, setRemembered] = useState<string | null>(null);
 
   useEffect(() => {
     const queryError = searchParams.get('error');
     if (queryError === 'session_expired') setError(t.sessionExpired);
     else if (queryError) setError(queryError);
+
+    // จำอีเมล/เบอร์ที่ login ล่าสุด (ไม่จำรหัส) — เติมช่องอีเมลให้อัตโนมัติ ผู้ใช้กรอกแค่รหัส
+    const last = getRememberedLogin();
+    if (last) {
+      setRemembered(last);
+      setEmail(last);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -149,6 +161,7 @@ export default function LoginPage() {
     try {
       const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/login', { email, password });
       setToken(accessToken);
+      rememberLogin(email); // จำอีเมลไว้เติมให้ครั้งหน้า (ไม่เก็บรหัสผ่าน)
       router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.genericError);
@@ -193,8 +206,33 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 className={inputClass}
-              />  
+              />
             </div>
+
+            {remembered && (
+              <div className="-mt-1 flex items-center gap-2 text-xs">
+                {email !== remembered && (
+                  <button
+                    type="button"
+                    onClick={() => setEmail(remembered)}
+                    className="rounded-full bg-tenant/10 px-2.5 py-1 font-medium text-tenant hover:bg-tenant/15"
+                  >
+                    {t.lastUsed}: {remembered}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    forgetLogin();
+                    setRemembered(null);
+                    setEmail('');
+                  }}
+                  className="text-ink-faint underline"
+                >
+                  {t.notYou}
+                </button>
+              </div>
+            )}
 
             <div>
               <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-card-border bg-white px-3.5">

@@ -1127,3 +1127,411 @@ apps/web/src/app/(auth)/auth/google/callback/page.tsx
 สถานะ: แก้แล้ว + ยืนยันโค้ด redirect ใช้ # tsc ผ่าน 0 error ทั้ง 2 apps (28/07/2026)
 หมายเหตุ: เป็น finding จากการทำ pentest จริง (blue team ดู nginx log เจอ) —
 ตอกย้ำว่าควรมี security logging ในแอปเองด้วย (ยังเป็นช่องว่างที่ค้างอยู่)
+
+[64] [ความปลอดภัย] Session ค้างไม่หมดอายุเอง + login ซ้อนหลายเครื่องพร้อมกันได้ (1 บัญชีหลาย session)
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/auth/auth.service.ts (sign),
+apps/api/src/modules/auth/strategies/jwt.strategy.ts,
+apps/web/src/lib/auth.ts, apps/web/src/app/(auth)/login/page.tsx
+อาการ: (1) session ที่ login แล้วอยู่ได้ยาวจนกว่า JWT หมดอายุ 7 วัน (หรือโดน
+revoke เอง) — ไม่มี idle timeout เลย ถ้าเครื่องหลุดมือ/token ถูกขโมยไป ใช้ต่อได้
+นานมาก (2) sign() สร้าง Session ใหม่ทุก login โดยไม่ล้างตัวเก่า → 1 บัญชีมี
+session active หลายตัวพร้อมกัน คนที่รู้รหัสเดียวกัน login ค้างหลายเครื่องได้ ไม่มี
+การเตะออก
+แก้ไข (คำสั่งเจ้าของระบบ: ตัวใหม่เตะตัวเก่า + idle 30 นาที):
+- sign(): ก่อนออก token ใหม่ ทำ $transaction revoke ทุก session ที่ยัง active
+  ของ user คนนั้น (updateMany revokedAt=now) แล้วค่อย create แถวใหม่ →
+  1 บัญชี = 1 session อุปกรณ์เก่าโดน 401 request ถัดไปทันที (newest-wins)
+  ครอบทุกทางเข้า: login, adminLogin, register, loginWithGoogle (ทุกตัวเรียก sign)
+- jwt.strategy validate(): เพิ่มเช็ค idle — ถ้า now - session.lastSeenAt เกิน
+  30 นาที → set revokedAt แล้ว throw 401 "เซสชันหมดอายุจากการไม่ใช้งาน"
+  (lastSeenAt อัปเดตทุก request อยู่แล้ว) = auto-logout เมื่อไม่ใช้งาน
+- ฝั่ง client ไม่ต้องแก้เพิ่ม: api-client.ts จับ 401+token อยู่แล้ว → clearToken
+  + เด้งไป /login?error=session_expired อัตโนมัติ (session หมดอายุ/โดนเตะ เด้งออกเอง)
+- remember email (จำอีเมล ไม่จำรหัส): auth.ts เพิ่ม rememberLogin/getRememberedLogin/
+  forgetLogin (เก็บ localStorage 'hopak_last_login' เฉพาะ identifier ไม่เคยเก็บรหัส)
+  หน้า login: login สำเร็จ → rememberLogin(email); เปิดหน้า → prefill ช่องอีเมลให้
+  อัตโนมัติ + chip "ใช้ล่าสุด: xxx" กดกรอกด่วน + ปุ่ม "ไม่ใช่คุณ?" ล้างทิ้ง
+สถานะ: แก้แล้ว tsc --noEmit ผ่าน 0 error ทั้ง 2 apps (29/07/2026)
+หมายเหตุ: ไม่ต้อง migrate — Session มี lastSeenAt/revokedAt ครบอยู่แล้ว
+ข้อควรรู้: newest-wins แปลว่าถ้า user เปิดพร้อมกัน 2 แท็บ/2 เครื่องแล้ว login ใหม่
+เครื่องเดิมจะโดนเตะออก (ตามที่เลือกไว้) — เป็นพฤติกรรมตั้งใจ ไม่ใช่บั๊ก
+
+[64 แก้ไขเพิ่ม 29/07/2026] เจ้าของระบบรายงาน: เปิดหลายบราวเซอร์แล้วยังล็อกอินอยู่ทุกอัน
+(newest-wins เตะจริงฝั่ง backend — ยืนยันด้วย test: token เก่า→401) แต่บราวเซอร์เก่า
+"ยังโชว์ล็อกอินอยู่" เพราะไม่ได้ยิง request ใหม่ เลยไม่รู้ว่าโดนเตะ (client เด้งออก
+เฉพาะตอนเจอ 401 จาก api-client) — เป็นปัญหา visibility ฝั่ง client ไม่ใช่ backend
+แก้: เพิ่ม heartbeat เฝ้า session
+- backend: GET /auth/session (ไม่มี guard, รับ token ผ่าน header เอง) + checkSession()
+  ใน auth.service — verify jwt + เช็ค revoked/idle คืน {valid} สำคัญ: ไม่ bump lastSeenAt
+  (ต่างจาก request ผ่าน JwtStrategy) เพื่อให้ heartbeat เรียกถี่ได้โดยไม่กัน idle หมดอายุ
+- frontend: components/SessionWatcher.tsx (mount ใน root layout) poll ทุก 15 วิ +
+  ทุกครั้งที่สลับกลับมาที่แท็บ (visibilitychange/focus) ถ้า valid:false → clearToken +
+  เด้ง /login?error=session_expired ทันที
+ผล: บราวเซอร์เก่าโดนเตะออกจริงภายใน 15 วิ หรือทันทีตอนสลับแท็บ
+ทดสอบ: /auth/session token เก่า valid:false / ใหม่ valid:true / ไม่มี token false
+tsc ผ่าน 0 error ทั้ง 2 apps
+
+[64 แก้ไขเพิ่ม 29/07/2026] เจ้าของระบบรายงาน: กดรีเฟรชแล้วหลุด (ไม่ควรหลุด — รีเฟรช=กำลังใช้งาน)
+ต้นเหตุ: SessionWatcher เดิมเช็คด้วย /auth/session (ไม่ bump lastSeenAt) แม้ตอนโหลดหน้า/
+รีเฟรช เลยไม่นับรีเฟรชเป็นกิจกรรม (idle เดินต่อ) + บางครั้งหลุดเพราะโดนเตะจาก login ซ้ำ
+แก้: แยก 2 แบบใน SessionWatcher
+- activityCheck (โหลดหน้า/รีเฟรช/สลับกลับมาที่แท็บ) → ยิง /users/me ที่ bump lastSeenAt
+  = รีเซ็ตนาฬิกา idle → รีเฟรชไม่หมดอายุ (ตราบใดที่ยังไม่โดนเตะ/ไม่ idle เกิน 30 นาที)
+- passiveCheck (poll ทุก 15 วิ ระหว่างเปิดค้าง) → /auth/session ไม่ bump → ปล่อย idle เดิน
+  ตามจริง แต่ยังจับได้ว่าโดนเตะ/หมดอายุเพื่อเด้งออก
+สรุปพฤติกรรม: รีเฟรช/กลับมาที่แท็บ = อยู่ต่อ · ไม่แตะ 30 นาที = หลุด · login ที่อื่น = เตะตัวเก่า
+tsc ผ่าน 0 error
+
+[65] ระบบไม่เก็บค่ามัดจำ (ผู้เช่าจ่ายค่าห้องอย่างเดียว) + สูตรค่าคอม/ส่วนแบ่งเดิมคิดผิดฐาน
+--------------------------------------------------------
+ไฟล์: packages/shared/src/logic/commission.ts, constants/fees.ts, types/booking.ts,
+apps/api/prisma/schema.prisma (migration add_booking_price_deposit),
+apps/api/src/modules/bookings/bookings.service.ts (create),
+apps/api/src/modules/payments/payments.service.ts,
+apps/api/src/modules/admin/finance/finance.service.ts (listDetailed, getOwnerDetail),
+apps/web: bookings/new, bookings/[id], bookings/[id]/pay, admin/finance,
+admin/finance/owners/[ownerId], partner/dashboard
+อาการ (เจ้าของระบบรายงาน): (1) ตอนจอง booking.amount = room.pricePerMonth อย่างเดียว
+ค่ามัดจำไม่ถูกเก็บผ่านระบบเลย → ผู้เช่าต้องไปจ่ายมัดจำกับเจ้าของหอเองนอกระบบ = เสี่ยง
+โดนโกง (2) หน้าจองโชว์มัดจำเป็น "ชำระกับหอโดยตรง" และยอดจ่ายรวมไม่รวมมัดจำ
+คำสั่งเจ้าของระบบ + สูตรที่ตกลง:
+- amount = ค่าห้อง + มัดจำ (เก็บรวมกับ Hopak ทั้งก้อน กันโกง) เช่น 1800+2000=3800
+- ค่าคอม 20% คิดจาก "ค่าห้อง" เท่านั้น (มัดจำไม่โดนหัก ส่งเจ้าของเต็ม)
+- หอการค้า (chamberShare) = 10% ของ "ค่าคอม" (ไม่ใช่ 10% ของยอดเต็มแบบเดิม)
+  เช่น ค่าห้อง 100 → คอม 20 → หอการค้า 2 ; แพลตฟอร์ม = 90% ของคอม = 18
+- เจ้าของหอได้ = (ค่าห้อง − คอม) + มัดจำเต็ม เช่น (1800−360)+2000 = 3440
+แก้ไข:
+- schema: Booking เพิ่ม roomPrice, deposit (snapshot ตอนจอง กันราคาห้องเปลี่ยนภายหลัง)
+  migrate + backfill roomPrice=amount ให้ booking เก่า (deposit คง 0 เพราะเดิมไม่เก็บ)
+- commission.ts: calcCommission(rent)=20%rent; calcChamberShare=10%ของคอม;
+  calcPlatformShare=คอม−chamber; calcOwnerPayout(rent,deposit)=rent−คอม+deposit
+- bookings.create: roomPrice=pricePerMonth, deposit=ห้อง||หอ, amount=รวม
+- payments: คิด commission/chamber/platform จาก booking.roomPrice, payout รวมมัดจำ
+- finance.service: listDetailed/getOwnerDetail คืน roomPrice+deposit เพิ่ม
+- web tenant: หน้าจองโชว์ยอดรวม (ค่าห้าง+มัดจำ) + มัดจำเปลี่ยนข้อความเป็น "ชำระผ่าน
+  Hopak พร้อมค่าเช่า (กันโอนตรงเจ้าของหอ)"; ใบเสร็จ/หน้าจ่ายเงินแยกโชว์ค่าห้อง/มัดจำ
+- web admin finance + owner detail: เพิ่มคอลัมน์ ค่าห้อง/มัดจำ + แก้ label %
+  ที่ไม่ตรง (เดิม "หอการค้า 10%/แพลตฟอร์ม 10%/โอนเจ้าของ 80%")
+- web partner/dashboard: จุดสำคัญ — เดิม calcOwnerPayout(รวมยอดทั้งเดือน) จะหักคอม
+  จากมัดจำผิด แก้เป็นคิด payout ต่อ booking จาก roomPrice/deposit แยก แล้วรวม
+สถานะ: แก้แล้ว migration apply + backfill สำเร็จ, ตรวจตัวเลขด้วย node ตรงเป๊ะ
+(100→คอม20→หอการค้า2; 1800+2000→คอม360 chamber36 platform324 payout3440)
+tsc --noEmit ผ่าน 0 error ทั้ง 2 apps (29/07/2026)
+หมายเหตุ: มัดจำเป็นเงินประกันของผู้เช่า — ตอนนี้ Hopak เก็บแล้วส่งต่อเจ้าของหอเต็ม
+(เจ้าของหอถือไว้คืนผู้เช่าตอนย้ายออกเอง) ระบบยังไม่มี flow "คืนมัดจำ" อัตโนมัติ
+(ถ้าต้องการให้ Hopak เป็นคนถือ/คืนมัดจำแทน ค่อยทำเพิ่มทีหลัง)
+
+[65 แก้ไขเพิ่ม 29/07/2026] เจ้าของระบบเปลี่ยนใจ: คอม 20% คิดจาก "ยอดรวม" (ค่าห้อง+มัดจำ)
+ไม่ใช่ค่าห้องอย่างเดียว — มัดจำโดนหักคอมด้วย
+- commission.ts กลับมารับ arg เดียว (ยอดรวม): calcCommission(amount)=20%amount;
+  chamber=10%ของคอม; platform=90%ของคอม; ownerPayout(amount)=amount−คอม (80%)
+- payments.service: คิดทุกอย่างจาก booking.amount (ยอดรวม) ไม่ใช่ roomPrice
+- partner/dashboard: monthlyNet = calcOwnerPayout(ยอดรวมทั้งเดือน) (80% ของยอดรวม)
+- roomPrice/deposit ยังเก็บ+โชว์แยกในแดชบอร์ดเหมือนเดิม (แค่ไม่ใช่ฐานคิดคอมแล้ว)
+- label finance กลับเป็น "คอม 20% / โอนเจ้าของ 80%" (ตรงกับยอดรวม)
+ตัวเลขใหม่ ยอดรวม 3800: คอม 760, หอการค้า 76, แพลตฟอร์ม 684, เจ้าของได้ 3040
+tsc ผ่าน 0 error ทั้ง 2 apps
+
+[65 แก้ไขเพิ่ม 2 29/07/2026] เจ้าของระบบสั่ง: ปิดส่วนแบ่งหอการค้าไว้ก่อน หัก 20% เพียวๆ
+- fees.ts: CHAMBER_RATE = 0 (เดิม 0.1) → chamberShare=0, platformShare=คอมเต็ม
+  เปิดกลับเมื่อพร้อมแค่ตั้ง 0.1 (โครงสร้าง+field เก็บครบ ไม่ต้องแก้โค้ดอื่น)
+- web finance + owner detail: เอาการ์ดสรุป "หอการค้ามหาสารคาม" + คอลัมน์หอการค้าออก
+  (grid 4→3 คอลัมน์) label แพลตฟอร์ม = "รายได้แพลตฟอร์ม (คอม 20%)"
+สรุปสูตรสุดท้าย: ผู้เช่าจ่าย ค่าห้อง+มัดจำ → หัก 20% เข้าแพลตฟอร์ม → เจ้าของได้ 80%
+
+[66] เพิ่มหน้า admin ประวัติการเข้าสู่ระบบ (IP + บราวเซอร์ที่ใช้)
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/admin/users/{admin-users.service,admin-users.controller}.ts,
+apps/web/src/app/(admin)/admin/sessions/page.tsx (ใหม่),
+apps/web/src/app/(admin)/admin/layout.tsx (nav + title map)
+คำขอ: หน้า admin เก็บ/ดูประวัติการเข้าใช้งาน พร้อม IP และบราวเซอร์
+ทำ: Session model เก็บ ip/userAgent/createdAt/lastSeenAt/revokedAt อยู่แล้ว (ไม่ต้อง
+migrate) — เพิ่ม
+- backend GET /admin/users/sessions (admin only, วางก่อน :id routes) คืน 200 รายการ
+  ล่าสุด: ชื่อ/อีเมล/บทบาทผู้ใช้ + ip + userAgent + loginAt + lastSeenAt + active
+- frontend หน้า /admin/sessions: ตารางผู้ใช้/บทบาท/IP/บราวเซอร์(parse ua เป็น
+  Chrome·Windows ฯลฯ ไม่ใช้ไลบรารี)/เข้าเมื่อ/ใช้ล่าสุด/สถานะ(ใช้งานอยู่·สิ้นสุด)
+  + ปุ่มกรอง "เฉพาะที่ใช้งานอยู่" + เมนู sidebar + title
+สถานะ: แก้แล้ว ทดสอบ endpoint คืน 17 sessions จริง tsc ผ่าน 0 error ทั้ง 2 apps
+หมายเหตุ: ผูกกับ [64] — active=session ที่ยังไม่ revoke (เห็นได้ว่าใครโดนเตะ/idle ไปแล้ว)
+
+[66 เพิ่ม 29/07/2026] ดูประวัติย้อนหลังทีละเดือน (เก็บเป็นเดือนๆ)
+- backend: listSessions(year?,month?) filter ตาม createdAt range +
+  GET /admin/users/sessions/periods คืนเดือน/ปีที่มีข้อมูล (วางก่อน route sessions)
+  ไม่เลือกเดือน=200 ล่าสุด · เลือกเดือน=ทุกรายการเดือนนั้น (take 1000)
+- frontend หน้า /admin/sessions: dropdown เลือกเดือน (ทุกเดือน + รายเดือนจาก periods)
+  ดูย้อนหลังได้ตลอด — เปลี่ยนเดือนแล้ว refetch
+ทดสอบ: periods=[ก.ค.2026], กรองเดือน 7/2026 คืน 19 รายการ tsc ผ่าน 0 error
+
+[67] ระบบตัดห้อง: ย้ายจากเจ้าของหอ (เสี่ยงทุจริต) มาให้ระบบ/แอดมินคุม
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/admin/finance/finance.service.ts (settlePayment),
+apps/api/src/modules/bookings/bookings.service.ts (adminCancel),
+apps/api/src/modules/rooms/{rooms.service,rooms.controller}.ts (setStatus),
+apps/web: (partner)/partner/rooms/page.tsx, (admin)/admin/bookings/page.tsx
+คำขอ: เดิมเจ้าของหอกดตัดห้องเอง = เสี่ยงทุจริต. เปลี่ยนเป็น:
+- แอดมินเคลียร์บิล (แมนนวล เช็คบัญชีแล้วกดเอง) → ระบบตัดห้องอัตโนมัติ + ออกโทเค็น
+- แอดมินตัด/คืนห้องเองได้ต่อห้อง · คืนห้อง = ยกเลิกการจอง (คืนเงินเบื้องหลัง)
+- เอาสิทธิ์ตัดห้องออกจากเจ้าของหอ
+แก้:
+- settlePayment: หลัง booking PAID → room = OCCUPIED อัตโนมัติ (โชว์ไม่ว่างบนเว็บทันที)
+  เดิม markPaid() ที่ตัดห้องไม่มีใครเรียก = ห้องค้างว่างทั้งที่จองแล้ว
+- adminCancel: override (ไม่เช็ค state machine) ยกเลิกได้ทุกสถานะรวม PAID +
+  $transaction booking CANCELLED + room AVAILABLE + แจ้งผู้เช่า = "คืนห้อง/คืนเงิน"
+- rooms setStatus: @Roles('owner')→'admin', service ตัด ownership check (แอดมินคุม)
+- partner/rooms: เอาปุ่มตัด/คืนห้องออก เหลือ badge สถานะ read-only (จัดการโดยระบบ)
+- admin/bookings: เพิ่มคอลัมน์ "ห้อง" (badge ว่าง/ไม่ว่าง + ปุ่มตัด/คืน) +
+  ปุ่ม "คืนห้อง (คืนเงิน)" สำหรับ booking PAID (confirm ก่อน) เรียก admin-cancel
+สถานะ: แก้แล้ว tsc --noEmit ผ่าน 0 error ทั้ง 2 apps (29/07/2026)
+Decisions เจ้าของระบบ: คืนห้อง=ยกเลิก+ห้องว่าง · เอาปุ่มตัดห้องเจ้าของออก
+หมายเหตุ: การคืนเงินจริงทำเบื้องหลัง (ยังไม่มี flow refund อัตโนมัติในระบบ)
+
+[68] หน้า booking flow ขั้นตอน 2-5 UI พื้นๆ ไม่ตรงดีไซน์ (Hoprak User Booking.dc.html)
+--------------------------------------------------------
+ไฟล์: apps/web/src/components/booking/{BookingStepper,BookingSummary}.tsx (ใหม่),
+apps/web/src/app/(tenant)/bookings/[id]/page.tsx, bookings/[id]/pay/page.tsx
+อาการ: ดีไซน์เป็น flow ขั้นตอนเดียว — stepper แนวนอน 5 ขั้น + panel ซ้ายเปลี่ยนตามขั้น +
+sidebar สรุปขวา. หน้า /new (step1) ทำตรงแล้ว แต่ step 2-5 (detail + pay) ยังเป็น UI พื้น
+(stepper เป็นลิสต์ข้อความ, หน้า pay เป็นกล่อง QR เปล่าๆ, ไม่มีการ์ด waiting/confirmed)
+แก้:
+- BookingStepper: stepper แนวนอน 5 ขั้น (done เขียว/active น้ำเงิน/upcoming เทา) ใช้ร่วมทุกหน้า
+- BookingSummary: sidebar สรุป (รูป+เรตติ้ง+ชื่อหอ + ค่าเช่า/มัดจำ/ยอดรวม + reassurance)
+  รับ children เป็นปุ่ม CTA เฉพาะแต่ละขั้น
+- bookings/[id]: รื้อ layout ตามดีไซน์ (header back+title+sub, stepper, grid 2 คอลัมน์)
+  panel ซ้ายตามสถานะ: pending=การ์ดรอยืนยัน(spinner+เตือน), confirmed=การ์ดยืนยัน+สรุป,
+  paid/completed=ใบเสร็จ+โทเค็น(ของเดิม), cancelled=การ์ดยกเลิก. CTA ใน sidebar ตามสถานะ
+- bookings/[id]/pay (step4): รื้อใหม่ — การ์ดบัญชีโอน(คัดลอกเลขบัญชี) + dropzone แนบสลิป
+  (พรีวิวรูป) + stepper + sidebar สรุป. คงตรรกะอัปโหลดสลิปเดิม (FormData → /payment)
+stepper map: pending→2 confirmed→3 pay→4 paid/completed→5
+สถานะ: แก้แล้ว tsc ผ่าน 0 error, route /bookings/:id + /pay คืน 200 (ไม่ 500)
+(29/07/2026) ยังไม่ได้ E2E เบราว์เซอร์จริง — ผู้ใช้เทสด้วยการจองจริงได้เลย
+
+[69] Google login พัง "google_login_failed" — fragment (#token) หายตอน 302 redirect ข้าม origin
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/auth/{auth.service,auth.controller}.ts,
+apps/web/src/app/(auth)/auth/google/callback/page.tsx
+อาการ: login ด้วย Google เด้งกลับ /login?error=google_login_failed ทุกครั้ง
+ต้นตอ: การแก้ [63] เปลี่ยน redirect จาก ?token= เป็น #token= (กัน JWT รั่ว log/Referer)
+แต่ URL fragment (#) "ไม่รอด" การ 302 redirect ข้าม origin (:4000 API → :3001 web) —
+เบราว์เซอร์ทิ้ง fragment ทำให้หน้า callback อ่าน token ไม่เจอ เข้าเงื่อนไข else → error
+ยืนยันด้วย headless: ใส่ #token= ตรงๆ อ่านได้ (hasToken true) แต่ผ่าน redirect จริงหาย
+แก้ (one-time exchange code — ปลอดภัย + รอด redirect):
+- auth.service: googleCodes Map เก็บ {code -> token, หมดอายุ 2 นาที} + createGoogleExchangeCode()
+  + exchangeGoogleCode() (ใช้ครั้งเดียว ลบทันที + กวาดหมดอายุ)
+- auth.controller: callback สร้าง code แล้ว redirect ?code=<code> (query รอด redirect),
+  เพิ่ม POST /auth/google/exchange (@RateLimit 20/นาที) แลก code -> {accessToken}
+- web callback: อ่าน ?code จาก query แล้ว POST แลก JWT → setToken → window.location.replace('/')
+  (hard nav กัน Next router ค้างหลังเปลี่ยน URL — เจอบั๊กรองว่า router.replace ไม่ navigate)
+เหตุผลปลอดภัย: code หลุด log ก็ไร้ค่า (ใช้ครั้งเดียว/2 นาที) ต่างจาก JWT 7 วันที่หลุดแล้วเข้าบัญชีได้
+สถานะ: แก้แล้ว tsc ผ่าน 0 error ทั้ง 2 apps, ทดสอบ headless: code ปลอม→เด้ง error ถูก,
+exchange bad code→401 (29/07/2026)
+หมายเหตุ: prod ก็มีบั๊กนี้จาก [63] เหมือนกัน — ต้อง deploy fix นี้ด้วยตอนขึ้น prod
+
+[70] หน้า pay ดีดกลับ step 3 หลังจ่าย + ขาด state "รอแอดมินตรวจสลิป"
+--------------------------------------------------------
+ไฟล์: apps/api/src/modules/bookings/bookings.service.ts (findOne include payment),
+packages/shared/src/types/booking.ts (payment field),
+apps/web: bookings/[id]/page.tsx, bookings/[id]/pay/page.tsx
+อาการ: หลังผู้เช่าจ่าย/แนบสลิป → payment=PENDING แต่ booking ยัง CONFIRMED
+(รอแอดมินเคลียร์บิล) → หน้า detail โชว์ step 3 (confirmed) พร้อมปุ่มจ่ายอีก = เหมือนถอย
+กลับ. หน้า pay ก็เข้าซ้ำได้ทั้งที่จ่ายแล้ว
+แก้:
+- findOne include payment.status → frontend รู้ว่าจ่าย/แนบสลิปแล้วหรือยัง
+- Booking type เพิ่ม payment?: {status}
+- detail: เพิ่ม state awaitingVerify (confirmed + มี payment) = step 4 การ์ด "แนบสลิป
+  เรียบร้อย · รอแอดมินตรวจสอบ" (spinner) + ปุ่มเทา "รอแอดมินตรวจสลิป" (ไม่โชว์ปุ่มจ่ายซ้ำ)
+  แยก canPay (confirmed + ยังไม่จ่าย) = step 3 โชว์ปุ่มจ่าย
+- pay page guard: จ่ายได้เฉพาะ CONFIRMED + ยังไม่มี payment, สถานะอื่นเด้งกลับ detail
+  ใช้ window.location.replace (hard nav) — router.replace บางครั้งไม่ navigate ใน App Router
+สถานะ: แก้แล้ว tsc ผ่าน 0 error, ถ่ายจอยืนยัน state รอตรวจสลิป render ถูก (step 4)
+หมายเหตุ: หน้า detail มี socket booking:updated refetch อยู่แล้ว → แอดมินเคลียร์บิล
+หน้าเด้งเป็น step 5 (ใบเสร็จ) เองเรียลไทม์ ไม่ต้องรีเฟรช
+
+[71] แจ้งเตือนเรียลไทม์: กระดิ่งเด้ง + toast แดง ตอนมี notification ใหม่
+--------------------------------------------------------
+ไฟล์: apps/web/src/components/Navbar.tsx
+คำขอ: มี notification ให้วิ่งเข้ากระดิ่ง + toast แดงเรียลไทม์ ไม่ต้องรีเฟรช
+ทำ: socket 'notification:new' (มีอยู่แล้วจาก [60]) เดิมแค่เพิ่มตัวนับ — เพิ่ม:
+- กระดิ่ง ping ring แดง + icon เด้ง (animate-bounce) 2.5 วิ เมื่อมีใหม่
+- toast แดงมุมขวาบน (title+body ของ notification) กดไปหน้าแจ้งเตือน หายเองใน 6 วิ
+สถานะ: แก้แล้ว tsc ผ่าน 0 error (30/07/2026)
+
+[72] อัฟเดท UI หน้าแรก (/) ให้ตรงดีไซน์ Hopak Web Home (DesignSync)
+ไฟล์: apps/web/src/app/page.tsx
+- Hero: gradient ฟ้าสว่าง linear-gradient(120deg,#2F6FE0,#2456B8) แทนกรมท่าเข้ม
+- การ์ดค้นหาลอยทับ hero (-mt-120/140px, z-2) ขอบฟ้า border-tenant แทนขอบส้ม
+- แท็บ หอพักรายเดือน/รายวัน มุมโค้งบน ต่อกับการ์ด
+- โครงในการ์ด: ช่องค้นหาใหญ่เต็มบน + ประเภทห้อง/งบประมาณ 2 คอลัมน์ + ปุ่มค้นหาเต็มความกว้าง
+- ชิปยอดนิยมย้ายมาใต้การ์ด (พื้นขาว border เทา) แทนชิปโปร่งบน hero
+- Footer: เปลี่ยนพื้นดำเป็นขาว 5 คอลัมน์ + แถบดำล่าง (โลโก้+copyright)
+- คง logic เดิมครบ: ค้นหาจริง, Google Places autocomplete, i18n TH/EN, favorites, กระดิ่งแจ้งเตือน realtime, ข้อมูลหอจริง
+สถานะ: แก้แล้ว tsc ผ่าน 0 error ยืนยันด้วย screenshot (30/07/2026)
+
+[73] เพิ่มหน้าแอดมิน "แก้ไขหน้าแรก (inline)" — แก้ข้อความหน้าแรกแบบคลิกพิมพ์ทันที (DesignSync: Hopak Admin Inline Edit)
+Backend:
+- schema SiteSettings + homeContent Json @default("{}") (migration add_home_content)
+- settings.service: setHomeContent (merge/trim, ช่องว่าง=ลบ override), clearHero (เอารูป hero ออก), getHero คืน homeContent
+- settings.controller: POST /admin/settings/home-content, DELETE /admin/settings/hero (admin only)
+Frontend:
+- หน้าใหม่ apps/web/src/app/(admin)/admin/website/edit/page.tsx: sticky save bar + ตัวนับจุดที่แก้ (เทา/เขียว), hint strip, live preview แก้ inline (contentEditable) ของ hero title/subtitle, การ์ดจุดขาย 3 ใบ (tag/title/sub), หัวข้อ+คำโปรย "ทำเลยอดนิยม", trust cards 3 ใบ
+- เปลี่ยน/เอารูปพื้นหลัง hero (อัปโหลด/ลบ บันทึกทันที) ปุ่มมุมขวาบน
+- ปุ่มยกเลิก (remount คืนค่าเดิม) + บันทึก (POST home-content + promos) + toast
+- แก้เฉพาะภาษาไทย (อังกฤษใช้ default) ตามดีไซน์
+- หน้าแรก page.tsx: consume homeContent ทับ default เมื่อดูภาษาไทย (heroTitle/subtitle, zonesTitle/sub, trust 3 ใบ) ช่องว่าง=ใช้ default
+- เพิ่มเมนู sidebar แอดมิน "แก้ไขหน้าแรก (inline)" / "Edit Homepage (inline)"
+สถานะ: แก้แล้ว tsc ผ่าน 0 error ทั้ง api+web, migration ลงแล้ว, /settings/hero คืน homeContent, หน้าแรก render ปกติ (30/07/2026)
+
+[74] อัปโหลดรูปพื้นหลัง hero แล้วหน้าแรกไม่เปลี่ยน
+สาเหตุ: heroImageUrl เก็บใน DB ถูกต้อง (POST /admin/settings/hero คืน 201 เปลี่ยน URL จริง) แต่หน้าแรก apps/web/src/app/page.tsx hero hardcode เป็น gradient ฟ้าตายตัว ไม่เคย consume heroImageUrl
+แก้: page.tsx เพิ่ม state heroImageUrl (ดึงจาก /settings/hero), hero div ใช้รูปเป็น background (bg-cover/center) + overlay เข้ม rgba(20,40,90,.62/.42) ให้ตัวอักษรขาวอ่านออก; ไม่มีรูป = gradient เดิม
+สถานะ: แก้แล้ว tsc ผ่าน ยืนยันด้วย screenshot (หน้าแรกโชว์รูป hero ที่อัปโหลด) — เทส upload backend คืน 201 เปลี่ยน URL จริง (30/07/2026)
+
+[75] hero: เอา overlay/ฟิลเตอร์ออกให้เห็นภาพจริง + เลือกสีพื้นหลังตอนไม่มีรูป
+- เอา overlay เข้มบนรูป hero ออกทั้งหน้าแรก + หน้า editor → เห็นภาพจริงชัด ใส่ text-shadow แทนให้ตัวอักษรขาวยังอ่านออก
+- ตอนไม่มีรูป: เลือกสีพื้นหลัง hero ได้จาก palette 8 สี (ฟ้าเริ่มต้น=gradient / ฟ้าเข้ม / กรมท่า / เขียว / ส้ม / ม่วง / แดง / ชมพู)
+Backend: HomeContent + heroColor (validate ^#[0-9a-fA-F]{3,8}$ กันค่าขยะ, ว่าง=ลบ)
+Frontend หน้าแรก: hero ใช้ heroColor เป็นพื้นหลังตอนไม่มีรูป, มีรูป=ภาพจริงไม่มี filter + text-shadow
+Frontend editor: palette วงกลมสีใต้ hero (โชว์เฉพาะตอนไม่มีรูป) กดเลือก=dirty บันทึกลง home-content
+สถานะ: แก้แล้ว tsc ผ่าน api+web, เทส heroColor: hex ผ่าน/ค่าขยะถูกปฏิเสธ/ว่างล้าง, screenshot หน้าแรกภาพ hero ไม่มี filter แล้ว (30/07/2026)
+
+[76] hero: เลือกตำแหน่งรูป (background-position) พรีวิวสดก่อนบันทึก
+Backend: HomeContent + heroPos ("X% Y%") validate ^\d{1,3}% \d{1,3}%$ (ค่าขยะ/ผิดรูป=ไม่เก็บ ใช้ center)
+Frontend หน้าแรก: hero backgroundPosition = homeContent.heroPos || center (เฉพาะตอนมีรูป)
+Frontend editor: ตอนมีรูปโชว์ slider 2 อัน (แนวนอน/แนวตั้ง 0-100%) + ปุ่มรีเซ็ตกึ่งกลาง เลื่อน=พรีวิวสด, dirty, บันทึกลง home-content
+สถานะ: แก้แล้ว tsc ผ่าน api+web, เทส heroPos: ค่าถูกเก็บ/ค่าขยะปฏิเสธ, screenshot ยืนยันรูปเลื่อนตำแหน่งตาม % จริง (30/07/2026)
+
+[77] ปฏิเสธหอพัก (register seller): เดิม reject แค่ตั้ง REJECTED ไม่มีเหตุผล ไม่แจ้งเตือน เจ้าของหอแก้/ส่งใหม่ไม่ได้ (ค้าง) — ทำระบบใหม่
+Schema: Dorm + rejectionReason String?, rejectionCount Int @default(0) (migration dorm_rejection_reason)
+Backend:
+- ApprovalsService.reject(dormId, adminId, reason): บังคับมีเหตุผล (ว่าง=400), ตั้ง REJECTED + เก็บ reason + rejectionCount+1, แจ้งเตือนเจ้าของหอ in-app (type DORM_REJECTED, realtime) + อีเมล (เหตุผล+วิธีแก้), ครบ 3 ครั้งข้อความเตือนว่าอาจถูกระงับ
+- approve() ล้าง rejectionReason
+- DormsService.resubmit(ownerId, id): หอที่ REJECTED → PENDING_APPROVAL + ล้าง reason (คง count เป็นประวัติ), เช็ค ownership + สถานะ
+- routes: PATCH /admin/approvals/:dormId/reject (body reason), PATCH /dorms/:id/resubmit (owner)
+Frontend:
+- admin approvals: กดปฏิเสธ → prompt กรอกเหตุผล+วิธีแก้ (ยกเลิก=ไม่ปฏิเสธ), โชว์ "ถูกปฏิเสธ N ครั้ง" + เหตุผลครั้งก่อน, ครบ 3 ครั้งขึ้นปุ่ม "ระงับหอนี้ทันที"
+- partner dashboard: แบนเนอร์แดงหอที่ถูกปฏิเสธ + เหตุผล/วิธีแก้ + ปุ่มแก้ไขข้อมูล + ส่งอนุมัติใหม่
+- shared Dorm type + rejectionReason/rejectionCount
+เทส (owner@hopak.com + admin): reason ว่าง=400, reject=REJECTED count1 reason เก็บ, owner ได้ notif DORM_REJECTED, resubmit=PENDING_APPROVAL reason=null, reject 3 ครั้ง count=3
+หมายเหตุ: ไม่ได้ทำ owner→user ปกติ ตอน reject (ขัดกับ "แก้แล้วส่งใหม่" ที่ต้องคง owner) — คงบัญชี owner ไว้ให้แก้+ส่งกลับ รอยืนยันถ้ายังอยากให้ downgrade
+สถานะ: แก้แล้ว tsc ผ่าน api+web, เทส flow ครบผ่าน (30/07/2026)
+
+[77b] ปรับเพิ่ม: reject หอ → ลดสิทธิ์เจ้าของหอกลับเป็น user ปกติ (TENANT) + คืนสิทธิ์ตอนอนุมัติ
+- ApprovalsService.reject: หลังตั้ง REJECTED ถ้าเจ้าของ "ไม่มีหออื่นที่ APPROVED" → ลด role OWNER→TENANT (กันเจ้าของหลายหอเสียสิทธิ์หอที่ดี), แจ้งเตือนบอกให้ขอเป็นเจ้าของหอใหม่
+- ApprovalsService.approve: คืน role → OWNER (เผื่อโดนลดตอนถูกปฏิเสธก่อนหน้า)
+- flow ใหม่: reject → เป็น user ปกติ → ขอเป็นเจ้าของหออีกครั้ง (become-owner) → แอดมินอนุมัติ = คืน OWNER → แก้หอ+ส่งอนุมัติใหม่ ; ครบ 3 ครั้งระงับได้
+เทส: owner สร้างใหม่ (หอเดียว) reject→role TENANT, approve→role OWNER ; owner@hopak.com (มีหอ APPROVED อื่น) reject→ยังเป็น OWNER (guard ทำงาน)
+หมายเหตุ: token เดิมยัง cache role OWNER จนกว่า re-login (role อยู่ใน JWT) — ผลเต็มตอนล็อกอินใหม่
+สถานะ: แก้แล้ว tsc api ผ่าน เทส demote/restore ผ่าน ลบ test data แล้ว (30/07/2026)
+
+[78] ขอเป็นเจ้าของหอ (become-owner) กดครั้งเดียว = คำขอเปล่า admin ไม่มีข้อมูล/เอกสารตรวจ
+Schema: OwnerRequest + phone, dormName, province, address, note, documents String[] (migration owner_request_details)
+Backend:
+- UsersService.requestOwner(userId, dto, files): บังคับกรอก dormName+province+phone + แนบเอกสาร >=1 (ว่าง=400), อัปโหลดเอกสารแบบ private, สร้าง OwnerRequest พร้อมข้อมูล; ถ้ามีคำขอ pending อยู่แล้ว=409
+- myOwnerRequest + admin listPending: แปลง documents (storage key) เป็น signed URL
+- controller become-owner: FilesInterceptor('documents',6) multipart
+- OwnerRequestsService inject UploadsService
+Frontend:
+- profile OwnerPitch: เปลี่ยนปุ่มกดครั้งเดียว เป็นฟอร์ม (ชื่อหอ/จังหวัด(select)/เบอร์/ที่อยู่/หมายเหตุ + อัปโหลดเอกสารหลายไฟล์) submit multipart, validate ก่อนส่ง
+- admin owner-requests page: โชว์ ชื่อหอ/จังหวัด/ที่อยู่/หมายเหตุ + ลิงก์เอกสาร
+- shared OwnerRequest type + ฟิลด์ใหม่
+เทส (tenant ใหม่ + admin): empty=400, submit(fields+doc)=201 เก็บครบ, myOwnerRequest คืน signed URL, admin เห็นข้อมูล+เอกสาร signed
+สถานะ: แก้แล้ว tsc api+web ผ่าน migration ลงแล้ว เทส flow ผ่าน ลบ test data (30/07/2026)
+
+[79] become-owner (/profile "ขอเป็นเจ้าของหอ") เปลี่ยนจากฟอร์มเดียว เป็น wizard ทีละขั้น (เหมือน /partner-register)
+- profile OwnerPitch: stepper 3 ขั้น
+  1) ข้อมูลหอพัก (ชื่อหอ/จังหวัด/เบอร์/ที่อยู่/หมายเหตุ) — validate ก่อนไปต่อ
+  2) เอกสารยืนยัน (อัปโหลดหลายไฟล์) — บังคับ >=1 ก่อนไปต่อ
+  3) ตรวจสอบและส่ง (สรุปข้อมูล + ปุ่มส่งคำขอ)
+- ปุ่ม ถัดไป/ย้อนกลับ/ยกเลิก, แถบ step 1→2→3, backend เดิม (POST multipart /users/me/become-owner)
+- verify: screenshot wizard ขั้น 1 render ครบ (stepper + fields + ถัดไป/ยกเลิก), tsc web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+
+หมายเหตุ: ระหว่างงานนี้ API dev process ดับชั่วคราว (client เจอ "Failed to fetch") — restart pnpm dev แล้ว api+web=200 กลับปกติ ไม่ใช่บัคโค้ด
+
+[80] เอาการ์ด "เปิดหอพักกับ Hoprak / ขอเป็นเจ้าของหอ" (OwnerPitch wizard) ออกจาก /profile ตามที่ผู้ใช้ขอ
+- ลบ render {isTenant && <OwnerPitch/>} + ลบ component OwnerPitch ทั้งก้อน + ลบ import PROVINCES/OwnerRequest ที่ไม่ใช้
+- backend become-owner (endpoint + wizard logic) ยังคงอยู่ เผื่อเปิดใช้ทีหลัง
+- tsc web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+
+[81] แดชบอร์ดเจ้าของหอ: เพิ่มการ์ด "สรุปรายได้เดือนนี้ (แยกรายละเอียด)"
+- แยก ค่าห้อง (เต็ม) / ค่ามัดจำ (เต็ม) / ยอดเต็มเดือนนี้ (room+deposit)
+- แถวสรุป: ยอดเต็ม → หักค่าคอมมิชชัน 20% (−) → คงเหลือสุทธิ (80%)
+- โบนัส: ป้าย "เร็วๆ นี้" (ยังไม่ทำระบบ)
+- คำนวณจาก paid/completed bookings เดือนปัจจุบัน (b.roomPrice, b.deposit) ใช้ calcCommission/calcOwnerPayout
+- ไฟล์: apps/web/src/app/(partner)/partner/dashboard/page.tsx (TEXT th/en + การ์ดหลัง grid รายได้/occupancy)
+- verify: tsc web ผ่าน; ข้อมูลจริง owner@hopak.com เดือนนี้ ค่าห้อง3500/มัดจำ0/เต็ม3500/หัก700/สุทธิ2800 ถูกต้อง
+สถานะ: แก้แล้ว (30/07/2026)
+
+[82] /partner/settings: เพิ่มช่องกรอกเบอร์ติดต่อเจ้าของหอพัก
+- การ์ด "ข้อมูลเจ้าของหอพัก" เพิ่ม input เบอร์โทร (แก้ได้) โหลดจาก user.phone
+- handleSave เดิม PATCH /users/me เพิ่ม field phone (บันทึกพร้อมข้อมูลรับเงินด้วยปุ่มเดียว)
+- backend รองรับอยู่แล้ว (UpdateProfileDto.phone)
+- TEXT th/en (ownerPhone/placeholder)
+- เทส: PATCH /users/me phone null→0891234567→คืนค่า ผ่าน; tsc web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+
+[83] หน้าโอนเงินแอดมิน (finance/payouts) โชว์เบอร์เจ้าของหอ เผื่อติดต่อกลับ
+- finance.service listPendingPayouts: เพิ่ม ownerPhone: dorm.owner.phone
+- admin finance page: PendingPayout + ownerPhone; โชว์ในการ์ดหอ (📞 ข้างชื่อเจ้าของ) + ในโมดัลยืนยันโอนเงิน
+- เทส: PATCH เบอร์เจ้าของ → GET /admin/finance/payouts คืน ownerPhone ถูกต้อง; tsc api+web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+
+[84] แดชบอร์ดเจ้าของหอ: การ์ด "รายได้จากการโอน" (รอโอน/โอนแล้ว) อัปเดตอัตโนมัติ (DesignSync Hopak Partner Panel)
+Backend:
+- PaymentsService.getOwnerIncome(ownerId): payments SETTLED=รอโอน, TRANSFERRED=โอนแล้ว ของหอตัวเอง; คืน received/pending + rows (ref,ผู้เช่า,payout,status,transferSlipUrl signed)
+- OwnerIncomeController ใหม่ GET /partner/income (Roles owner) + ลงทะเบียนใน PaymentsModule
+Frontend dashboard:
+- การ์ด 2 ช่อง: โอนแล้ว (เขียว) / รอโอนจากแอดมิน (ส้ม) + รายการล่าสุดพร้อม badge สถานะ + ลิงก์ดูสลิป
+- realtime: subscribe 'notification:new' → refetch /partner/income (แอดมินโอน→เด้งเป็นโอนแล้วอัตโนมัติ)
+เทส: GET /partner/income owner@hopak.com = received 9550 / pending 0 / 5 rows (row0 transferred+slip) ; tsc api+web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+
+หมายเหตุ: API dev process ล้มซ้ำๆ ตอน nest watch recompile/restart (client เจอ api:000 "Failed to fetch") — restart pnpm dev แล้วหาย ไม่ใช่บัคโค้ด (tsc ผ่าน endpoint ทำงานเมื่อ api ขึ้น)
+
+[85] จัด partner panel ให้ตรงดีไซน์ Hopak Partner Panel (แยกหน้า income + CTA + nav)
+- หน้าใหม่ /partner/income (apps/web/.../partner/income/page.tsx) ตามดีไซน์:
+  · การ์ดดำ "ค่าห้องที่ได้รับแล้ว" (received, เขียว) + การ์ดส้ม "รอโอนจากแอดมิน" (pending)
+  · ตาราง "ค่าห้องแยกตามการจอง": เลขที่/ผู้เช่า/ห้อง/ค่าห้องสุทธิ/สถานะ (โอนแล้ว✓/รอโอน + ดูสลิป) + แถวรวม + note
+  · realtime notification:new → refetch (แอดมินโอน→เด้งโอนแล้วอัตโนมัติ)
+- sidebar partner: เพิ่มเมนู "รายได้จากแอป" (/partner/income) ตำแหน่งที่ 2 + PAGE_HEADER
+- dashboard: ลบการ์ด income[84] + breakdown[81] ที่ยัดเกิน (ไม่มีในดีไซน์) → ใส่ CTA การ์ดดำ "รายได้จากแอป Hoprak" ลิงก์ /partner/income (ตามดีไซน์) ; คง stats/revenue/occupancy/recent/todo
+- ลบ dead code (income state/effect/interfaces/getSocket/breakdown compute/calcCommission) ใน dashboard
+เทส: endpoint /partner/income คืนข้อมูลจริง; tsc web ผ่าน (screenshot partner route ติด headless-auth เตะ login — ไม่ใช่บัคหน้า)
+สถานะ: แก้แล้ว (30/07/2026)
+
+[86] หน้าแจ้งเตือนเจ้าของหอ (/partner/notifications) จัดใหม่ตามดีไซน์ Hopak Partner Panel
+- แท็บกรอง 5 อัน: ทั้งหมด / การจอง / การเงิน / ข้อความ / เตือน (active เขียว) + ตัวนับต่อหมวด
+- การ์ดแยกสีตามหมวด: แถบ accent ซ้าย (ถ้ายังไม่อ่าน) + ไอคอนสี + title + body + เวลา + ปุ่ม action
+- map type→หมวด: payout/payment→การเงิน(เขียว,ดูสลิป), booking→การจอง(ฟ้า,ดูการจอง→/partner/requests), chat/message→ข้อความ(ม่วง), warning/dorm_rejected/อื่นๆ→เตือน(ส้ม); dorm_rejected มีปุ่ม "ไปแก้ไข"→dashboard
+- คง markRead, ดูสลิป (attachment), realtime notification:new
+- tsc web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+หมายเหตุ: หมวด "การจอง/ข้อความ" จะว่างถ้าเจ้าของหอไม่ได้รับ type นั้น (ตอนนี้ owner ได้ payout/warning/dorm_rejected) — ถ้าอยากให้มีแจ้งเตือน "คำขอจองใหม่" ตอน tenant จอง ต้องเพิ่ม notify owner ใน bookings.create (ยังไม่ทำ)
+
+[87] แดชบอร์ดเจ้าของหอ (/partner/dashboard) ทำ responsive มือถือ จัดการข้อมูลง่าย
+- KPI: มือถือ 2 คอลัมน์ (grid-cols-2) แทน 1 คอลัมน์ยาว, gap แคบลง (gap-3 sm:gap-18)
+- การจองล่าสุด: จอใหญ่=ตาราง, มือถือ=การ์ดต่อรายการ (เลิกตาราง min-w-720 ที่เลื่อนข้าง)
+- income CTA: มือถือ stack แนวตั้ง + ปุ่มเต็มกว้าง (เดิมแถวเดียวล้น)
+- การ์ดใหญ่: padding p-4 บนมือถือ → sm:p-6 (revenue/occupancy/recent/todo)
+- tsc web ผ่าน (screenshot partner ติด headless-auth เตะ login — ไม่ใช่บัคหน้า)
+สถานะ: แก้แล้ว (30/07/2026)
+
+[88] ใบเสร็จ/ใบจอง A4 พิมพ์ได้ (DesignSync Hopak Receipt) — 2 ฉบับ ผู้เช่า(มีรหัส)/เจ้าของหอ(ไม่มีรหัส)
+- components/Receipt.tsx: sheet A4 (header H+HOPRAK.COM+PAID, No./วันที่, ข้อมูลผู้จอง, ห้องพัก, ชำระเงิน+ยอดรวม, รหัสยืนยัน[เฉพาะฉบับผู้เช่า], เงื่อนไข, ลายเซ็น) + toolbar พิมพ์/PDF (window.print) + @media print A4
+- โชว์รหัสยืนยัน iff booking.checkInToken มีค่า — findOneFor strip token ให้ non-tenant → เจ้าของหอ/admin ได้ฉบับไม่มีรหัสอัตโนมัติ
+- หน้า tenant /bookings/[id]/receipt + owner /partner/receipt/[id] (ทั้งคู่ fetch /bookings/:id)
+- ปุ่มเข้า: tenant booking detail (paid) "พิมพ์/ดาวน์โหลดใบเสร็จ" ; owner /partner/slips row "ดาวน์โหลด PDF"→/partner/receipt/[id]
+- ฟิลด์ที่ระบบไม่มี (บัตรปชช/อีเมล/ที่อยู่/ฉุกเฉิน/ที่จอดรถ) เป็นเส้นประกรอกมือ (ตาม intent form)
+- เทส/verify: screenshot ฉบับเจ้าของหอ (admin) render ตรงดีไซน์ ไม่มีรหัส ; tsc web ผ่าน
+สถานะ: แก้แล้ว (30/07/2026)
+
+[89] ผู้เช่าส่งคำขอจอง แต่ไม่มีแจ้งเตือนเข้าเจ้าของหอ
+สาเหตุ: bookings.create ส่งแค่ socket 'booking:new' ชั่วคราว ไม่ได้สร้าง notification ถาวร เจ้าของหอเลยไม่เห็นในกระดิ่ง/หน้าแจ้งเตือน
+แก้: bookings.create เพิ่ม notifications.create(ownerId, 'booking', 'คำขอจองใหม่', body) — body มีชื่อผู้เช่า/ประเภทห้อง/วันเข้าอยู่/ระยะเวลาเช่า
+- type 'booking' → หน้าแจ้งเตือนเจ้าของหอจัดเป็นหมวด "การจอง" (ฟ้า) + ปุ่ม "ดูการจอง"→/partner/requests
+- emit 'notification:new' realtime อยู่แล้วใน notifications.create → กระดิ่ง+หน้าแจ้งเตือนเด้งทันที
+เทส: register tenant → POST /bookings ห้อง cms1njh6y (owner@hopak.com) → owner ได้ notif "คำขอจองใหม่" (verify DB) ; tsc api ผ่าน ; ลบ test data
+หมายเหตุ: การจองที่ผู้เช่าส่งก่อนแก้ ยังโผล่ใน /partner/requests (หมวดการจอง) หลังรีเฟรช แต่ไม่มี notif ย้อนหลัง
+สถานะ: แก้แล้ว (30/07/2026)

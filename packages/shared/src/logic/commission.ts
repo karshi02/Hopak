@@ -1,19 +1,24 @@
 import { COMMISSION_RATE, CHAMBER_RATE } from '../constants/fees';
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ค่าคอมคิดจาก "ยอดรวม" (ค่าห้อง + มัดจำ) — เจ้าของหอได้ 80% ของยอดรวม
 export function calcCommission(amount: number): number {
-  return Math.round(amount * COMMISSION_RATE * 100) / 100;
+  return round2(amount * COMMISSION_RATE);
 }
 
-export function calcOwnerPayout(amount: number): number {
-  return Math.round((amount - calcCommission(amount)) * 100) / 100;
-}
-
-// ส่วนแบ่งหอการค้ามหาสารคาม (10% ของยอดจอง)
+// ส่วนแบ่งหอการค้า = 10% ของ "ค่าคอม" (ไม่ใช่ 10% ของยอดเต็มแบบเดิม)
+// เช่น ยอดรวม 100 → คอม 20% = 20 → หอการค้า 10% ของ 20 = 2
 export function calcChamberShare(amount: number): number {
-  return Math.round(amount * CHAMBER_RATE * 100) / 100;
+  return round2(calcCommission(amount) * CHAMBER_RATE);
 }
 
-// ส่วนที่เหลือของค่าคอมเป็นรายได้แพลตฟอร์ม (คอมรวม - ส่วนหอการค้า)
+// ส่วนแพลตฟอร์ม = ค่าคอมที่เหลือหลังหักส่วนหอการค้า (90% ของค่าคอม)
 export function calcPlatformShare(amount: number): number {
-  return Math.round((calcCommission(amount) - calcChamberShare(amount)) * 100) / 100;
+  return round2(calcCommission(amount) - calcChamberShare(amount));
+}
+
+// เจ้าของหอได้ = ยอดรวมหลังหักคอม (80% ของยอดรวม)
+export function calcOwnerPayout(amount: number): number {
+  return round2(amount - calcCommission(amount));
 }

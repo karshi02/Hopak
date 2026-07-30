@@ -11,11 +11,18 @@ async function bootstrap() {
   // (จำเป็นต่อ rate limiter ที่คีย์ตาม IP + การเก็บ ip ใน Session)
   app.set('trust proxy', 1);
 
-  // จำกัด CORS เฉพาะโดเมนหน้าเว็บของเราเอง (prod: FRONTEND_URL) — เดิมเปิดทุก origin
-  // dev ไม่ตั้ง FRONTEND_URL ก็อนุญาต localhost ทั้งหมดเพื่อความสะดวก
+  // จำกัด CORS เฉพาะโดเมนหน้าเว็บของเราเอง (prod: FRONTEND_URL เท่านั้น)
+  // dev: อนุญาต localhost + 127.0.0.1 ทุกพอร์ตด้วย (เบราว์เซอร์เปิดด้วย host ไหนก็ได้ ไม่ให้ CORS บล็อก)
+  const isProd = process.env.NODE_ENV === 'production';
   const frontendUrl = process.env.FRONTEND_URL;
+  const devLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
   app.enableCors({
-    origin: frontendUrl ? [frontendUrl] : /^http:\/\/localhost(:\d+)?$/,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl / same-origin / server-to-server (ไม่มี Origin header)
+      if (frontendUrl && origin === frontendUrl) return cb(null, true);
+      if (!isProd && devLocalhost.test(origin)) return cb(null, true);
+      cb(new Error('Not allowed by CORS'), false);
+    },
     credentials: true,
   });
 

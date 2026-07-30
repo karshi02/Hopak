@@ -1,5 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
@@ -35,8 +47,13 @@ export class UsersController {
   }
 
   @Post('me/become-owner')
-  requestOwner(@CurrentUser() user: { id: string }) {
-    return this.usersService.requestOwner(user.id);
+  @UseInterceptors(FilesInterceptor('documents', 6))
+  requestOwner(
+    @CurrentUser() user: { id: string },
+    @Body() body: { dormName?: string; province?: string; phone?: string; address?: string; note?: string },
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.usersService.requestOwner(user.id, body ?? {}, files ?? []);
   }
 
   @Get('me/owner-request')
