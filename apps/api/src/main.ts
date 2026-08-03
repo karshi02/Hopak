@@ -2,10 +2,22 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // security headers: HSTS, X-Frame-Options: DENY, nosniff, ฯลฯ
+  // - contentSecurityPolicy ปิด: API คืน JSON เป็นหลัก + route ไฟล์ (/uploads, /files) ตั้ง CSP เข้มเองแล้ว
+  // - crossOriginResourcePolicy: cross-origin — ให้หน้าเว็บ (app.hoprak.com) โหลดรูปจาก api.hoprak.com ได้
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
 
   // อยู่หลัง nginx (prod) — เชื่อ X-Forwarded-For 1 ชั้น เพื่อให้ req.ip เป็น IP จริงของ client
   // (จำเป็นต่อ rate limiter ที่คีย์ตาม IP + การเก็บ ip ใน Session)

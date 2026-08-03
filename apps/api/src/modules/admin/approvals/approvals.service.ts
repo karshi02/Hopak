@@ -65,11 +65,19 @@ export class ApprovalsService {
     const dorm = await this.prisma.dorm.update({
       where: { id: dormId },
       data: { status: 'APPROVED', rejectionReason: null },
-      include: { owner: { select: { id: true, name: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, email: true, role: true } } },
     });
 
     // อนุมัติหอ = คืนสิทธิ์เจ้าของหอ (เผื่อโดนลดเป็น TENANT ตอนถูกปฏิเสธก่อนหน้า)
-    await this.prisma.user.update({ where: { id: dorm.owner.id }, data: { role: 'OWNER' } });
+    // ถ้าเพิ่งเลื่อนสิทธิ์กลับเป็น OWNER ต้อง revoke session เดิม (token ยังฝัง role:tenant อยู่)
+    // เพื่อให้ login ใหม่แล้วได้ token role:owner ใช้ Owner Console ได้จริง
+    if (dorm.owner.role !== 'OWNER') {
+      await this.prisma.user.update({ where: { id: dorm.owner.id }, data: { role: 'OWNER' } });
+      await this.prisma.session.updateMany({
+        where: { userId: dorm.owner.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
 
     await this.logAction({ entityType: 'DORM', entityId: dormId, action: 'APPROVED', adminId, snapshot: dorm });
 
@@ -111,6 +119,11 @@ export class ApprovalsService {
     let demoted = false;
     if (otherApproved === 0) {
       await this.prisma.user.update({ where: { id: existing.owner.id }, data: { role: 'TENANT' } });
+      // ลดสิทธิ์แล้วต้อง revoke session เดิมทันที ไม่งั้น token role:owner ยังใช้ owner routes ได้จนหมดอายุ (7 วัน)
+      await this.prisma.session.updateMany({
+        where: { userId: existing.owner.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
       demoted = true;
     }
 

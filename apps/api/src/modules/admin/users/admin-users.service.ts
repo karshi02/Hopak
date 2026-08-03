@@ -85,11 +85,21 @@ export class AdminUsersService {
     if (!user) throw new NotFoundException('User not found');
     if (user.role === 'ADMIN') throw new ForbiddenException('ระงับบัญชีแอดมินไม่ได้');
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id },
       data: { suspended },
       select: { id: true, role: true, name: true, email: true, phone: true, suspended: true, createdAt: true },
     });
+
+    // ระงับบัญชี = เตะออกจากทุกอุปกรณ์ทันที (revoke session) ไม่ให้ token เดิมใช้งานต่อจนหมดอายุเอง
+    if (suspended) {
+      await this.prisma.session.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    return updated;
   }
 
   async remove(id: string) {

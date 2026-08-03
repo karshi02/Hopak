@@ -1544,3 +1544,11 @@ Frontend dashboard:
 - ชั้น 2: main.ts static serve /uploads/ ตั้ง X-Content-Type-Options: nosniff + CSP "default-src 'none'; sandbox" ; files.controller (private) ตั้ง header เดียวกัน ; uploads.service.upload() กัน path traversal (reject key มี '..' หรือ '\')
 เทส: tsc api ผ่าน (exit 0)
 สถานะ: แก้แล้ว (03/08/2026)
+
+[91] JWT เดิมยังใช้ได้หลัง demote/suspend + ไม่มี security headers (SECURITY)
+ที่มา: (1) ลดสิทธิ์เจ้าของหอ (reject demote OWNER→TENANT) / เลื่อนสิทธิ์กลับ (approve) / ระงับบัญชี (setSuspended) เปลี่ยนแค่ role/suspended ใน DB แต่ JWT เดิมฝัง role เก่า ใช้ owner routes ได้ต่อจนหมดอายุ 7 วัน ; (2) API ไม่มี security header (HSTS/X-Frame-Options/nosniff)
+แก้:
+- revoke session (session.updateMany revokedAt) ทันทีตอน: reject demote, approve promote (เฉพาะที่ role เปลี่ยนจริง), setSuspended(true) → jwt.strategy บล็อก request ถัดไปทันที บังคับ login ใหม่ได้ token role ถูกต้อง
+- helmet ใน main.ts: contentSecurityPolicy=false (route ไฟล์ตั้ง CSP เองแล้ว), crossOriginResourcePolicy=cross-origin (ให้เว็บโหลดรูปจาก api ข้ามโดเมนได้), crossOriginEmbedderPolicy=false
+เทส: tsc api ผ่าน (exit 0)
+สถานะ: แก้แล้ว (03/08/2026)
