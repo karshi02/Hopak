@@ -10,6 +10,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { imageFileFilter, documentFileFilter, IMAGE_LIMIT, DOC_LIMIT } from '../../common/upload-filters';
 import { OwnerApplicationsService } from './owner-applications.service';
 import { StartApplicationDto } from './dto/start-application.dto';
 import { UpdateDormInfoDto } from './dto/update-dorm-info.dto';
@@ -41,7 +42,7 @@ export class OwnerApplicationsController {
   }
 
   @Post(':id/photos')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
   addPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
     return this.service.addPhoto(id, file);
   }
@@ -52,7 +53,7 @@ export class OwnerApplicationsController {
   }
 
   @Post(':id/documents')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { fileFilter: documentFileFilter, limits: DOC_LIMIT }))
   addDocument(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
     return this.service.addDocument(id, file);
   }

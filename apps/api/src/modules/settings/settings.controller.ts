@@ -18,18 +18,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { SettingsService, type PromoCard, type HomeContent } from './settings.service';
+import { imageFileFilter } from '../../common/upload-filters';
 
 const posterStorage = diskStorage({
   destination: join(process.cwd(), 'uploads'),
   filename: (_req, file, cb) => cb(null, `poster-${Date.now()}-${Math.round(Math.random() * 1e6)}${extname(file.originalname)}`),
 });
-const imageFileFilter = (_req: unknown, file: Express.Multer.File, cb: (err: Error | null, accept: boolean) => void) => {
-  if (!file.mimetype.startsWith('image/')) {
-    cb(new BadRequestException('ต้องเป็นไฟล์รูปภาพเท่านั้น'), false);
-    return;
-  }
-  cb(null, true);
-};
 
 @Controller()
 export class SettingsController {
@@ -50,13 +44,7 @@ export class SettingsController {
         filename: (_req, file, cb) => cb(null, `hero-${Date.now()}${extname(file.originalname)}`),
       }),
       limits: { fileSize: 5 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        if (!file.mimetype.startsWith('image/')) {
-          cb(new BadRequestException('ต้องเป็นไฟล์รูปภาพเท่านั้น'), false);
-          return;
-        }
-        cb(null, true);
-      },
+      fileFilter: imageFileFilter,
     }),
   )
   async uploadHero(@UploadedFile() file: Express.Multer.File) {

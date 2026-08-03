@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFiles, UseGu
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { imageFileFilter, IMAGE_LIMIT } from '../../common/upload-filters';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RoomsService } from './rooms.service';
@@ -35,7 +36,7 @@ export class RoomsController {
   @Post('dorms/:dormId/rooms')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('owner')
-  @UseInterceptors(FilesInterceptor('photos', 8))
+  @UseInterceptors(FilesInterceptor('photos', 8, { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
   create(
     @CurrentUser() user: { id: string },
     @Param('dormId') dormId: string,
@@ -85,7 +86,7 @@ export class RoomsController {
   @Post('rooms/:id/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('owner')
-  @UseInterceptors(FilesInterceptor('photos', 8))
+  @UseInterceptors(FilesInterceptor('photos', 8, { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
   addImages(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,

@@ -31,6 +31,10 @@ export class UploadsService {
   // visibility 'private' คืน "storage key" — ต้องผ่าน getPrivateUrl() ทุกครั้งที่จะแสดงผลจริง
   // (เอกสารยืนยันตัวตน/หอพัก เช่น บัตรประชาชน โฉนด ห้ามมี URL ถาวรสาธารณะ)
   async upload(key: string, body: Buffer, contentType: string, visibility: Visibility = 'public'): Promise<string> {
+    // กัน path traversal: originalname ที่ผู้ใช้ควบคุมถูกฝังใน key ห้ามหลุดออกนอกโฟลเดอร์ upload
+    if (key.includes('..') || key.includes('\\')) {
+      throw new Error('[SECURITY] ชื่อไฟล์ไม่ถูกต้อง');
+    }
     if (this.client) {
       const s3Key = `${visibility}/${key}`;
       await this.client.send(

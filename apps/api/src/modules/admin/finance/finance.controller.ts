@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { documentFileFilter, DOC_LIMIT } from '../../../common/upload-filters';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -48,7 +49,7 @@ export class FinanceController {
   }
 
   @Post('payouts/dorm/:dormId/transfer')
-  @UseInterceptors(FileInterceptor('slip'))
+  @UseInterceptors(FileInterceptor('slip', { fileFilter: documentFileFilter, limits: DOC_LIMIT }))
   transferForDorm(
     @Param('dormId') dormId: string,
     @CurrentUser() admin: { id: string },

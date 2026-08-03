@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { documentFileFilter, DOC_LIMIT } from '../../../common/upload-filters';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -44,7 +45,7 @@ export class AdminUsersController {
   }
 
   @Post(':id/documents')
-  @UseInterceptors(FilesInterceptor('documents', 10))
+  @UseInterceptors(FilesInterceptor('documents', 10, { fileFilter: documentFileFilter, limits: DOC_LIMIT }))
   addDocuments(@Param('id') id: string, @UploadedFiles() files: Express.Multer.File[]) {
     return this.adminUsersService.addDocuments(id, files ?? []);
   }

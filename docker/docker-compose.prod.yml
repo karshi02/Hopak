@@ -24,7 +24,8 @@ services:
       - postgres
       - redis
     ports:
-      - "4000:4000"
+      # ผูก localhost เท่านั้น — เข้าได้ผ่าน nginx (reverse proxy) บน host เท่านั้น ไม่เปิด public ตรงๆ
+      - "127.0.0.1:4000:4000"
     volumes:
       - api_uploads:/app/uploads
       # เอกสารส่วนตัว (บัตร ปชช./โฉนด/สลิปโอนเงิน) — ต้องมี volume แยก ไม่งั้นหายทุกครั้งที่ redeploy
@@ -41,7 +42,8 @@ services:
     depends_on:
       - api
     ports:
-      - "3001:3000"
+      # ผูก localhost เท่านั้น — เข้าได้ผ่าน nginx บน host เท่านั้น
+      - "127.0.0.1:3001:3000"
 
 volumes:
   postgres_data:

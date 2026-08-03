@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Patch, Param, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { imageFileFilter, IMAGE_LIMIT } from '../../../common/upload-filters';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -60,7 +61,7 @@ export class ApprovalsController {
   }
 
   @Post(':dormId/images')
-  @UseInterceptors(FilesInterceptor('photos', 8))
+  @UseInterceptors(FilesInterceptor('photos', 8, { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
   addImages(
     @CurrentUser() admin: { id: string },
     @Param('dormId') dormId: string,
@@ -118,7 +119,7 @@ export class ApprovalsController {
   }
 
   @Post('rooms/:roomId/images')
-  @UseInterceptors(FilesInterceptor('photos', 8))
+  @UseInterceptors(FilesInterceptor('photos', 8, { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
   addRoomImages(
     @CurrentUser() admin: { id: string },
     @Param('roomId') roomId: string,

@@ -27,7 +27,16 @@ async function bootstrap() {
   });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+  // เสิร์ฟไฟล์อัพโหลด public พร้อม header กัน stored XSS แบบ defense-in-depth:
+  // - nosniff: เบราว์เซอร์ห้ามเดา MIME (กันไฟล์รูปปลอมถูกตีความเป็นสคริปต์)
+  // - CSP default-src 'none' + sandbox: ถ้ามีไฟล์ .svg/.html หลุด fileFilter มา ก็รันสคริปต์ไม่ได้
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    },
+  });
   await app.listen(process.env.PORT ?? 4000);
 }
 bootstrap();

@@ -29,6 +29,9 @@ export class FilesController {
 
     const mime = MIME_BY_EXT[extname(key).toLowerCase()] || 'application/octet-stream';
     res.setHeader('Content-Type', mime);
+    // กัน XSS: ห้ามเดา MIME + neuter สคริปต์ใน svg/html หากมีหลุดมา
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.send(buffer);
   }

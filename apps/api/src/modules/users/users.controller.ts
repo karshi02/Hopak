@@ -14,6 +14,7 @@ import {
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { imageFileFilter, documentFileFilter, IMAGE_LIMIT, DOC_LIMIT } from '../../common/upload-filters';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
@@ -36,7 +37,7 @@ export class UsersController {
   }
 
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(FileInterceptor('avatar', { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
   updateAvatar(@CurrentUser() user: { id: string }, @UploadedFile() file: Express.Multer.File) {
     return this.usersService.updateAvatar(user.id, file);
   }
@@ -47,7 +48,7 @@ export class UsersController {
   }
 
   @Post('me/become-owner')
-  @UseInterceptors(FilesInterceptor('documents', 6))
+  @UseInterceptors(FilesInterceptor('documents', 6, { fileFilter: documentFileFilter, limits: DOC_LIMIT }))
   requestOwner(
     @CurrentUser() user: { id: string },
     @Body() body: { dormName?: string; province?: string; phone?: string; address?: string; note?: string },

@@ -1535,3 +1535,12 @@ Frontend dashboard:
 เทส: register tenant → POST /bookings ห้อง cms1njh6y (owner@hopak.com) → owner ได้ notif "คำขอจองใหม่" (verify DB) ; tsc api ผ่าน ; ลบ test data
 หมายเหตุ: การจองที่ผู้เช่าส่งก่อนแก้ ยังโผล่ใน /partner/requests (หมวดการจอง) หลังรีเฟรช แต่ไม่มี notif ย้อนหลัง
 สถานะ: แก้แล้ว (30/07/2026)
+
+[90] Stored XSS ผ่านไฟล์อัพโหลด (SECURITY, ระดับสูง)
+ที่มา: upload endpoint เกือบทั้งหมด (avatar, become-owner docs, rooms/dorms photos, admin approvals photos, admin-users docs, payments/finance slip, owner-applications photo/doc) ไม่มี fileFilter เลย — อัพ .svg/.html ยัด <script> ได้ ; key = `${Date.now()}-${file.originalname}` เก็บนามสกุลไฟล์ตามที่ผู้ใช้ตั้ง ; express.static (/uploads/) เสิร์ฟ inline เป็น image/svg+xml หรือ text/html → สคริปต์รันบนโดเมน API
+ซ้ำ: settings hero/poster/area มี filter แต่ใช้ mimetype.startsWith('image/') ซึ่ง image/svg+xml ก็ผ่าน
+แก้ 2 ชั้น:
+- ชั้น 1: common/upload-filters.ts (ใหม่) — imageFileFilter (jpg/jpeg/png/gif/webp) + documentFileFilter (+pdf) whitelist ทั้งนามสกุลและ MIME พร้อมกัน ; ใส่ทุก interceptor + size limit ; แทน filter อ่อนใน settings
+- ชั้น 2: main.ts static serve /uploads/ ตั้ง X-Content-Type-Options: nosniff + CSP "default-src 'none'; sandbox" ; files.controller (private) ตั้ง header เดียวกัน ; uploads.service.upload() กัน path traversal (reject key มี '..' หรือ '\')
+เทส: tsc api ผ่าน (exit 0)
+สถานะ: แก้แล้ว (03/08/2026)
