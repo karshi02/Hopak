@@ -114,7 +114,7 @@ export function Navbar() {
 
   return (
     <header className="border-b border-card-border bg-white dark:border-white/10 dark:bg-[#1a1a19]">
-      <div className="mx-auto flex max-w-6xl items-center gap-4 p-4">
+      <div className="mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:p-4">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-tenant font-sans text-base font-bold text-white">
             H
@@ -122,7 +122,8 @@ export function Navbar() {
           <span className="hidden text-lg font-bold text-ink-strong dark:text-white sm:inline">Hoprak</span>
         </Link>
 
-        <form onSubmit={handleSearch} className="flex max-w-xl flex-1 items-center gap-2 rounded-full border border-card-border bg-surface-canvas px-4 py-2 dark:border-white/10 dark:bg-white/5">
+        {/* ช่องค้นหา — ซ่อนบนมือถือ (เบียดจอเล็ก) เหลือปุ่มค้นหาแทน */}
+        <form onSubmit={handleSearch} className="hidden max-w-xl flex-1 items-center gap-2 rounded-full border border-card-border bg-surface-canvas px-4 py-2 dark:border-white/10 dark:bg-white/5 md:flex">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 text-ink-faint">
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -135,7 +136,19 @@ export function Navbar() {
           />
         </form>
 
-        <nav className="ml-auto flex items-center gap-5 text-sm">
+        {/* ปุ่มค้นหาไอคอน — เฉพาะมือถือ (แทนช่องค้นหาที่ซ่อน) */}
+        <Link
+          href="/search"
+          aria-label="search"
+          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-subtitle hover:bg-black/[0.04] dark:text-white dark:hover:bg-white/10 md:hidden"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </Link>
+
+        <nav className="flex items-center gap-2.5 text-sm md:ml-auto md:gap-5">
           <Link href="/" className="hidden text-ink hover:text-tenant dark:text-white md:inline">
             {t.home}
           </Link>
@@ -168,7 +181,7 @@ export function Navbar() {
           {!checked ? null : user ? (
             <>
               {dashboardHref && (
-                <Link href={dashboardHref} className="text-ink hover:text-tenant dark:text-white">
+                <Link href={dashboardHref} className="hidden text-ink hover:text-tenant dark:text-white sm:inline">
                   {t.dashboard}
                 </Link>
               )}
@@ -202,7 +215,7 @@ export function Navbar() {
                 </Link>
               )}
               <Link href="/profile" className="flex items-center gap-2 text-ink hover:text-tenant dark:text-white">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-tenant/15 text-xs font-bold text-tenant">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-tenant/15 text-xs font-bold text-tenant">
                   {user.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -210,9 +223,9 @@ export function Navbar() {
                     user.name.charAt(0)
                   )}
                 </span>
-                {user.name}
+                <span className="hidden max-w-[120px] truncate sm:inline">{user.name}</span>
               </Link>
-              <button onClick={handleLogout} className="text-danger hover:underline">
+              <button onClick={handleLogout} className="hidden text-danger hover:underline sm:inline">
                 {t.logout}
               </button>
             </>
