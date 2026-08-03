@@ -226,7 +226,7 @@ export class ApprovalsService {
   async updateRoom(roomId: string, adminId: string, data: Record<string, unknown>) {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new NotFoundException('ไม่พบห้องพัก');
-    const allowed = ['type', 'pricePerMonth', 'name', 'description', 'deposit', 'waterRate', 'electricRate', 'amenities'];
+    const allowed = ['type', 'pricePerMonth', 'pricePerDay', 'allowDaily', 'name', 'description', 'deposit', 'waterRate', 'electricRate', 'amenities'];
     const patch: Record<string, unknown> = {};
     for (const key of allowed) if (data[key] !== undefined) patch[key] = data[key];
     const updated = await this.prisma.room.update({ where: { id: roomId }, data: patch });

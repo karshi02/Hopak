@@ -7,6 +7,11 @@ export class CreateBookingDto {
   @IsDateString()
   checkInDate!: string;
 
+  // วันคืนห้อง — บังคับเฉพาะเช่ารายวัน (rentalType = DAILY) ไม่ใช้กับรายเดือน
+  @IsOptional()
+  @IsDateString()
+  checkOutDate?: string;
+
   @IsString()
   contactName!: string;
 
@@ -17,7 +22,12 @@ export class CreateBookingDto {
   @IsString()
   note?: string;
 
-  // ระยะเวลาเช่า (เดือน) — 1/3/6 เท่านั้น
+  // รูปแบบการเช่า — default รายเดือน (คงพฤติกรรมเดิมถ้าไม่ส่งมา)
+  @IsOptional()
+  @IsIn(['MONTHLY', 'DAILY'])
+  rentalType?: 'MONTHLY' | 'DAILY';
+
+  // ระยะเวลาเช่า (เดือน) — 1/3/6 เท่านั้น (เฉพาะรายเดือน)
   @IsOptional()
   @IsInt()
   @IsIn([1, 3, 6])

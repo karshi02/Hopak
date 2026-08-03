@@ -47,7 +47,13 @@ export class BookingsService {
       throw new BadRequestException('เจ้าของหอไม่สามารถจองห้องของตัวเองได้');
     }
 
+    const rentalType = dto.rentalType ?? 'MONTHLY';
     const now = new Date();
+
+    // เช่ารายวัน = คิดจำนวนคืน + กันจองซ้ำช่วงวัน แยก path ออกจากรายเดือน
+    if (rentalType === 'DAILY') {
+      return this.createDaily(tenantId, room, dto, now);
+    }
     // เก็บค่าเช่า+มัดจำเป็น snapshot ตอนจอง (ราคาห้องอาจเปลี่ยนภายหลัง) — มัดจำใช้ระดับห้องก่อน
     // ถ้าห้องไม่ได้ตั้ง (0) ตกไปใช้ค่ามัดจำระดับหอ. ผู้เช่าจ่ายรวมกับเรา (กันจ่ายมัดจำตรงเจ้าของหอแล้วโดนโกง)
     const roomPrice = room.pricePerMonth;
@@ -81,6 +87,84 @@ export class BookingsService {
     );
 
     return booking;
+  }
+
+  private static readonly MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  // เช่ารายวัน: ตรวจว่าห้องเปิดรายวัน + คิดจำนวนคืน + กันจองซ้ำช่วงวันชนกัน
+  // roomPrice = pricePerDay × nights (ฐานคิดค่าคอม), มัดจำ = 0 ตามนโยบายรายวัน
+  private async createDaily(
+    tenantId: string,
+    room: { id: string; type: string; allowDaily: boolean; pricePerDay: number; dorm: { ownerId: string } },
+    dto: CreateBookingDto,
+    now: Date,
+  ) {
+    if (!room.allowDaily) throw new BadRequestException('ห้องนี้ไม่เปิดให้เช่ารายวัน');
+    if (!dto.checkOutDate) throw new BadRequestException('กรุณาระบุวันคืนห้อง');
+
+    const checkIn = new Date(dto.checkInDate);
+    const checkOut = new Date(dto.checkOutDate);
+    const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / BookingsService.MS_PER_DAY);
+    if (nights < 1) {
+      throw new BadRequestException('ต้องจองอย่างน้อย 1 คืน (วันคืนห้องต้องหลังวันเข้าพัก)');
+    }
+
+    // กันจองซ้ำ: หา booking รายวันอื่นของห้องนี้ที่ยังไม่ยกเลิก และช่วงวันทับซ้อนกัน
+    // ทับซ้อนเมื่อ existing.checkIn < ใหม่.checkOut และ existing.checkOut > ใหม่.checkIn
+    // (checkOut ถือเป็นวันออก ไม่นับคืน — จองต่อวันที่คนก่อนคืนห้องได้)
+    const overlap = await this.prisma.booking.findFirst({
+      where: {
+        roomId: room.id,
+        rentalType: 'DAILY',
+        status: { not: 'CANCELLED' },
+        checkInDate: { lt: checkOut },
+        checkOutDate: { gt: checkIn },
+      },
+    });
+    if (overlap) throw new BadRequestException('ช่วงวันที่เลือกถูกจองแล้ว กรุณาเลือกวันอื่น');
+
+    const roomPrice = room.pricePerDay * nights;
+    const deposit = 0;
+    const booking = await this.prisma.booking.create({
+      data: {
+        tenantId,
+        roomId: room.id,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
+        amount: roomPrice + deposit,
+        roomPrice,
+        deposit,
+        rentalType: 'DAILY',
+        nights,
+        status: 'PENDING',
+        contactName: dto.contactName,
+        contactPhone: dto.contactPhone,
+        note: dto.note,
+        cancelDeadline: getCancelDeadline(now),
+      },
+    });
+    this.realtime.emitToUser(room.dorm.ownerId, 'booking:new', booking);
+
+    const roomLabel = room.type === 'AIR' ? 'ห้องแอร์' : 'ห้องพัดลม';
+    const fmt = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+    await this.notifications.create(
+      room.dorm.ownerId,
+      'booking',
+      'คำขอจองรายวันใหม่',
+      `${dto.contactName} ขอจอง${roomLabel} รายวัน · ${fmt(checkIn)} - ${fmt(checkOut)} (${nights} คืน) — กดยืนยันในหน้าการจอง`,
+    );
+
+    return booking;
+  }
+
+  // ช่วงวันที่ถูกจองแล้วของห้อง (เฉพาะรายวันที่ยังไม่ยกเลิก) — ปฏิทินฝั่งผู้เช่าใช้ปิดวันที่เต็ม
+  async bookedRanges(roomId: string) {
+    const rows = await this.prisma.booking.findMany({
+      where: { roomId, rentalType: 'DAILY', status: { not: 'CANCELLED' }, checkOutDate: { not: null } },
+      select: { checkInDate: true, checkOutDate: true },
+      orderBy: { checkInDate: 'asc' },
+    });
+    return rows.map((r) => ({ from: r.checkInDate, to: r.checkOutDate }));
   }
 
   listForTenant(tenantId: string) {
@@ -154,7 +238,11 @@ export class BookingsService {
   async markPaid(id: string) {
     const booking = await this.findOne(id);
     assertTransition(booking.status.toLowerCase() as any, 'paid');
-    await this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'OCCUPIED' } });
+    // รายเดือน = ห้องถูกครอบครองยาว → ตั้ง OCCUPIED กันคนอื่นจอง
+    // รายวัน = ห้องว่าง/เต็มตามช่วงวันแทน (bookedRanges คุมเอง) ห้ามตั้ง OCCUPIED ไม่งั้นบล็อกทุกวันอื่น
+    if (booking.rentalType !== 'DAILY') {
+      await this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'OCCUPIED' } });
+    }
     return this.prisma.booking.update({ where: { id }, data: { status: 'PAID' } });
   }
 

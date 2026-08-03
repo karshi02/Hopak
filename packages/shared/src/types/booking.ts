@@ -7,10 +7,13 @@ export interface Booking {
   tenantId: string;
   roomId: string;
   checkInDate: string;
+  checkOutDate?: string | null; // วันคืนห้อง (เฉพาะรายวัน)
   amount: number; // ยอดที่ผู้เช่าจ่ายรวม = roomPrice + deposit
   roomPrice: number; // ค่าเช่าห้อง (snapshot ตอนจอง) — ฐานคิดค่าคอม
   deposit: number; // ค่ามัดจำ (snapshot ตอนจอง) — ส่งเจ้าของเต็ม ไม่โดนหักคอม
-  leaseMonths?: number; // ระยะเวลาเช่า (เดือน) 1/3/6
+  rentalType?: 'MONTHLY' | 'DAILY'; // รูปแบบการเช่า
+  leaseMonths?: number; // ระยะเวลาเช่า (เดือน) 1/3/6 (เฉพาะรายเดือน)
+  nights?: number | null; // จำนวนคืน (เฉพาะรายวัน)
   status: BookingStatus;
   contactName: string;
   contactPhone: string;

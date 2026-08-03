@@ -7,6 +7,8 @@ import { ReviewsService } from '../reviews/reviews.service';
 interface CreateRoomData {
   type: 'AIR' | 'FAN';
   pricePerMonth: number;
+  pricePerDay?: number;
+  allowDaily?: boolean;
   name?: string;
   description?: string;
   deposit?: number;
@@ -54,6 +56,8 @@ export class RoomsService {
       dormId,
       type: data.type,
       pricePerMonth: data.pricePerMonth,
+      pricePerDay: data.pricePerDay ?? 0,
+      allowDaily: data.allowDaily ?? false,
       name: data.name?.trim() || genName(),
       description: data.description,
       deposit: data.deposit ?? 0,
@@ -111,6 +115,8 @@ export class RoomsService {
     const allowed: (keyof CreateRoomData)[] = [
       'type',
       'pricePerMonth',
+      'pricePerDay',
+      'allowDaily',
       'name',
       'description',
       'deposit',

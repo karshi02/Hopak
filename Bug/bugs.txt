@@ -1552,3 +1552,14 @@ Frontend dashboard:
 - helmet ใน main.ts: contentSecurityPolicy=false (route ไฟล์ตั้ง CSP เองแล้ว), crossOriginResourcePolicy=cross-origin (ให้เว็บโหลดรูปจาก api ข้ามโดเมนได้), crossOriginEmbedderPolicy=false
 เทส: tsc api ผ่าน (exit 0)
 สถานะ: แก้แล้ว (03/08/2026)
+
+[92] ฟีเจอร์ใหม่: ระบบเช่ารายวัน + รายงานรายได้รายวัน
+ขอบเขต: เพิ่มการเช่ารายวัน (จองเป็นช่วงวันแบบโรงแรม) ควบคู่รายเดือนเดิม + รายงานรายได้ต่อวันฝั่งเจ้าของหอ
+เฟส A (model): enum RentalType(MONTHLY|DAILY) ; Room + pricePerDay, allowDaily ; Booking + rentalType, checkOutDate, nights ; migration daily_rental
+เฟส B (backend จอง): create() แตกสาขา DAILY — คิด nights, กันจองซ้ำ overlap (checkOut เป็นวันออก exclusive), roomPrice=pricePerDay×nights, มัดจำ 0 ; markPaid รายวันไม่ตั้งห้อง OCCUPIED ; GET /bookings/availability/:roomId คืนช่วงวันจองแล้ว
+เฟส C (ผู้เช่า): shared types ; bookings/new toggle รายเดือน/รายวัน + date-range + จำนวนคืน + ยอดรวม + โชว์ช่วงเต็ม + กันซ้ำ client ; badge ราคา/คืนหน้าหอ
+เฟส D (เจ้าของ): rooms controller/service รับ pricePerDay/allowDaily (create+update+admin updateRoom) ; ฟอร์มสร้างห้อง toggle เปิดรายวัน+ราคา/คืน+preview ; /partner/requests tag รายวัน/เดือน + ช่วงวัน+คืน
+เฟส E (รายงาน): getOwnerDailyIncome(from,to) group ตามวัน (ได้รับ/รอโอน + นับรายวัน/เดือน) + GET /partner/income/daily ; หน้า income เพิ่ม tab รายวัน + filter ช่วงวัน + ตารางต่อวัน
+เฟส F (ใบเสร็จ): Receipt โชว์ช่วงวัน (เข้า–คืนห้อง) + จำนวนคืน + ค่าห้อง/คืน แทนรายเดือน
+เทส end-to-end (API local): จอง 3 คืน=900 มัดจำ0 ✓ ; จองทับ→บล็อก ✓ ; จองต่อวันคืนห้อง(exclusive)→ผ่าน 600 ✓ ; 0 คืน→บล็อก ✓ ; availability 2 ช่วงถูก ✓ ; tsc api+web ผ่าน ; ลบ test data + revert ห้อง
+สถานะ: เสร็จ local (ยังไม่ deploy — ต้อง migrate prod) (03/08/2026)

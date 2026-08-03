@@ -43,6 +43,10 @@ export function Receipt({ booking }: { booking: BookingFull }) {
   const dorm = room?.dorm;
   const code = booking.checkInToken;
   const isTenantCopy = !!code;
+  const isDaily = booking.rentalType === 'DAILY';
+  const nights = booking.nights ?? 0;
+  // roomPrice รายวัน = ราคา/คืน × จำนวนคืน (snapshot) — ถอดกลับเป็นราคา/คืนเพื่อแสดง
+  const perNight = isDaily && nights > 0 ? Math.round(booking.roomPrice / nights) : booking.roomPrice;
 
   return (
     <div className="fixed inset-0 z-[100] overflow-auto bg-[#E9ECF3]">
@@ -140,10 +144,16 @@ export function Receipt({ booking }: { booking: BookingFull }) {
             </div>
             <div className="mt-2.5 flex gap-6">
               <Field label="ประเภทห้อง :" value={room ? ROOM_TYPE[room.type] ?? room.type : undefined} />
-              <Field label="ค่าเช่า/เดือน :" value={booking.roomPrice ? `฿${booking.roomPrice.toLocaleString()}` : undefined} />
+              <Field
+                label={isDaily ? 'ค่าห้อง/คืน :' : 'ค่าเช่า/เดือน :'}
+                value={perNight ? `฿${perNight.toLocaleString()}` : undefined}
+              />
             </div>
             <div className="mt-2.5 flex gap-6">
-              <Field label="ระยะเวลาเช่า :" value={booking.leaseMonths ? `${booking.leaseMonths} เดือน` : undefined} />
+              <Field
+                label={isDaily ? 'จำนวนคืน :' : 'ระยะเวลาเช่า :'}
+                value={isDaily ? (nights ? `${nights} คืน` : undefined) : booking.leaseMonths ? `${booking.leaseMonths} เดือน` : undefined}
+              />
               <Field label="ที่จอดรถ :" />
             </div>
           </div>
@@ -157,10 +167,16 @@ export function Receipt({ booking }: { booking: BookingFull }) {
             </div>
             <div className="mt-2.5 flex gap-6">
               <Field label="กำหนดวันเข้าพัก :" value={fmtDate(booking.checkInDate)} />
-              <Field label="ค่าเช่าเดือนแรก :" value={booking.roomPrice ? `฿${booking.roomPrice.toLocaleString()}` : undefined} />
+              {isDaily ? (
+                <Field label="วันคืนห้อง :" value={fmtDate(booking.checkOutDate)} />
+              ) : (
+                <Field label="ค่าเช่าเดือนแรก :" value={booking.roomPrice ? `฿${booking.roomPrice.toLocaleString()}` : undefined} />
+              )}
             </div>
             <div className="mt-3 flex items-center justify-between rounded-[9px] border border-[#D5E0F2] bg-[#F3F6FC] px-4 py-2.5">
-              <span className="text-[14px] font-bold text-[#1F3A6E]">ยอดชำระทั้งหมด (ค่าห้อง + มัดจำ)</span>
+              <span className="text-[14px] font-bold text-[#1F3A6E]">
+                {isDaily ? 'ยอดชำระทั้งหมด (ค่าห้องรายวัน)' : 'ยอดชำระทั้งหมด (ค่าห้อง + มัดจำ)'}
+              </span>
               <span className="font-sans text-[22px] font-extrabold text-[#12A150]">฿{booking.amount.toLocaleString()}</span>
             </div>
           </div>

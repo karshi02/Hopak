@@ -34,6 +34,12 @@ export class BookingsController {
     return this.bookingsService.checkIn(user.id, body.token ?? '');
   }
 
+  // ช่วงวันที่ถูกจองแล้วของห้อง (รายวัน) — ปฏิทินจองใช้ปิดวันเต็ม ต้องอยู่ก่อน @Get(':id')
+  @Get('availability/:roomId')
+  availability(@Param('roomId') roomId: string) {
+    return this.bookingsService.bookedRanges(roomId);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: { id: string; role: string }, @Param('id') id: string) {
     return this.bookingsService.findOneFor(id, user);

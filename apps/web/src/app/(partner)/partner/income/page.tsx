@@ -26,6 +26,19 @@ interface OwnerIncome {
   pending: number;
   rows: IncomeRow[];
 }
+interface DayIncome {
+  date: string;
+  received: number;
+  pending: number;
+  count: number;
+  daily: number;
+  monthly: number;
+}
+interface OwnerDailyIncome {
+  days: DayIncome[];
+  totalReceived: number;
+  totalPending: number;
+}
 
 const TEXT = {
   th: {
@@ -46,6 +59,18 @@ const TEXT = {
     totalReceived: 'รวมที่ได้รับแล้ว',
     none: 'ยังไม่มีรายการ',
     note: 'แสดงเฉพาะค่าห้องที่เจ้าของหอได้รับจากการจองผ่านแอป Hoprak · รายการที่ “รอโอนจากแอดมิน” จะถูกบันทึกเป็นรายได้เมื่อเงินเข้าบัญชีแล้วเท่านั้น',
+    tabBooking: 'ตามการจอง',
+    tabDaily: 'รายวัน',
+    fromLabel: 'ตั้งแต่',
+    toLabel: 'ถึง',
+    thDate: 'วันที่',
+    thReceived: 'ได้รับแล้ว',
+    thPending: 'รอโอน',
+    thCount: 'จำนวนจอง',
+    dailyBadge: 'รายวัน',
+    monthlyBadge: 'รายเดือน',
+    dailyNote: 'ยอดจัดกลุ่มตามวันที่ผู้เช่าชำระเงิน',
+    clearFilter: 'ล้างตัวกรอง',
   },
   en: {
     back: 'Back to dashboard',
@@ -65,6 +90,18 @@ const TEXT = {
     totalReceived: 'Total received',
     none: 'No items yet',
     note: 'Shows the room income the owner receives from Hoprak bookings · items “awaiting admin transfer” are recorded as income only once the money is in your account.',
+    tabBooking: 'By booking',
+    tabDaily: 'Daily',
+    fromLabel: 'From',
+    toLabel: 'To',
+    thDate: 'Date',
+    thReceived: 'Received',
+    thPending: 'Pending',
+    thCount: 'Bookings',
+    dailyBadge: 'Daily',
+    monthlyBadge: 'Monthly',
+    dailyNote: 'Grouped by the date the tenant paid',
+    clearFilter: 'Clear filter',
   },
 };
 
@@ -77,6 +114,10 @@ export default function PartnerIncomePage() {
   const { lang } = useLang();
   const t = TEXT[lang];
   const [income, setIncome] = useState<OwnerIncome | null>(null);
+  const [view, setView] = useState<'booking' | 'daily'>('booking');
+  const [daily, setDaily] = useState<OwnerDailyIncome | null>(null);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   useEffect(() => {
     const load = () => apiClient.get<OwnerIncome>('/partner/income').then(setIncome).catch(() => setIncome({ received: 0, pending: 0, rows: [] }));
@@ -87,6 +128,19 @@ export default function PartnerIncomePage() {
       socket.off('notification:new', load);
     };
   }, []);
+
+  // มุมมองรายวัน — โหลดใหม่เมื่อสลับแท็บหรือเปลี่ยนช่วงวัน
+  useEffect(() => {
+    if (view !== 'daily') return;
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const url = `/partner/income/daily${qs.toString() ? `?${qs.toString()}` : ''}`;
+    apiClient
+      .get<OwnerDailyIncome>(url)
+      .then(setDaily)
+      .catch(() => setDaily({ days: [], totalReceived: 0, totalPending: 0 }));
+  }, [view, from, to]);
 
   if (!income) return <PageLoader theme="seller" />;
 
@@ -128,8 +182,118 @@ export default function PartnerIncomePage() {
         </div>
       </div>
 
+      {/* tab: ตามการจอง / รายวัน */}
+      <div className="mt-[18px] flex items-center gap-2">
+        {(['booking', 'daily'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+              view === v ? 'bg-ink-strong text-white' : 'border border-card-border bg-white text-ink-body'
+            }`}
+          >
+            {v === 'booking' ? t.tabBooking : t.tabDaily}
+          </button>
+        ))}
+      </div>
+
+      {/* มุมมองรายวัน */}
+      {view === 'daily' && (
+        <div className="mt-3.5 rounded-card-lg border border-card-border bg-white p-6 shadow-card">
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-ink-muted">{t.fromLabel}</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="h-[42px] rounded-[11px] border border-card-border px-3 text-sm outline-none focus:border-tenant"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-ink-muted">{t.toLabel}</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="h-[42px] rounded-[11px] border border-card-border px-3 text-sm outline-none focus:border-tenant"
+              />
+            </div>
+            {(from || to) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom('');
+                  setTo('');
+                }}
+                className="h-[42px] rounded-[11px] border border-card-border px-3 text-sm font-medium text-ink-body hover:bg-surface-canvas"
+              >
+                {t.clearFilter}
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-xs font-semibold text-ink-faint">
+                  <th className="py-2.5 pr-3 font-semibold">{t.thDate}</th>
+                  <th className="py-2.5 pr-3 font-semibold">{t.thCount}</th>
+                  <th className="py-2.5 pr-3 text-right font-semibold">{t.thReceived}</th>
+                  <th className="py-2.5 text-right font-semibold">{t.thPending}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(daily?.days ?? []).map((d) => (
+                  <tr key={d.date} className="border-b border-hairline last:border-0">
+                    <td className="py-3.5 pr-3 font-sans font-medium text-ink-strong">
+                      {new Date(d.date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td className="py-3.5 pr-3">
+                      <span className="mr-1.5 rounded-md bg-success-tint px-1.5 py-0.5 text-[11px] font-semibold text-success">
+                        {d.daily} {t.dailyBadge}
+                      </span>
+                      <span className="rounded-md bg-tenant-tint px-1.5 py-0.5 text-[11px] font-semibold text-tenant">
+                        {d.monthly} {t.monthlyBadge}
+                      </span>
+                    </td>
+                    <td className="py-3.5 pr-3 text-right font-sans font-bold tabular-nums text-[#12A150]">
+                      ฿{d.received.toLocaleString()}
+                    </td>
+                    <td className="py-3.5 text-right font-sans font-bold tabular-nums text-[#C77B14]">
+                      ฿{d.pending.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+                {daily && daily.days.length > 0 && (
+                  <tr>
+                    <td className="py-4 pr-3 font-bold text-ink-strong" colSpan={2}>
+                      {t.totalReceived}
+                    </td>
+                    <td className="py-4 pr-3 text-right font-sans text-[16px] font-bold text-[#12A150]">
+                      ฿{daily.totalReceived.toLocaleString()}
+                    </td>
+                    <td className="py-4 text-right font-sans text-[16px] font-bold text-[#C77B14]">
+                      ฿{daily.totalPending.toLocaleString()}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {daily && daily.days.length === 0 && <p className="py-4 text-ink-faint">{t.none}</p>}
+          <p className="mt-3.5 text-[12.5px] leading-relaxed text-ink-faint">{t.dailyNote}</p>
+        </div>
+      )}
+
       {/* per-booking table */}
-      <div className="mt-[18px] rounded-card-lg border border-card-border bg-white p-6 shadow-card">
+      {view === 'booking' && (
+      <div className="mt-3.5 rounded-card-lg border border-card-border bg-white p-6 shadow-card">
         <div className="mb-3.5 text-[17px] font-bold text-ink-strong">{t.tableTitle}</div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
@@ -203,6 +367,7 @@ export default function PartnerIncomePage() {
         {income.rows.length === 0 && <p className="py-4 text-ink-faint">{t.none}</p>}
         <p className="mt-3.5 text-[12.5px] leading-relaxed text-ink-faint">{t.note}</p>
       </div>
+      )}
     </div>
   );
 }

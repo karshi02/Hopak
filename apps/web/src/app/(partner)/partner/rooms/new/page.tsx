@@ -73,6 +73,11 @@ const TEXT = {
     deposit: 'เงินมัดจำ',
     water: 'ค่าน้ำ / หน่วย',
     electric: 'ค่าไฟ / หน่วย',
+    dailySection: 'เช่ารายวัน',
+    dailySectionSub: 'เปิดให้ผู้เช่าจองเป็นรายคืน (แบบโรงแรม) นอกเหนือจากรายเดือน — ไม่เก็บมัดจำ',
+    allowDailyLabel: 'เปิดให้เช่ารายวัน',
+    pricePerDay: 'ราคา / คืน',
+    perNight: '/คืน',
     amenities: 'สิ่งอำนวยความสะดวก & เฟอร์นิเจอร์',
     amenitiesSub: 'เลือกสิ่งที่มีในห้อง — จะแสดงเป็นไอคอนในหน้าผู้เช่า',
     saveDraft: 'ยกเลิก',
@@ -110,6 +115,11 @@ const TEXT = {
     deposit: 'Deposit',
     water: 'Water / unit',
     electric: 'Electricity / unit',
+    dailySection: 'Daily rental',
+    dailySectionSub: 'Allow per-night booking (hotel-style) besides monthly — no deposit',
+    allowDailyLabel: 'Enable daily rental',
+    pricePerDay: 'Price / night',
+    perNight: '/night',
     amenities: 'Amenities & Furniture',
     amenitiesSub: "Select what's in the room — shown as icons to tenants",
     saveDraft: 'Cancel',
@@ -138,6 +148,8 @@ export default function NewRoomPage() {
   const [deposit, setDeposit] = useState(7000);
   const [waterRate, setWaterRate] = useState(18);
   const [electricRate, setElectricRate] = useState(8);
+  const [allowDaily, setAllowDaily] = useState(false);
+  const [pricePerDay, setPricePerDay] = useState(300);
   const [amenities, setAmenities] = useState<Set<string>>(new Set(['ac', 'bath', 'wifi', 'bed']));
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -191,6 +203,8 @@ export default function NewRoomPage() {
       formData.append('deposit', String(deposit));
       formData.append('waterRate', String(waterRate));
       formData.append('electricRate', String(electricRate));
+      formData.append('allowDaily', String(allowDaily));
+      formData.append('pricePerDay', String(allowDaily ? pricePerDay : 0));
       formData.append('amenities', JSON.stringify(Array.from(amenities)));
       formData.append('quantity', String(quantity));
       photos.forEach((f) => formData.append('photos', f));
@@ -392,6 +406,43 @@ export default function NewRoomPage() {
           </div>
         </div>
 
+        {/* daily rental */}
+        <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[15.5px] font-bold text-ink-strong">{t.dailySection}</div>
+              <p className="mt-1 text-[12.5px] text-ink-muted">{t.dailySectionSub}</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={allowDaily}
+              onClick={() => setAllowDaily((v) => !v)}
+              className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors ${allowDaily ? 'bg-success' : 'bg-card-border'}`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${allowDaily ? 'left-[22px]' : 'left-0.5'}`}
+              />
+            </button>
+          </div>
+          {allowDaily && (
+            <div className="mt-4 rounded-[13px] border border-hairline p-3.5">
+              <div className="mb-2 text-xs text-ink-muted">{t.pricePerDay}</div>
+              <div className="flex items-center gap-1">
+                <span className="font-sans text-lg font-bold">฿</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={pricePerDay}
+                  onChange={(e) => setPricePerDay(Math.max(0, Number(e.target.value)))}
+                  className="w-full font-sans text-2xl font-bold text-ink-strong outline-none"
+                />
+                <span className="shrink-0 text-sm font-medium text-ink-muted">{t.perNight}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* amenities */}
         <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
           <div className="text-[15.5px] font-bold text-ink-strong">{t.amenities}</div>
@@ -483,9 +534,17 @@ export default function NewRoomPage() {
           <div className="p-[18px]">
             <div className="flex items-baseline justify-between">
               <div className="text-[17px] font-bold text-ink-strong">{roomType === 'AIR' ? t.previewAir : t.previewFan}</div>
-              <div className="font-sans text-lg font-bold text-tenant">
-                ฿{price.toLocaleString()}
-                <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>
+              <div className="text-right">
+                <div className="font-sans text-lg font-bold text-tenant">
+                  ฿{price.toLocaleString()}
+                  <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>
+                </div>
+                {allowDaily && pricePerDay > 0 && (
+                  <div className="font-sans text-[12.5px] font-semibold text-success">
+                    ฿{pricePerDay.toLocaleString()}
+                    <span className="text-ink-muted">{t.perNight}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-1 text-[12.5px] text-ink-muted">

@@ -54,6 +54,8 @@ export interface Room {
   dormId: string;
   type: RoomType;
   pricePerMonth: number;
+  pricePerDay?: number; // ราคาต่อคืน (ใช้เมื่อ allowDaily = true)
+  allowDaily?: boolean; // ห้องนี้เปิดให้เช่ารายวันหรือไม่
   status: RoomStatus;
   name?: string | null;
   description?: string | null;

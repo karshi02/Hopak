@@ -10,6 +10,8 @@ import { RoomsService } from './rooms.service';
 interface CreateRoomBody {
   type: 'AIR' | 'FAN';
   pricePerMonth: string;
+  pricePerDay?: string; // ราคาต่อคืน (multipart ส่งเป็น string)
+  allowDaily?: string; // 'true' | 'false' — เปิดเช่ารายวัน
   name?: string;
   description?: string;
   deposit?: string;
@@ -56,6 +58,8 @@ export class RoomsController {
       {
         type: body.type,
         pricePerMonth: Number(body.pricePerMonth),
+        pricePerDay: body.pricePerDay ? Number(body.pricePerDay) : 0,
+        allowDaily: body.allowDaily === 'true',
         name: body.name,
         description: body.description,
         deposit: body.deposit ? Number(body.deposit) : 0,

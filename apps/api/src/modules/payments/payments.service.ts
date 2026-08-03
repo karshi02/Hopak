@@ -50,6 +50,46 @@ export class PaymentsService {
     return { received, pending, rows };
   }
 
+  // รายได้รายวัน — จัดกลุ่ม payment ตามวันที่ผู้เช่าชำระ (createdAt) แยกรับแล้ว/รอโอน + นับจำนวนจอง (รายวัน/เดือน)
+  // ใช้บนหน้า /partner/income มุมมองรายวัน — ไม่ใส่ from/to = ทั้งหมด
+  async getOwnerDailyIncome(ownerId: string, fromISO?: string, toISO?: string) {
+    const createdAt: { gte?: Date; lte?: Date } = {};
+    if (fromISO) createdAt.gte = new Date(fromISO);
+    if (toISO) {
+      const d = new Date(toISO);
+      d.setHours(23, 59, 59, 999);
+      createdAt.lte = d;
+    }
+
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        status: { in: ['SETTLED', 'TRANSFERRED'] },
+        booking: { room: { dorm: { ownerId } } },
+        ...(fromISO || toISO ? { createdAt } : {}),
+      },
+      include: { booking: { select: { rentalType: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    type Day = { date: string; received: number; pending: number; count: number; daily: number; monthly: number };
+    const map = new Map<string, Day>();
+    for (const p of payments) {
+      const day = p.createdAt.toISOString().slice(0, 10);
+      const e: Day = map.get(day) ?? { date: day, received: 0, pending: 0, count: 0, daily: 0, monthly: 0 };
+      if (p.status === 'TRANSFERRED') e.received += p.ownerPayout;
+      else e.pending += p.ownerPayout;
+      e.count += 1;
+      if (p.booking.rentalType === 'DAILY') e.daily += 1;
+      else e.monthly += 1;
+      map.set(day, e);
+    }
+
+    const days = Array.from(map.values()).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const totalReceived = days.reduce((s, d) => s + d.received, 0);
+    const totalPending = days.reduce((s, d) => s + d.pending, 0);
+    return { days, totalReceived, totalPending };
+  }
+
   async pay(userId: string, bookingId: string, method: string, slip: Express.Multer.File) {
     if (!slip) throw new BadRequestException('กรุณาแนบสลิปโอนเงิน');
 

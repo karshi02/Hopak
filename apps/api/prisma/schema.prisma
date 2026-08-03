@@ -60,6 +60,12 @@ enum BookingStatus {
   COMPLETED
 }
 
+// รูปแบบการเช่า: รายเดือน (สัญญาเช่า) หรือ รายวัน (จองเป็นช่วงวัน แบบโรงแรม/Airbnb)
+enum RentalType {
+  MONTHLY
+  DAILY
+}
+
 enum PaymentStatus {
   PENDING
   SETTLED
@@ -183,6 +189,10 @@ model Room {
   dorm          Dorm       @relation(fields: [dormId], references: [id])
   type          RoomType
   pricePerMonth Float
+  // ราคาต่อคืนสำหรับเช่ารายวัน — ใช้เมื่อ allowDaily = true เท่านั้น
+  pricePerDay   Float      @default(0)
+  // เจ้าของหอเปิดให้ห้องนี้จองรายวันได้หรือไม่ (ปิดโดย default — คงพฤติกรรมเดิมเป็นรายเดือน)
+  allowDaily    Boolean    @default(false)
   status        RoomStatus @default(AVAILABLE)
 
   name          String?
@@ -205,10 +215,14 @@ model Booking {
   roomId         String
   room           Room          @relation(fields: [roomId], references: [id])
   checkInDate    DateTime
+  // วันคืนห้อง — ใช้เฉพาะเช่ารายวัน (rentalType = DAILY) เพื่อคิดจำนวนคืน + กันจองซ้ำช่วงวันชนกัน
+  checkOutDate   DateTime?
   amount         Float         // ยอดที่ผู้เช่าจ่ายรวม = roomPrice + deposit
   roomPrice      Float         @default(0) // ค่าเช่าห้อง snapshot ตอนจอง — ฐานคิดค่าคอม
   deposit        Float         @default(0) // ค่ามัดจำ snapshot ตอนจอง — ส่งเจ้าของเต็ม ไม่โดนหักคอม
-  leaseMonths    Int           @default(1) // ระยะเวลาเช่าที่ผู้เช่าเลือก (เดือน) — 1/3/6
+  rentalType     RentalType    @default(MONTHLY) // รายเดือน หรือ รายวัน
+  leaseMonths    Int           @default(1) // ระยะเวลาเช่าที่ผู้เช่าเลือก (เดือน) — 1/3/6 (เฉพาะรายเดือน)
+  nights         Int?          // จำนวนคืน (เฉพาะรายวัน) = checkOutDate - checkInDate
   status         BookingStatus @default(PENDING)
   contactName    String
   contactPhone   String

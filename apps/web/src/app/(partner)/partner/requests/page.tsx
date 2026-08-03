@@ -24,6 +24,9 @@ const TEXT = {
     historySub: (n: number) => `${n} รายการที่ยืนยัน/ปฏิเสธไปแล้ว`,
     status: 'สถานะ',
     noHistory: 'ยังไม่มีประวัติ',
+    dailyTag: 'รายวัน',
+    monthlyTag: 'รายเดือน',
+    nightsWord: 'คืน',
     dateLocale: 'th-TH',
   },
   en: {
@@ -41,9 +44,36 @@ const TEXT = {
     historySub: (n: number) => `${n} confirmed/rejected`,
     status: 'Status',
     noHistory: 'No history yet',
+    dailyTag: 'Daily',
+    monthlyTag: 'Monthly',
+    nightsWord: 'nights',
     dateLocale: 'en-US',
   },
 };
+
+// วันเข้าพัก: รายวันโชว์ช่วงวัน (เข้า–ออก + จำนวนคืน), รายเดือนโชว์วันเข้าอยู่
+function rentalCell(b: Booking, t: (typeof TEXT)['th']) {
+  if (b.rentalType === 'DAILY' && b.checkOutDate) {
+    const opt = { day: 'numeric', month: 'short' } as const;
+    const inD = new Date(b.checkInDate).toLocaleDateString(t.dateLocale, opt);
+    const outD = new Date(b.checkOutDate).toLocaleDateString(t.dateLocale, opt);
+    return `${inD} – ${outD} · ${b.nights ?? 0} ${t.nightsWord}`;
+  }
+  return new Date(b.checkInDate).toLocaleDateString(t.dateLocale);
+}
+
+function RentalTag({ b, t }: { b: Booking; t: (typeof TEXT)['th'] }) {
+  const daily = b.rentalType === 'DAILY';
+  return (
+    <span
+      className={`ml-2 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold ${
+        daily ? 'bg-success-tint text-success' : 'bg-tenant-tint text-tenant'
+      }`}
+    >
+      {daily ? t.dailyTag : t.monthlyTag}
+    </span>
+  );
+}
 
 export default function PartnerRequestsPage() {
   const { lang } = useLang();
@@ -112,9 +142,12 @@ export default function PartnerRequestsPage() {
           <tbody>
             {pending.map((b) => (
               <tr key={b.id} className="border-b border-hairline last:border-0">
-                <td className="p-3 font-medium text-ink-strong">{b.contactName}</td>
+                <td className="p-3 font-medium text-ink-strong">
+                  {b.contactName}
+                  <RentalTag b={b} t={t} />
+                </td>
                 <td className="p-3 font-sans tabular-nums text-ink-subtitle">{b.contactPhone.slice(0, 8)}**-*</td>
-                <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</td>
+                <td className="p-3 text-ink-subtitle">{rentalCell(b, t)}</td>
                 <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
                 <td className="p-3">
                   <div className="flex justify-end gap-2">
@@ -164,8 +197,11 @@ export default function PartnerRequestsPage() {
                 const badge = bookingStatusBadge(normalizeStatus(b.status), lang);
                 return (
                   <tr key={b.id} className="border-b border-hairline last:border-0">
-                    <td className="p-3 font-medium text-ink-strong">{b.contactName}</td>
-                    <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</td>
+                    <td className="p-3 font-medium text-ink-strong">
+                      {b.contactName}
+                      <RentalTag b={b} t={t} />
+                    </td>
+                    <td className="p-3 text-ink-subtitle">{rentalCell(b, t)}</td>
                     <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
                     <td className="p-3">
                       <Badge label={badge.label} variant={badge.variant} />
@@ -185,11 +221,14 @@ export default function PartnerRequestsPage() {
             return (
               <div key={b.id} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 flex-1 truncate font-semibold text-ink-strong">{b.contactName}</span>
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ink-strong">
+                    {b.contactName}
+                    <RentalTag b={b} t={t} />
+                  </span>
                   <Badge label={badge.label} variant={badge.variant} />
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[13px]">
-                  <span className="text-ink-muted">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</span>
+                  <span className="text-ink-muted">{rentalCell(b, t)}</span>
                   <span className="font-sans font-bold tabular-nums text-ink-strong">฿{b.amount.toLocaleString()}</span>
                 </div>
               </div>

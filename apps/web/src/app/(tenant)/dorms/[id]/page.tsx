@@ -36,6 +36,8 @@ const TEXT = {
     fanSub: 'เย็นสบาย ประหยัดค่าไฟ',
     fromPrice: (p: string) => `เริ่ม ${p}`,
     perMonth: '/เดือน',
+    perNight: '/คืน',
+    dailyTag: 'รายวัน',
     roomDetailLink: 'ดูรายละเอียดห้อง',
     noRoomsNow: 'ไม่มีห้องว่างตอนนี้',
     reviews: 'รีวิวจากผู้เช่า',
@@ -94,6 +96,8 @@ const TEXT = {
     fanSub: 'Comfortable and low electricity cost',
     fromPrice: (p: string) => `From ${p}`,
     perMonth: '/month',
+    perNight: '/night',
+    dailyTag: 'Daily',
     roomDetailLink: 'Room details',
     noRoomsNow: 'No rooms available right now',
     reviews: 'Tenant reviews',
@@ -583,6 +587,12 @@ export default function DormDetailPage() {
                                 ฿{room.pricePerMonth.toLocaleString()}
                               </span>
                               <span className="text-xs text-ink-faint">{t.perMonth}</span>
+                              {room.allowDaily && (room.pricePerDay ?? 0) > 0 && (
+                                <div className="mt-0.5 text-[11.5px] font-semibold text-success">
+                                  {t.dailyTag} ฿{(room.pricePerDay ?? 0).toLocaleString()}
+                                  <span className="text-ink-faint">{t.perNight}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
