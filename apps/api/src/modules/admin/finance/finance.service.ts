@@ -3,8 +3,7 @@ import { PrismaService } from '../../../prisma.service';
 import { UploadsService } from '../../uploads/uploads.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { MailService } from '../../mail/mail.service';
-import { RealtimeGateway } from '../../realtime/realtime.gateway';
-import { generateCheckInToken, checkInTokenExpiry } from '../../bookings/bookings.service';
+import { DisbursementGateway, resolveBankChannel } from '../../payments/gateway/disbursement.gateway';
 
 @Injectable()
 export class FinanceService {
@@ -13,48 +12,80 @@ export class FinanceService {
     private uploads: UploadsService,
     private notifications: NotificationsService,
     private mail: MailService,
-    private realtime: RealtimeGateway,
+    private disbursement: DisbursementGateway,
   ) {}
 
-  // แอดมินเคลียร์บิลเอง (เช็คสลิปลูกค้า/ยืนยันลูกค้าเข้าหอแล้วด้วยตาตัวเอง) — ไม่มีระบบอัตโนมัติ
-  // ตั้งใจตัดออก กันเคสสลิปปลอม/ลูกค้ายังไม่เข้าหอจริงแต่ระบบเผลอโอนให้เจ้าของหอไปแล้ว
-  async settlePayment(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
-    if (!payment) throw new NotFoundException('ไม่พบรายการชำระเงิน');
-    if (payment.status !== 'PENDING') throw new BadRequestException('รายการนี้เคลียร์บิลไปแล้ว');
+  // โอน payout ให้เจ้าของหอ "อัตโนมัติ" ผ่าน Xendit (แทนอัปสลิปมือ) — ยิงเงินออกไปบัญชีธนาคารเจ้าของหอจริง
+  // ใช้บัญชีที่เจ้าของหอตั้งไว้ (bankName→channel, bankAccountNumber, bankAccountName)
+  async transferForDormViaXendit(dormId: string, adminId: string, confirmedAmount?: number, note?: string) {
+    const dorm = await this.prisma.dorm.findUnique({ where: { id: dormId }, include: { owner: true } });
+    if (!dorm) throw new NotFoundException('ไม่พบหอพัก');
+    const owner = dorm.owner;
 
-    await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: 'SETTLED', settledAt: new Date() },
+    const channel = resolveBankChannel(owner.bankName);
+    if (!channel || !owner.bankAccountNumber || !owner.bankAccountName) {
+      throw new BadRequestException('เจ้าของหอยังไม่ได้ตั้งบัญชีธนาคารรับเงิน (หรือธนาคารไม่รองรับการโอนอัตโนมัติ)');
+    }
+
+    const payments = await this.prisma.payment.findMany({
+      where: { status: 'SETTLED', booking: { room: { dormId } } },
     });
-    // ใบเสร็จเกิดขึ้นตรงนี้ จึงออกโค้ดยืนยันการเข้าพักพร้อมกันไปเลย
-    // เช็ค checkInToken เดิมก่อน กันกรณีถูกเรียกซ้ำแล้วออกโค้ดใหม่ทับของที่ผู้เช่าถืออยู่
-    const existing = await this.prisma.booking.findUniqueOrThrow({ where: { id: payment.bookingId } });
-    const booking = await this.prisma.booking.update({
-      where: { id: payment.bookingId },
+    const calculatedTotal = payments.reduce((sum, p) => sum + p.ownerPayout, 0);
+    if (payments.length === 0 && !(confirmedAmount && confirmedAmount > 0)) {
+      throw new BadRequestException('หอนี้ไม่มียอดค้างโอนในระบบ กรุณาระบุยอดที่จะโอนเอง');
+    }
+    const transferAmount = confirmedAmount && confirmedAmount > 0 ? confirmedAmount : calculatedTotal;
+    const bonusAmount = Math.max(0, transferAmount - calculatedTotal);
+
+    // ยิง Xendit โอนออกจริง — ได้ payoutId (disb-...) กลับมา
+    const payout = await this.disbursement.createPayout({
+      channelCode: channel,
+      accountNumber: owner.bankAccountNumber,
+      accountHolderName: owner.bankAccountName,
+      amount: transferAmount,
+      referenceId: this.disbursement.freshReference(`dorm-${dormId}`),
+      description: `Hoprak payout - ${dorm.name}`,
+    });
+
+    const now = new Date();
+    if (payments.length > 0) {
+      await this.prisma.payment.updateMany({
+        where: { id: { in: payments.map((p) => p.id) } },
+        data: { status: 'TRANSFERRED', transferredAt: now },
+      });
+    }
+
+    await this.prisma.approvalLog.create({
       data: {
-        status: 'PAID',
-        ...(existing.checkInToken
-          ? {}
-          : {
-              checkInToken: generateCheckInToken(),
-              checkInTokenExpiresAt: checkInTokenExpiry(existing.checkInDate),
-            }),
+        entityType: 'PAYOUT',
+        entityId: dormId,
+        action: 'XENDIT_TRANSFER',
+        adminId,
+        snapshot: {
+          dormId,
+          dormName: dorm.name,
+          ownerId: dorm.ownerId,
+          amount: transferAmount,
+          baseAmount: calculatedTotal,
+          bonusAmount,
+          note: note ?? null,
+          linkedPaymentIds: payments.map((p) => p.id),
+          payoutId: payout.payoutId,
+          payoutStatus: payout.status,
+          channel,
+        },
+        note: `โอนอัตโนมัติผ่าน Xendit (${payout.status})`,
       },
     });
-    // แอดมินเคลียร์บิล (ได้รับเงินแล้ว) → ระบบตัดห้องอัตโนมัติ (OCCUPIED) โชว์ "ไม่ว่าง" บนเว็บทันที
-    // ไม่ต้องรอเจ้าของหอกดตัดเอง (กันทุจริต/ห้องค้างว่างทั้งที่จองแล้ว)
-    await this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'OCCUPIED' } });
 
-    this.realtime.emitToUser(booking.tenantId, 'booking:updated', booking);
     await this.notifications.create(
-      booking.tenantId,
-      'payment',
-      'ยืนยันการชำระเงินสำเร็จ',
-      `สลิปของคุณผ่านการตรวจสอบแล้ว ยอด ฿${booking.amount.toLocaleString()} — ใบเสร็จและโทเค็นยืนยันการเข้าพักพร้อมแล้ว`,
+      dorm.ownerId,
+      'payout',
+      'ได้รับโอนเงินจาก Hoprak',
+      `โอนเงิน ฿${transferAmount.toLocaleString()} เข้าบัญชี ${owner.bankName} ${owner.bankAccountNumber} แล้ว (หอ ${dorm.name})`,
     );
 
-    return { settled: true };
+    return { payoutId: payout.payoutId, status: payout.status, amount: transferAmount };
   }
 
   private periodRange(year?: number, month?: number) {

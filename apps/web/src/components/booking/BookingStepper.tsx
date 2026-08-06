@@ -3,8 +3,8 @@
 import type { Lang } from '@/hooks/useLang';
 
 const STEP_LABELS: Record<Lang, string[]> = {
-  th: ['ส่งข้อมูล', 'รอหอพักยืนยัน', 'หอพักยืนยัน', 'โอนเงิน + สลิป', 'รับใบเสร็จ'],
-  en: ['Send info', 'Awaiting owner', 'Owner confirmed', 'Transfer + slip', 'Get receipt'],
+  th: ['กรอกข้อมูล', 'ชำระเงิน', 'แจ้งเจ้าของหอ', 'รับใบเสร็จ'],
+  en: ['Fill info', 'Payment', 'Notify owner', 'Get receipt'],
 };
 
 const STEP_PREFIX: Record<Lang, string> = { th: 'ขั้นที่', en: 'Step' };
@@ -46,7 +46,7 @@ export function BookingStepper({ current, lang }: { current: number; lang: Lang 
                 </div>
               </div>
             </div>
-            {idx < 5 && (
+            {idx < labels.length && (
               <div
                 className="mx-3 h-0.5 min-w-[14px] flex-1 rounded"
                 style={{ background: done ? '#1FB56E' : '#E4E7EC' }}

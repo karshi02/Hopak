@@ -82,8 +82,8 @@ export class BookingsService {
     await this.notifications.create(
       room.dorm.ownerId,
       'booking',
-      'คำขอจองใหม่',
-      `${dto.contactName} ขอจอง${roomLabel} · เข้าอยู่ ${checkIn} · เช่า ${dto.leaseMonths ?? 1} เดือน — กดยืนยันในหน้าการจอง`,
+      'มีการจองใหม่',
+      `${dto.contactName} จอง${roomLabel} · เข้าอยู่ ${checkIn} · เช่า ${dto.leaseMonths ?? 1} เดือน — รอผู้เช่าชำระเงิน`,
     );
 
     return booking;
@@ -150,8 +150,8 @@ export class BookingsService {
     await this.notifications.create(
       room.dorm.ownerId,
       'booking',
-      'คำขอจองรายวันใหม่',
-      `${dto.contactName} ขอจอง${roomLabel} รายวัน · ${fmt(checkIn)} - ${fmt(checkOut)} (${nights} คืน) — กดยืนยันในหน้าการจอง`,
+      'มีการจองรายวันใหม่',
+      `${dto.contactName} จอง${roomLabel} รายวัน · ${fmt(checkIn)} - ${fmt(checkOut)} (${nights} คืน) — รอผู้เช่าชำระเงิน`,
     );
 
     return booking;
@@ -218,47 +218,6 @@ export class BookingsService {
       return rest;
     }
     return booking;
-  }
-
-  async confirm(ownerId: string, id: string) {
-    const booking = await this.findOne(id);
-    if (booking.room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
-    assertTransition(booking.status.toLowerCase() as any, 'confirmed');
-    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CONFIRMED' } });
-    this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
-    await this.notifications.create(
-      booking.tenantId,
-      'booking',
-      'เจ้าของหอยืนยันการจองแล้ว',
-      `การจอง ${booking.room.dorm.name} ได้รับการยืนยันแล้ว ดำเนินการชำระเงินต่อได้เลย`,
-    );
-    return updated;
-  }
-
-  async markPaid(id: string) {
-    const booking = await this.findOne(id);
-    assertTransition(booking.status.toLowerCase() as any, 'paid');
-    // รายเดือน = ห้องถูกครอบครองยาว → ตั้ง OCCUPIED กันคนอื่นจอง
-    // รายวัน = ห้องว่าง/เต็มตามช่วงวันแทน (bookedRanges คุมเอง) ห้ามตั้ง OCCUPIED ไม่งั้นบล็อกทุกวันอื่น
-    if (booking.rentalType !== 'DAILY') {
-      await this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'OCCUPIED' } });
-    }
-    return this.prisma.booking.update({ where: { id }, data: { status: 'PAID' } });
-  }
-
-  async reject(ownerId: string, id: string) {
-    const booking = await this.findOne(id);
-    if (booking.room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your dorm');
-    assertTransition(booking.status.toLowerCase() as any, 'cancelled');
-    const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'CANCELLED' } });
-    this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
-    await this.notifications.create(
-      booking.tenantId,
-      'booking',
-      'เจ้าของหอไม่รับการจอง',
-      `การจอง ${booking.room.dorm.name} ไม่ได้รับการยืนยัน คำขอสิ้นสุดแล้ว คุณสามารถเลือกจองหอพักอื่นได้`,
-    );
-    return updated;
   }
 
   // admin ยกเลิก/คืนห้อง booking ไหนก็ได้ (รวม PAID กรณีคืนเงิน) — override ไม่เช็ค state machine/

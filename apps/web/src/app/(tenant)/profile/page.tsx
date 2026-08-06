@@ -119,8 +119,7 @@ const TEXT = {
     verifySuccess: 'ยืนยันตัวตนสำเร็จ! บัญชีของคุณได้รับการยืนยันด้วย OTP แล้ว',
     otpError: 'เกิดข้อผิดพลาด',
     statusLabel: {
-      pending: 'รอเจ้าของหอยืนยัน',
-      confirmed: 'ยืนยันแล้ว รอชำระเงิน',
+      pending: 'รอชำระเงิน',
       paid: 'ชำระเงินแล้ว',
       cancelled: 'ยกเลิกแล้ว',
       completed: 'เสร็จสิ้น',
@@ -228,8 +227,7 @@ const TEXT = {
     verifySuccess: 'Verified! Your account email is now confirmed.',
     otpError: 'Something went wrong',
     statusLabel: {
-      pending: 'Awaiting owner confirmation',
-      confirmed: 'Confirmed, awaiting payment',
+      pending: 'Awaiting payment',
       paid: 'Paid',
       cancelled: 'Cancelled',
       completed: 'Completed',

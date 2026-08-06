@@ -17,9 +17,9 @@ const TEXT: Record<Lang, Record<string, string>> = {
     payTotal: 'ยอดชำระวันเข้าอยู่',
     payNote: 'ค่าเช่าเดือนแรก + ค่ามัดจำ',
     secure: 'ข้อมูลของคุณถูกเข้ารหัสและปลอดภัย',
-    r1: 'หากหอพักยืนยัน จะไปขั้นตอนโอนเงินต่อ · หากไม่ยืนยัน คำขอจะสิ้นสุดทันที',
-    r2: 'โอนเงินเสร็จแนบสลิปในระบบ แล้วรอแอดมินตรวจสอบ',
-    r3: 'แอดมินยืนยันแล้วจะออกใบเสร็จ ให้นำไปยืนยันกับหอพัก',
+    r1: 'จองสำเร็จ · สแกน QR พร้อมเพย์เพื่อชำระเงิน',
+    r2: 'ระบบตรวจยอดอัตโนมัติ ไม่ต้องรอเจ้าของหอ/แอดมินยืนยัน',
+    r3: 'ชำระแล้วออกใบเสร็จ + โทเค็นทันที นำโค้ดไปยืนยันกับหอพักตอนเข้าพัก',
   },
   en: {
     roomAir: 'Air-con room',
@@ -33,9 +33,9 @@ const TEXT: Record<Lang, Record<string, string>> = {
     payTotal: 'Due on move-in',
     payNote: 'First month rent + deposit',
     secure: 'Your information is encrypted and secure',
-    r1: 'If the owner confirms, you proceed to transfer · if not, the request ends immediately',
-    r2: 'After transferring, attach the slip and wait for admin review',
-    r3: 'Once admin confirms, a receipt is issued to show the owner',
+    r1: 'Booked · scan the PromptPay QR to pay',
+    r2: 'The system verifies automatically — no waiting for owner/admin',
+    r3: 'Once paid, the receipt & check-in code are issued instantly to show the dorm',
   },
 };
 

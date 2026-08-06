@@ -45,20 +45,6 @@ export class BookingsController {
     return this.bookingsService.findOneFor(id, user);
   }
 
-  @Patch(':id/confirm')
-  @Roles('owner')
-  @UseGuards(RolesGuard)
-  confirm(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.bookingsService.confirm(user.id, id);
-  }
-
-  @Patch(':id/reject')
-  @Roles('owner')
-  @UseGuards(RolesGuard)
-  reject(@CurrentUser() user: { id: string }, @Param('id') id: string) {
-    return this.bookingsService.reject(user.id, id);
-  }
-
   @Patch(':id/cancel')
   cancel(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.bookingsService.cancel(user.id, id);

@@ -81,6 +81,7 @@ const TEXT = {
     photoPlaceholder: 'รูปหอพัก',
     ad: 'โฆษณา',
     perMonth: '/ เดือน',
+    perNight: '/ คืน',
     full: 'ห้องเต็ม',
     allDormsIn: (p: string) => `หอพักทั้งหมด${p ? `ใน${p}` : ''}`,
     count: (n: number) => `${n} แห่ง`,
@@ -132,6 +133,7 @@ const TEXT = {
     photoPlaceholder: 'Dorm photo',
     ad: 'Ad',
     perMonth: '/ month',
+    perNight: '/ night',
     full: 'Fully booked',
     allDormsIn: (p: string) => (p ? `Dorms in ${p}` : 'All dorms'),
     count: (n: number) => `${n} listings`,
@@ -190,6 +192,13 @@ export default function SearchPage() {
   const { dorms, loading } = useDormSearch({ q, province: province || undefined });
   const { favoriteIds, toggle } = useFavorites();
 
+  // โหมดรายวัน (มาจากหน้าแรก ?rental=daily) — กรองเฉพาะหอที่มีห้องเปิดรายวัน + ใช้ราคา/คืน
+  const dailyMode = params.get('rental') === 'daily';
+  type RoomT = (typeof dorms)[number]['rooms'][number];
+  const rPrice = (r: RoomT) => (dailyMode ? r.pricePerDay ?? 0 : r.pricePerMonth);
+  const rOk = (r: RoomT) => r.status.toUpperCase() === 'AVAILABLE' && (!dailyMode || (!!r.allowDaily && (r.pricePerDay ?? 0) > 0));
+  const perUnit = dailyMode ? t.perNight : t.perMonth;
+
   const placeLat = params.get('lat') ? Number(params.get('lat')) : null;
   const placeLng = params.get('lng') ? Number(params.get('lng')) : null;
   const placeName = params.get('placeName');
@@ -215,12 +224,16 @@ export default function SearchPage() {
 
   const filteredDorms = useMemo(() => {
     let list = dorms.map((dorm) => {
-      const availableRooms = dorm.rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');
-      const startingRoom = [...availableRooms].sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
+      const availableRooms = dorm.rooms.filter(rOk);
+      const startingRoom = [...availableRooms].sort((a, b) => rPrice(a) - rPrice(b))[0];
       const distanceKm = hasPlace ? haversineKm(placeLat!, placeLng!, dorm.lat, dorm.lng) : null;
       return { dorm, availableRooms, startingRoom, distanceKm };
     });
 
+    // โหมดรายวัน: ตัดหอที่ไม่มีห้องเปิดรายวันออก
+    if (dailyMode) {
+      list = list.filter((x) => x.availableRooms.length > 0);
+    }
     if (roomType !== 'all') {
       list = list.filter((x) => x.availableRooms.some((r) => r.type.toUpperCase() === roomType.toUpperCase()));
     }
@@ -230,29 +243,30 @@ export default function SearchPage() {
     if (priceRange !== 'all') {
       list = list.filter((x) => {
         if (!x.startingRoom) return false;
-        const p = x.startingRoom.pricePerMonth;
+        const p = rPrice(x.startingRoom);
         if (priceRange === 'under3000') return p < 3000;
         if (priceRange === '3000-5000') return p >= 3000 && p <= 5000;
         return p > 5000;
       });
     }
     if (sortBy === 'price_asc') {
-      list = [...list].sort((a, b) => (a.startingRoom?.pricePerMonth ?? Infinity) - (b.startingRoom?.pricePerMonth ?? Infinity));
+      list = [...list].sort((a, b) => (a.startingRoom ? rPrice(a.startingRoom) : Infinity) - (b.startingRoom ? rPrice(b.startingRoom) : Infinity));
     } else if (sortBy === 'price_desc') {
-      list = [...list].sort((a, b) => (b.startingRoom?.pricePerMonth ?? 0) - (a.startingRoom?.pricePerMonth ?? 0));
+      list = [...list].sort((a, b) => (b.startingRoom ? rPrice(b.startingRoom) : 0) - (a.startingRoom ? rPrice(a.startingRoom) : 0));
     } else if (sortBy === 'distance_asc') {
       list = [...list].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
     }
     return list;
-  }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng, dailyMode]);
 
   const heroStats = useMemo(() => {
     let cheapest: number | null = null;
     let ratingSum = 0;
     let ratingCount = 0;
     for (const { startingRoom, dorm } of filteredDorms) {
-      if (startingRoom && (cheapest === null || startingRoom.pricePerMonth < cheapest)) {
-        cheapest = startingRoom.pricePerMonth;
+      if (startingRoom && (cheapest === null || rPrice(startingRoom) < cheapest)) {
+        cheapest = rPrice(startingRoom);
       }
       if ((dorm.reviewCount ?? 0) > 0 && dorm.avgRating != null) {
         ratingSum += dorm.avgRating;
@@ -488,8 +502,8 @@ export default function SearchPage() {
                 {sponsored.map((c) => {
                   const dorm = c.dorm;
                   const cheapest = dorm.rooms
-                    .filter((r) => r.status.toUpperCase() === 'AVAILABLE')
-                    .sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
+                    .filter(rOk)
+                    .sort((a, b) => rPrice(a) - rPrice(b))[0];
                   return (
                     <Link
                       key={c.id}
@@ -514,9 +528,9 @@ export default function SearchPage() {
                           {cheapest ? (
                             <>
                               <span className="font-sans text-lg font-bold text-tenant">
-                                ฿{cheapest.pricePerMonth.toLocaleString()}
+                                ฿{rPrice(cheapest).toLocaleString()}
                               </span>
-                              <span className="text-ink-faint"> {t.perMonth}</span>
+                              <span className="text-ink-faint"> {perUnit}</span>
                             </>
                           ) : (
                             <span className="text-ink-faint">{t.full}</span>
@@ -602,9 +616,9 @@ export default function SearchPage() {
                         {startingRoom ? (
                           <div>
                             <span className="font-sans text-[22px] font-bold text-tenant">
-                              ฿{startingRoom.pricePerMonth.toLocaleString()}
+                              ฿{rPrice(startingRoom).toLocaleString()}
                             </span>
-                            <span className="text-xs text-ink-faint"> {t.perMonth}</span>
+                            <span className="text-xs text-ink-faint"> {perUnit}</span>
                           </div>
                         ) : (
                           <span className="text-sm text-ink-faint">{t.full}</span>

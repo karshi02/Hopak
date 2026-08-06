@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { documentFileFilter, DOC_LIMIT } from '../../../common/upload-filters';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -43,9 +43,15 @@ export class FinanceController {
     return this.financeService.getOwnerDetail(ownerId);
   }
 
-  @Patch('payments/:paymentId/settle')
-  settlePayment(@Param('paymentId') paymentId: string) {
-    return this.financeService.settlePayment(paymentId);
+  // โอน payout อัตโนมัติผ่าน Xendit ไปบัญชีเจ้าของหอ (ไม่ต้องอัปสลิป)
+  @Post('payouts/dorm/:dormId/transfer-xendit')
+  transferForDormXendit(
+    @Param('dormId') dormId: string,
+    @CurrentUser() admin: { id: string },
+    @Body('amount') amount?: string,
+    @Body('note') note?: string,
+  ) {
+    return this.financeService.transferForDormViaXendit(dormId, admin.id, amount ? Number(amount) : undefined, note);
   }
 
   @Post('payouts/dorm/:dormId/transfer')

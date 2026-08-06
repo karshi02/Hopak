@@ -1,6 +1,6 @@
 import type { Dorm, Room } from './dorm';
 
-export type BookingStatus = 'pending' | 'confirmed' | 'paid' | 'cancelled' | 'completed';
+export type BookingStatus = 'pending' | 'paid' | 'cancelled' | 'completed';
 
 export interface Booking {
   id: string;
@@ -24,7 +24,7 @@ export interface Booking {
   checkInToken?: string | null;
   checkInTokenExpiresAt?: string | null;
   checkedInAt?: string | null;
-  // มีค่าเมื่อผู้เช่าจ่าย/แนบสลิปแล้ว (PENDING = รอแอดมินตรวจ, SETTLED/TRANSFERRED = เคลียร์แล้ว)
+  // มีค่าเมื่อผู้เช่าจ่าย QR แล้ว (SETTLED = เงินเข้าบัญชีกลางรอโอนเจ้าของหอ, TRANSFERRED = โอนแล้ว)
   payment?: { status: string } | null;
   room?: Room & { dorm?: Dorm };
 }

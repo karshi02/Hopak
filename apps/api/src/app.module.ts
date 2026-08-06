@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { DormsModule } from './modules/dorms/dorms.module';
@@ -18,6 +19,7 @@ import { OwnerApplicationsModule } from './modules/owner-applications/owner-appl
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     DormsModule,

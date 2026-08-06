@@ -18,14 +18,14 @@ const TEXT = {
     statWaiting: 'รอดำเนินการ',
     statStaying: 'กำลังเข้าพัก',
     statOutstanding: 'ยอดค้างชำระ',
-    tabs: { all: 'ทั้งหมด', wait: 'รอยืนยัน', pay: 'รอชำระเงิน', stay: 'กำลังเข้าพัก', done: 'เสร็จสิ้น', cancel: 'ยกเลิก' } as Record<string, string>,
+    tabs: { all: 'ทั้งหมด', pay: 'รอชำระเงิน', stay: 'กำลังเข้าพัก', done: 'เสร็จสิ้น', cancel: 'ยกเลิก' } as Record<string, string>,
     st: {
       wait: 'รอเจ้าของหอยืนยัน', pay: 'รอชำระเงิน', verify: 'รอแอดมินตรวจสลิป',
       stay: 'ชำระเงินสำเร็จ · พร้อมเข้าพัก', done: 'เสร็จสิ้น', cancel: 'ยกเลิกแล้ว',
     },
     note: {
       wait: (d: string) => `ส่งคำขอเมื่อ ${d}`,
-      pay: 'เจ้าของหอยืนยันแล้ว · ชำระผ่าน Hoprak',
+      pay: 'จองสำเร็จ · สแกน QR พร้อมเพย์เพื่อยืนยัน',
       verify: 'แนบสลิปแล้ว · รอแอดมินตรวจสอบ',
       stay: 'มีใบเสร็จและรหัสเข้าพักแล้ว',
       done: (d: string) => `เข้าพักเมื่อ ${d}`,
@@ -51,14 +51,14 @@ const TEXT = {
     statWaiting: 'In progress',
     statStaying: 'Staying',
     statOutstanding: 'Outstanding',
-    tabs: { all: 'All', wait: 'Awaiting', pay: 'To pay', stay: 'Staying', done: 'Completed', cancel: 'Cancelled' } as Record<string, string>,
+    tabs: { all: 'All', pay: 'To pay', stay: 'Staying', done: 'Completed', cancel: 'Cancelled' } as Record<string, string>,
     st: {
       wait: 'Awaiting owner confirmation', pay: 'Awaiting payment', verify: 'Awaiting admin review',
       stay: 'Paid · ready to check in', done: 'Completed', cancel: 'Cancelled',
     },
     note: {
       wait: (d: string) => `Requested on ${d}`,
-      pay: 'Owner confirmed · pay via Hoprak',
+      pay: 'Booked · scan the PromptPay QR to confirm',
       verify: 'Slip attached · awaiting admin review',
       stay: 'Receipt and check-in code ready',
       done: (d: string) => `Checked in on ${d}`,
@@ -104,13 +104,8 @@ export default function BookingsPage() {
   // แปลง booking จริง → props การ์ด (สถานะ/สี/ปุ่ม) ตามสถานะ + มี payment หรือยัง
   function view(b: Booking) {
     const s = normalizeStatus(b.status);
-    const hasPayment = !!b.payment;
     if (s === 'pending')
-      return { tab: 'wait', tone: 'amber' as Tone, label: t.st.wait, note: t.note.wait(fmtDate(b.createdAt)), cta: t.cta.view, href: `/bookings/${b.id}` };
-    if (s === 'confirmed' && !hasPayment)
       return { tab: 'pay', tone: 'blue' as Tone, label: t.st.pay, note: t.note.pay, cta: t.cta.pay, href: `/bookings/${b.id}/pay` };
-    if (s === 'confirmed' && hasPayment)
-      return { tab: 'pay', tone: 'blue' as Tone, label: t.st.verify, note: t.note.verify, cta: t.cta.view, href: `/bookings/${b.id}` };
     if (s === 'paid')
       return { tab: 'stay', tone: 'green' as Tone, label: t.st.stay, note: t.note.stay, cta: t.cta.receipt, href: `/bookings/${b.id}` };
     if (s === 'completed')

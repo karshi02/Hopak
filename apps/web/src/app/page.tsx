@@ -109,7 +109,9 @@ const TEXT = {
     nearbyCount: (n: number) => `${n} หอพักใกล้เคียง`,
     distanceAway: (km: number) => (km < 1 ? `ห่างคุณ ${Math.round(km * 1000)} ม.` : `ห่างคุณ ${km.toFixed(1)} กม.`),
     noDorms: 'ยังไม่มีหอพักในจังหวัดนี้',
+    noDailyDorms: 'ยังไม่มีหอพักรายวันในจังหวัดนี้',
     perMonth: '/ เดือน',
+    perNight: '/ คืน',
     full: 'ห้องเต็ม',
     photoPlaceholder: 'ไม่มีรูปหอพัก',
     trust: [
@@ -167,7 +169,9 @@ const TEXT = {
     nearbyCount: (n: number) => `${n} nearby dorms`,
     distanceAway: (km: number) => (km < 1 ? `${Math.round(km * 1000)} m from you` : `${km.toFixed(1)} km from you`),
     noDorms: 'No dorms in this province yet',
+    noDailyDorms: 'No daily rentals in this province yet',
     perMonth: '/ month',
+    perNight: '/ night',
     full: 'Fully booked',
     photoPlaceholder: 'No dorm photo',
     trust: [
@@ -218,6 +222,7 @@ export default function HomePage() {
   }, [isTenant]);
 
   const { lang, setLang } = useLang();
+  const [category, setCategory] = useState<'monthly' | 'daily'>('monthly');
   const [province, setProvince] = useState<string>(PROVINCES[0]);
   const [open, setOpen] = useState(false);
   const [roomType, setRoomType] = useState('all');
@@ -325,14 +330,26 @@ export default function HomePage() {
   });
   const provinceLabel = (p: string) => PROVINCE_LABEL[lang][p] ?? p;
 
+  const dailyMode = category === 'daily';
+  // โหมดรายวัน: ห้องต้องเปิดรายวัน (allowDaily) + ราคาที่ใช้คือ pricePerDay ; โหมดเดือนใช้ pricePerMonth
+  const roomOk = (r: (typeof dorms)[number]['rooms'][number]) =>
+    r.status.toUpperCase() === 'AVAILABLE' && (!dailyMode || (r.allowDaily && (r.pricePerDay ?? 0) > 0));
+  const roomPrice = (r: (typeof dorms)[number]['rooms'][number]) => (dailyMode ? r.pricePerDay ?? 0 : r.pricePerMonth);
+
+  // โหมดรายวันแสดงเฉพาะหอที่มีห้องเปิดรายวันอย่างน้อย 1 ห้อง
+  const catDorms = useMemo(
+    () => (dailyMode ? dorms.filter((d) => d.rooms.some((r) => r.allowDaily && (r.pricePerDay ?? 0) > 0)) : dorms),
+    [dorms, dailyMode],
+  );
+
   const byProvince = useMemo(() => {
     const map = new Map<string, typeof dorms>();
     for (const p of PROVINCES) map.set(p, []);
-    for (const d of dorms) {
+    for (const d of catDorms) {
       if (map.has(d.province)) map.get(d.province)!.push(d);
     }
     return map;
-  }, [dorms]);
+  }, [catDorms]);
 
   const currentDorms = byProvince.get(province) ?? [];
 
@@ -340,8 +357,8 @@ export default function HomePage() {
     let min: number | null = null;
     for (const d of list) {
       for (const r of d.rooms) {
-        if (r.status.toUpperCase() === 'AVAILABLE' && (min === null || r.pricePerMonth < min)) {
-          min = r.pricePerMonth;
+        if (roomOk(r) && (min === null || roomPrice(r) < min)) {
+          min = roomPrice(r);
         }
       }
     }
@@ -361,14 +378,16 @@ export default function HomePage() {
 
   // หอพักแนะนำ = คะแนนรีวิวจริงสูงสุดทั้งระบบ (ไม่มี concept "โปรโมท/บูสต์" โชว์บนหน้าแรกในตอนนี้ ไม่ใส่ badge ที่พิสูจน์ไม่ได้)
   const topDorms = useMemo(() => {
-    return [...dorms]
+    return [...catDorms]
       .filter((d) => (d.reviewCount ?? 0) > 0)
       .sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0))
       .slice(0, 4);
-  }, [dorms]);
+  }, [catDorms]);
+
+  const perUnit = dailyMode ? t.perNight : t.perMonth;
 
   const visibleCurrentDorms = availableOnly
-    ? currentDorms.filter((d) => d.rooms.some((r) => r.status.toUpperCase() === 'AVAILABLE'))
+    ? currentDorms.filter((d) => d.rooms.some(roomOk))
     : currentDorms;
 
   function handleLogout() {
@@ -388,6 +407,7 @@ export default function HomePage() {
       params.set('q', q.trim());
     }
     params.set('province', province);
+    if (dailyMode) params.set('rental', 'daily');
     if (roomType !== 'all') params.set('roomType', roomType);
     if (priceRange !== 'all') params.set('priceRange', priceRange);
     if (availableOnly) params.set('availableOnly', '1');
@@ -533,16 +553,26 @@ export default function HomePage() {
       <div className="relative z-[2] mx-auto -mt-[120px] w-full max-w-[880px] px-4 sm:-mt-[140px]">
         {/* category tabs */}
         <div className="flex gap-1.5 pl-3.5">
-          <div className="flex items-center gap-2 rounded-t-xl bg-white px-6 py-3.5 text-[15px] font-semibold text-tenant shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
-            <span className="h-[9px] w-[9px] rounded-full bg-tenant" />
-            {t.tabMonthly}
-          </div>
-          <div
-            className="cursor-not-allowed rounded-t-xl bg-white/55 px-6 py-3.5 text-[15px] text-[#3A3F49]"
-            title={t.comingSoon}
+          <button
+            type="button"
+            onClick={() => setCategory('monthly')}
+            className={`flex items-center gap-2 rounded-t-xl px-6 py-3.5 text-[15px] font-semibold shadow-[0_-2px_8px_rgba(0,0,0,0.04)] ${
+              !dailyMode ? 'bg-white text-tenant' : 'bg-white/55 text-[#3A3F49]'
+            }`}
           >
+            {!dailyMode && <span className="h-[9px] w-[9px] rounded-full bg-tenant" />}
+            {t.tabMonthly}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategory('daily')}
+            className={`flex items-center gap-2 rounded-t-xl px-6 py-3.5 text-[15px] font-semibold shadow-[0_-2px_8px_rgba(0,0,0,0.04)] ${
+              dailyMode ? 'bg-white text-tenant' : 'bg-white/55 text-[#3A3F49]'
+            }`}
+          >
+            {dailyMode && <span className="h-[9px] w-[9px] rounded-full bg-tenant" />}
             {t.tabDaily}
-          </div>
+          </button>
         </div>
 
         {/* card */}
@@ -763,7 +793,7 @@ export default function HomePage() {
                         <>
                           <span className="text-[11px] text-[#9AA0AB]">{lang === 'th' ? 'เริ่มต้น ' : 'From '}</span>
                           <span className="font-sans text-[19px] font-bold text-tenant">฿{cheapest.toLocaleString()}</span>
-                          <span className="text-xs text-[#9AA0AB]"> {t.perMonth}</span>
+                          <span className="text-xs text-[#9AA0AB]"> {perUnit}</span>
                         </>
                       ) : (
                         <span className="text-xs text-ink-faint">{t.full}</span>
@@ -840,12 +870,12 @@ export default function HomePage() {
         </div>
 
         {visibleCurrentDorms.length === 0 ? (
-          <p className="text-ink-faint">{t.noDorms}</p>
+          <p className="text-ink-faint">{dailyMode ? t.noDailyDorms : t.noDorms}</p>
         ) : (
           <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
             {visibleCurrentDorms.slice(0, 4).map((d) => {
-              const availableRooms = d.rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');
-              const startingRoom = [...availableRooms].sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
+              const okRooms = d.rooms.filter(roomOk);
+              const startingRoom = [...okRooms].sort((a, b) => roomPrice(a) - roomPrice(b))[0];
               const isFavorited = favoriteIds.has(d.id);
               return (
                 <Link
@@ -878,8 +908,8 @@ export default function HomePage() {
                     <div className="mt-2.5 text-sm">
                       {startingRoom ? (
                         <>
-                          <b className="font-sans text-lg">฿{startingRoom.pricePerMonth.toLocaleString()}</b>
-                          <span className="text-ink-muted"> {t.perMonth}</span>
+                          <b className="font-sans text-lg">฿{roomPrice(startingRoom).toLocaleString()}</b>
+                          <span className="text-ink-muted"> {perUnit}</span>
                         </>
                       ) : (
                         <span className="text-ink-faint">{t.full}</span>

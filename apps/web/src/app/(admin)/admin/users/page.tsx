@@ -152,9 +152,9 @@ const TEXT = {
   },
 };
 
-export default function AdminUsersPage() {
+export default function AdminUsersPage() { // eslint-disable-line react-refresh/only-export-components
   const { lang } = useLang();
-  const t = TEXT[lang];
+  const t = TEXT[lang]; //เเก้กราฟ 
   const [users, setUsers] = useState<User[]>([]);
   const [roleFilter, setRoleFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -458,8 +458,8 @@ export default function AdminUsersPage() {
             <p className="mt-1 text-sm text-ink-subtitle">
               {t.to} {warningTarget.name} {warningTarget.email && `(${warningTarget.email})`}
             </p>
-
-            {warningResult ? (
+{/* กราฟตรง เดือน ผ่าน respost  */}
+            {warningResult ? (  
               <div className="mt-4">
                 <p className="text-sm text-success">{t.notifiedInApp}</p>
                 <p className="mt-1 text-sm text-ink-subtitle">

@@ -10,18 +10,17 @@ import type { Booking } from '@hopak/shared';
 
 const TEXT = {
   th: {
-    title: 'คำขอจอง',
-    pendingCount: (n: number) => `รอยืนยัน ${n} รายการ · กดยืนยันเพื่อออกใบจองอัตโนมัติ`,
+    title: 'การจองเข้ามา',
+    pendingCount: (n: number) => `รอผู้เช่าชำระเงิน ${n} รายการ · เมื่อชำระแล้วระบบแจ้งเตือนและออกใบจองอัตโนมัติ`,
     booker: 'ผู้จอง',
     phone: 'เบอร์โทร',
     checkIn: 'วันเข้าอยู่',
     amount: 'ยอด',
-    confirm: 'ยืนยัน & ออกใบจอง',
-    reject: 'ปฏิเสธ',
-    none: 'ไม่มีคำขอใหม่',
+    waitingPay: 'รอชำระเงิน',
+    none: 'ไม่มีการจองที่รอชำระ',
     footnote: 'เบอร์ผู้จองถูกซ่อนบางส่วน จะเปิดเผยเต็มหลังผู้เช่าชำระเงินเรียบร้อย',
-    historyTitle: 'ประวัติการดำเนินการ',
-    historySub: (n: number) => `${n} รายการที่ยืนยัน/ปฏิเสธไปแล้ว`,
+    historyTitle: 'ประวัติการจอง',
+    historySub: (n: number) => `${n} รายการที่ชำระ/ยกเลิกแล้ว`,
     status: 'สถานะ',
     noHistory: 'ยังไม่มีประวัติ',
     dailyTag: 'รายวัน',
@@ -30,18 +29,17 @@ const TEXT = {
     dateLocale: 'th-TH',
   },
   en: {
-    title: 'Booking Requests',
-    pendingCount: (n: number) => `${n} pending · Confirm to auto-issue a booking slip`,
+    title: 'Incoming Bookings',
+    pendingCount: (n: number) => `${n} awaiting tenant payment · auto-notified and slip issued once paid`,
     booker: 'Booker',
     phone: 'Phone',
     checkIn: 'Check-in date',
     amount: 'Amount',
-    confirm: 'Confirm & issue slip',
-    reject: 'Reject',
-    none: 'No new requests',
+    waitingPay: 'Awaiting payment',
+    none: 'No bookings awaiting payment',
     footnote: "The booker's phone is partly hidden until fully paid",
-    historyTitle: 'Action history',
-    historySub: (n: number) => `${n} confirmed/rejected`,
+    historyTitle: 'Booking history',
+    historySub: (n: number) => `${n} paid/cancelled`,
     status: 'Status',
     noHistory: 'No history yet',
     dailyTag: 'Daily',
@@ -100,24 +98,6 @@ export default function PartnerRequestsPage() {
     };
   }, []);
 
-  async function confirm(id: string) {
-    try {
-      await apiClient.patch(`/bookings/${id}/confirm`);
-      reload();
-    } catch {
-      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
-    }
-  }
-
-  async function reject(id: string) {
-    try {
-      await apiClient.patch(`/bookings/${id}/reject`);
-      reload();
-    } catch {
-      // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
-    }
-  }
-
   const pending = bookings.filter((b) => normalizeStatus(b.status) === 'pending');
   // ประวัติ = คำขอที่ไม่ใช่ pending แล้ว (ยืนยัน/ปฏิเสธ/จ่าย/เข้าพัก/ยกเลิก) เรียงใหม่สุดก่อน
   const history = bookings
@@ -148,21 +128,13 @@ export default function PartnerRequestsPage() {
                 </td>
                 <td className="p-3 font-sans tabular-nums text-ink-subtitle">{b.contactPhone.slice(0, 8)}**-*</td>
                 <td className="p-3 text-ink-subtitle">{rentalCell(b, t)}</td>
-                <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
+                <td className="p-3 font-sans font-semibold tabular-nums">฿{(b.amount ?? 0).toLocaleString()}</td>
                 <td className="p-3">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => confirm(b.id)}
-                      className="rounded-lg bg-tenant px-3 py-1.5 text-xs font-semibold text-white hover:bg-tenant-dark"
-                    >
-                      {t.confirm}
-                    </button>
-                    <button
-                      onClick={() => reject(b.id)}
-                      className="rounded-lg bg-danger-tint px-3 py-1.5 text-xs font-semibold text-danger"
-                    >
-                      {t.reject}
-                    </button>
+                  <div className="flex justify-end">
+                    <span className="inline-flex items-center gap-1.5 rounded-pill bg-[#FFF3E0] px-3 py-1.5 text-xs font-semibold text-[#C77B14]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#E0902F]" />
+                      {t.waitingPay}
+                    </span>
                   </div>
                 </td>
               </tr>
@@ -202,7 +174,7 @@ export default function PartnerRequestsPage() {
                       <RentalTag b={b} t={t} />
                     </td>
                     <td className="p-3 text-ink-subtitle">{rentalCell(b, t)}</td>
-                    <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
+                    <td className="p-3 font-sans font-semibold tabular-nums">฿{(b.amount ?? 0).toLocaleString()}</td>
                     <td className="p-3">
                       <Badge label={badge.label} variant={badge.variant} />
                     </td>
@@ -229,7 +201,7 @@ export default function PartnerRequestsPage() {
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[13px]">
                   <span className="text-ink-muted">{rentalCell(b, t)}</span>
-                  <span className="font-sans font-bold tabular-nums text-ink-strong">฿{b.amount.toLocaleString()}</span>
+                  <span className="font-sans font-bold tabular-nums text-ink-strong">฿{(b.amount ?? 0).toLocaleString()}</span>
                 </div>
               </div>
             );

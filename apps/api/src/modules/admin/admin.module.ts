@@ -18,6 +18,7 @@ import { PromotionsService } from '../promotions/promotions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
 import { UploadsService } from '../uploads/uploads.service';
+import { DisbursementGateway } from '../payments/gateway/disbursement.gateway';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { PrismaService } from '../../prisma.service';
 
@@ -44,6 +45,7 @@ import { PrismaService } from '../../prisma.service';
     NotificationsService,
     MailService,
     UploadsService,
+    DisbursementGateway,
     PrismaService,
     AdminSearchService,
   ],

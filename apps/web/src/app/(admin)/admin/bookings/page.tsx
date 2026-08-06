@@ -16,8 +16,8 @@ const TEXT = {
     export: 'Export CSV',
     filters: [
       { value: '', label: 'ทั้งหมด' },
-      { value: 'pending', label: 'รอยืนยัน' },
-      { value: 'confirmed', label: 'ยืนยันแล้ว' },
+      { value: 'pending', label: 'รอชำระเงิน' },
+      { value: 'paid', label: 'ชำระเงินแล้ว' },
       { value: 'cancelled', label: 'ยกเลิก' },
       { value: 'completed', label: 'เสร็จสิ้น' },
     ],
@@ -47,8 +47,8 @@ const TEXT = {
     export: 'Export CSV',
     filters: [
       { value: '', label: 'All' },
-      { value: 'pending', label: 'Pending' },
-      { value: 'confirmed', label: 'Confirmed' },
+      { value: 'pending', label: 'Awaiting payment' },
+      { value: 'paid', label: 'Paid' },
       { value: 'cancelled', label: 'Cancelled' },
       { value: 'completed', label: 'Completed' },
     ],

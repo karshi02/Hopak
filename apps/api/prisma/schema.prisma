@@ -194,6 +194,10 @@ model Room {
   // เจ้าของหอเปิดให้ห้องนี้จองรายวันได้หรือไม่ (ปิดโดย default — คงพฤติกรรมเดิมเป็นรายเดือน)
   allowDaily    Boolean    @default(false)
   status        RoomStatus @default(AVAILABLE)
+  // จองชั่วคราวระหว่างผู้เช่ากำลังชำระเงิน (hold) — กันคนอื่นจ่ายห้องเดียวกันซ้อน
+  // heldUntil > now = ห้องถูกล็อกให้ heldByBookingId คนเดียวจ่ายได้ ; เกินเวลา = ปล่อยคืน (cron)
+  heldUntil       DateTime?
+  heldByBookingId String?
 
   name          String?
   description   String?
@@ -228,6 +232,8 @@ model Booking {
   contactPhone   String
   note           String?
   cancelDeadline DateTime
+  // เส้นตายชำระเงิน (hold) — ตั้งตอนกดจ่าย (createCharge) = now+10 นาที ; เกินแล้วไม่จ่าย cron คืนห้อง+ยกเลิก
+  paymentDeadline DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -253,6 +259,10 @@ model Payment {
   method        String
   status        PaymentStatus @default(PENDING)
   slipKey       String?
+  // เลขอ้างอิงธุรกรรมจากสลิป (SlipOK) — unique กันเอาสลิปเดิมมาจ่ายซ้ำหลาย booking
+  slipTransRef  String?       @unique
+  // id ของ charge/QR ฝั่ง payment gateway (Xendit) — ใช้ผูก webhook กลับมาหา payment นี้
+  gatewayChargeId String?     @unique
   settledAt     DateTime?
   createdAt     DateTime      @default(now())
 

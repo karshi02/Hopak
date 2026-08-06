@@ -16,6 +16,7 @@ interface IncomeRow {
   roomType: string;
   roomPrice: number;
   deposit: number;
+  commission: number;
   ownerPayout: number;
   status: 'transferred' | 'pending';
   transferredAt: string | null;
@@ -47,12 +48,18 @@ const TEXT = {
     receivedSub: 'โอนเข้าบัญชีเรียบร้อย · เต็มจำนวน',
     pendingTitle: 'รอโอนจากแอดมิน',
     pendingSub: 'จะบันทึกเป็นรายได้อัตโนมัติเมื่อเงินเข้า',
-    tableTitle: 'ค่าห้องแยกตามการจอง',
+    commTitle: 'ค่าคอมมิชชั่นของแอป',
+    commSub: 'Hoprak หัก 20% จากค่าห้อง (มัดจำไม่โดนหัก)',
+    tableTitle: 'รายได้แยกตามการจอง',
     thRef: 'เลขที่',
     thTenant: 'ผู้เช่า',
     thRoom: 'ห้อง',
-    thRent: 'ค่าห้อง (สุทธิ)',
+    thRoomPrice: 'ค่าห้อง',
+    thDeposit: 'มัดจำ (เต็ม)',
+    thComm: 'คอม 20%',
+    thRent: 'โอนสุทธิ',
     thStatus: 'สถานะ',
+    breakdownNote: 'คอม 20% หักจาก “ค่าห้อง” เท่านั้น · ค่ามัดจำคืนเจ้าของหอเต็มจำนวน · โอนสุทธิ = ค่าห้อง − คอม + มัดจำ',
     transferred: 'โอนแล้ว',
     pending: 'รอโอนจากแอดมิน',
     viewSlip: 'ดูสลิป',
@@ -78,12 +85,18 @@ const TEXT = {
     receivedSub: 'Transferred to your account · in full',
     pendingTitle: 'Awaiting admin transfer',
     pendingSub: 'Auto-recorded as income once the money arrives',
-    tableTitle: 'Room income by booking',
+    commTitle: 'App commission',
+    commSub: 'Hoprak takes 20% of room rent (deposit exempt)',
+    tableTitle: 'Income by booking',
     thRef: 'Ref',
     thTenant: 'Tenant',
     thRoom: 'Room',
-    thRent: 'Payout (net)',
+    thRoomPrice: 'Room rent',
+    thDeposit: 'Deposit (full)',
+    thComm: 'Comm 20%',
+    thRent: 'Net payout',
     thStatus: 'Status',
+    breakdownNote: 'The 20% commission is deducted from the room rent only · the deposit is returned in full · net payout = room rent − commission + deposit',
     transferred: 'Transferred',
     pending: 'Awaiting transfer',
     viewSlip: 'View slip',
@@ -145,6 +158,8 @@ export default function PartnerIncomePage() {
   if (!income) return <PageLoader theme="seller" />;
 
   const roomTypeLabel = (type: string) => ROOM_TYPE[type]?.[lang] ?? type;
+  // คอมรวมที่แอปหักไปทั้งหมด (ทุกการจอง ไม่ว่าโอนแล้วหรือรอโอน) — คอมถูกหักตั้งแต่จ่ายเงิน
+  const totalCommission = income.rows.reduce((s, r) => s + r.commission, 0);
 
   return (
     <div>
@@ -159,7 +174,7 @@ export default function PartnerIncomePage() {
       </Link>
 
       {/* headline totals */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-card-lg border-0 bg-[linear-gradient(120deg,#0F1115,#1B2A22)] p-6 shadow-card">
           <div className="text-[13.5px] text-[#9BB3A6]">{t.receivedTitle}</div>
           <div className="mt-1.5 font-sans text-[36px] font-bold tracking-tight text-[#3DDC97]">
@@ -179,6 +194,19 @@ export default function PartnerIncomePage() {
             ฿{income.pending.toLocaleString()}
           </div>
           <div className="mt-1 text-[12.5px] text-[#B08A4A]">{t.pendingSub}</div>
+        </div>
+        {/* ยอดหักค่าคอม (แอปหักไปทั้งหมด) — หัก 20% จากค่าห้องเท่านั้น */}
+        <div className="rounded-card-lg border-[1.5px] border-[#E5DAF5] bg-[#FAF7FE] p-6 shadow-card">
+          <div className="flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M19 5L5 19M8 6a2 2 0 11-4 0 2 2 0 014 0zm12 12a2 2 0 11-4 0 2 2 0 014 0z" stroke="#7C4DB8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[13.5px] font-semibold text-[#7C4DB8]">{t.commTitle}</span>
+          </div>
+          <div className="mt-1.5 font-sans text-[36px] font-bold tracking-tight text-[#7C4DBB]">
+            −฿{totalCommission.toLocaleString()}
+          </div>
+          <div className="mt-1 text-[12.5px] text-[#9578B5]">{t.commSub}</div>
         </div>
       </div>
 
@@ -296,13 +324,16 @@ export default function PartnerIncomePage() {
       <div className="mt-3.5 rounded-card-lg border border-card-border bg-white p-6 shadow-card">
         <div className="mb-3.5 text-[17px] font-bold text-ink-strong">{t.tableTitle}</div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-[820px] text-left text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs font-semibold text-ink-faint">
                 <th className="py-2.5 pr-3 font-semibold">{t.thRef}</th>
                 <th className="py-2.5 pr-3 font-semibold">{t.thTenant}</th>
                 <th className="py-2.5 pr-3 font-semibold">{t.thRoom}</th>
-                <th className="py-2.5 pr-3 font-semibold">{t.thRent}</th>
+                <th className="py-2.5 pr-3 text-right font-semibold">{t.thRoomPrice}</th>
+                <th className="py-2.5 pr-3 text-right font-semibold">{t.thDeposit}</th>
+                <th className="py-2.5 pr-3 text-right font-semibold">{t.thComm}</th>
+                <th className="py-2.5 pr-3 text-right font-semibold">{t.thRent}</th>
                 <th className="py-2.5 font-semibold">{t.thStatus}</th>
               </tr>
             </thead>
@@ -312,7 +343,16 @@ export default function PartnerIncomePage() {
                   <td className="py-3.5 pr-3 font-sans font-bold text-tenant">#{r.ref}</td>
                   <td className="py-3.5 pr-3 text-ink-subtitle">{r.tenantName}</td>
                   <td className="py-3.5 pr-3 text-ink-subtitle">{roomTypeLabel(r.roomType)}</td>
-                  <td className="py-3.5 pr-3 font-sans font-bold tabular-nums text-ink-strong">
+                  <td className="py-3.5 pr-3 text-right font-sans tabular-nums text-ink-subtitle">
+                    ฿{r.roomPrice.toLocaleString()}
+                  </td>
+                  <td className="py-3.5 pr-3 text-right font-sans tabular-nums text-[#12A150]">
+                    ฿{r.deposit.toLocaleString()}
+                  </td>
+                  <td className="py-3.5 pr-3 text-right font-sans tabular-nums text-danger">
+                    −฿{r.commission.toLocaleString()}
+                  </td>
+                  <td className="py-3.5 pr-3 text-right font-sans font-bold tabular-nums text-ink-strong">
                     ฿{r.ownerPayout.toLocaleString()}
                   </td>
                   <td className="py-3.5">
@@ -353,10 +393,10 @@ export default function PartnerIncomePage() {
               ))}
               {income.rows.length > 0 && (
                 <tr>
-                  <td className="py-4 pr-3 font-bold text-ink-strong" colSpan={3}>
+                  <td className="py-4 pr-3 font-bold text-ink-strong" colSpan={6}>
                     {t.totalReceived}
                   </td>
-                  <td className="py-4 pr-3 font-sans text-[17px] font-bold text-[#12A150]" colSpan={2}>
+                  <td className="py-4 pr-3 text-right font-sans text-[17px] font-bold text-[#12A150]" colSpan={2}>
                     ฿{income.received.toLocaleString()}
                   </td>
                 </tr>
@@ -365,7 +405,14 @@ export default function PartnerIncomePage() {
           </table>
         </div>
         {income.rows.length === 0 && <p className="py-4 text-ink-faint">{t.none}</p>}
-        <p className="mt-3.5 text-[12.5px] leading-relaxed text-ink-faint">{t.note}</p>
+        <div className="mt-3.5 flex items-start gap-2 rounded-[11px] border border-[#D5E4FF] bg-[#F3F7FE] px-4 py-3">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-0.5 shrink-0">
+            <circle cx="12" cy="12" r="9" stroke="#2F6FE0" strokeWidth="1.8" />
+            <path d="M12 8h.01M11 12h1v4h1" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-[12.5px] leading-relaxed text-[#1E4FB0]">{t.breakdownNote}</span>
+        </div>
+        <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-faint">{t.note}</p>
       </div>
       )}
     </div>

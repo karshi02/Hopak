@@ -21,8 +21,7 @@ export function Badge({ label, variant = 'neutral' }: { label: string; variant?:
 
 export function bookingStatusBadge(status: string, lang: Lang = 'th'): { label: string; variant: BadgeVariant } {
   const labels: Record<string, Record<string, string>> = {
-    pending: { th: 'รอยืนยัน', en: 'Pending' },
-    confirmed: { th: 'ยืนยันแล้ว', en: 'Confirmed' },
+    pending: { th: 'รอชำระเงิน', en: 'Awaiting payment' },
     paid: { th: 'ชำระเงินแล้ว', en: 'Paid' },
     completed: { th: 'เสร็จสิ้น', en: 'Completed' },
     cancelled: { th: 'ยกเลิก', en: 'Cancelled' },

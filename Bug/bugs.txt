@@ -1563,3 +1563,90 @@ Frontend dashboard:
 เฟส F (ใบเสร็จ): Receipt โชว์ช่วงวัน (เข้า–คืนห้อง) + จำนวนคืน + ค่าห้อง/คืน แทนรายเดือน
 เทส end-to-end (API local): จอง 3 คืน=900 มัดจำ0 ✓ ; จองทับ→บล็อก ✓ ; จองต่อวันคืนห้อง(exclusive)→ผ่าน 600 ✓ ; 0 คืน→บล็อก ✓ ; availability 2 ช่วงถูก ✓ ; tsc api+web ผ่าน ; ลบ test data + revert ห้อง
 สถานะ: เสร็จ local (ยังไม่ deploy — ต้อง migrate prod) (03/08/2026)
+
+[93] รื้อระบบชำระเงินใหม่ทั้งหมด — จ่าย QR พร้อมเพย์ สถานะขึ้นอัตโนมัติ ตัดด่านเจ้าของหอ+แอดมิน (05/08/2026)
+อาการ/คำขอ: เดิม flow = จอง(PENDING)→เจ้าของหอ confirm(CONFIRMED)→ผู้เช่าแนบสลิป→แอดมินเคลียร์บิล(SETTLED+PAID). ช้าเกิน รอเจ้าของหอ/แอดมิน. คำขอ: จ่ายผ่าน QR แล้วสถานะขึ้นเอง ไม่ต้องรอเจ้าของหอ/แอดมินยืนยัน. ยอดเข้า = รอโอนเจ้าของหออย่างเดียว. + import ดีไซน์ "Hopak User Booking Steps v2" (claude.ai/design) 4 ขั้น: กรอกข้อมูล→ชำระ QR→แจ้งเจ้าของหอ→ใบเสร็จ
+flow ใหม่: จอง(PENDING) → ผู้เช่าจ่าย QR → payment สร้าง SETTLED ทันที + booking PAID + ออกโทเค็น/ใบเสร็จ + ตัดห้อง OCCUPIED (รายเดือน) + แจ้งผู้เช่า/เจ้าของหอ อัตโนมัติ → เช็คอินด้วยโทเค็น(COMPLETED). ไม่มี CONFIRMED / ไม่มีด่านแอดมินเคลียร์บิล
+วิธียืนยัน QR: ทาง C stub (gateway.charge success เสมอ) — ต่อ PSP จริง (Omise/GB Prime Pay/SCB webhook) ทีหลังได้ ยังไม่ตัดสิน
+Backend:
+- booking-state.machine.ts: ตัด confirmed — pending→[paid,cancelled], paid→[completed] ; test อัปเดต 6 เคสผ่าน
+- shared/types/booking.ts: BookingStatus ตัด 'confirmed' ; rebuild shared
+- bookings.service.ts: ลบ confirm()/reject()/markPaid() ; notification จอง เปลี่ยน "กดยืนยัน"→"รอผู้เช่าชำระเงิน"
+- payments.service.ts pay(): gate PENDING (เดิม CONFIRMED), ตัดสลิป, สร้าง payment SETTLED+settledAt, $transaction ดัน booking PAID+ออกโทเค็น, ห้อง OCCUPIED (รายเดือน), แจ้งผู้เช่า(ชำระสำเร็จ)+เจ้าของหอ(มีเงินเข้า) ; +inject NotificationsService/RealtimeGateway (payments.module import RealtimeModule/NotificationsModule)
+- payments.controller.ts: ตัด FileInterceptor slip — body แค่ {method}
+- bookings.controller.ts: ตัด route :id/confirm, :id/reject
+- finance.service.ts: ลบ settlePayment() + import token helper + realtime (เหลือไม่ใช้) ; finance.controller ตัด PATCH payments/:id/settle
+Frontend:
+- BookingStepper: 5 ขั้น→4 ขั้น (กรอกข้อมูล/ชำระเงิน/แจ้งเจ้าของหอ/รับใบเสร็จ) ; bookings/new local Stepper labels ตาม
+- bookings/[id]/pay: จากโอน+แนบสลิป → PromptPay QR card + ยอด + ปุ่ม "ชำระเงินแล้ว·ตรวจยอด" POST JSON {method} → เด้งใบเสร็จ ; gate PENDING
+- bookings/[id]: ตัด confirmed/awaitingVerify/รอเจ้าของหอ ; pending=พร้อมชำระ(ขั้น2, ปุ่มไปจ่าย+ยกเลิก) ; paid/completed=ใบเสร็จ(ขั้น4) ; ข้อความ receipt/badge "ยืนยันโดยระบบ" แทน "แอดมิน/สลิป"
+- bookings(list): pending→tab pay (เดิม wait) ; ตัด tab 'wait' + สาขา confirmed ; note "จองสำเร็จ·สแกน QR"
+- partner/requests: ตัดปุ่ม confirm/reject + funcs → pending โชว์ badge "รอชำระเงิน" อ่านอย่างเดียว
+- admin/finance: ตัดปุ่มเคลียร์บิล + คอลัมน์ action + handleSettle + settlingId ; คงคอลัมน์สลิปลูกค้าไว้ (ข้อมูลเก่า)
+- profile/Badge/admin-bookings: label pending "รอเจ้าของหอ/รอยืนยัน"→"รอชำระเงิน" ; filter admin-bookings confirmed→paid
+ตรวจ: tsc api+web ผ่าน ; jest state machine 6/6 ผ่าน
+สถานะ: เสร็จ local (ยังไม่ deploy — prod ยังเป็น flow เก่า + ต้อง migrate booking CONFIRMED ค้าง/payment PENDING ค้าง ตอน deploy)
+
+[94] ใบเสร็จ/หน้าจ่าย: reassure r1-r3 (BookingSummary) ยังเป็น flow เก่า (รอหอพักยืนยัน/แนบสลิป/รอแอดมิน) — แก้เป็น flow ใหม่ (สแกน QR/ตรวจยอดอัตโนมัติ/ออกใบเสร็จ+โทเค็นทันที) th+en (05/08/2026)
+[95] pay stub gateway = success เสมอ กดปุ่ม=PAID ทันทีโดยไม่เช็คว่าโอนจริง (placeholder) + QR ไม่ขึ้น (ต้องไฟล์ public/promptpay-qr.png หรือ gen dynamic) — ต้องต่อ dynamic QR (ฝังยอด) + Slip Verify/PSP ก่อนใช้จริง (05/08/2026)
+
+[96] เพิ่ม Slip Verify — ตรวจสลิปว่าจ่ายจริงก่อน PAID (แก้ปัญหา stub กดปุ่ม=สำเร็จโดยไม่จ่าย) (06/08/2026)
+- gateway/slip-verify.gateway.ts (ใหม่): verify(slip, expectedAmount) โหมด env PAYMENT_VERIFY_MODE — slipok=ยิงรูปสลิป multipart ไป SlipOK API (x-authorization) เช็ค success/transRef/amount>=/ผู้รับ ; stub=บังคับแนบสลิปแต่ไม่เช็ค (dev) transRef สุ่ม
+- schema Payment + slipTransRef String? @unique (กันสลิปซ้ำ) ; migration 20260806000000_payment_slip_transref (สร้างไฟล์เอง + migrate deploy เพราะ migrate dev ต้อง interactive)
+- payments.service.pay(): รับ slip กลับมา, verify ก่อน, เช็ค dup transRef, upload สลิป private, เก็บ slipKey+slipTransRef ; ลบ PromptPayGateway (เลิกใช้)
+- payments.controller: คืน FileInterceptor('slip', imageFileFilter, IMAGE_LIMIT)
+- pay page: คืน dropzone แนบสลิป + submit multipart ; QR img มี onError fallback (โชว์ข้อความถ้าไม่มีไฟล์ public/promptpay-qr.png)
+- .env.example: + PAYMENT_VERIFY_MODE / SLIPOK_API_KEY / SLIPOK_BRANCH_ID / PAYMENT_RECEIVER_NAME
+- หมายเหตุ: contract SlipOK อ้างจากความจำ (fields data.transRef/amount/receiver.displayName) — ตรวจกับ doc จริงตอนใส่คีย์ ; ยิง migrate deploy บน local แล้ว + regen client (kill dev api PID 25136)
+- tsc api+web ผ่าน
+สถานะ: เสร็จ local ; ต้องตั้ง env จริง (SlipOK คีย์) เพื่อเปิดโหมด slipok ; ยังไม่ deploy (prod ต้อง migrate deploy + ตั้ง env)
+
+[97] เปลี่ยนระบบชำระเงินเป็น PSP จริง (Xendit PromptPay QR) — เงินเข้าจริง ยืนยันเอง ไม่ต้องแนบสลิป (06/08/2026)
+เหตุ: stub/slip verify ยังไม่ยืนยันเงินจริง (แนบรูปมั่วก็ผ่าน). ผู้ใช้สมัคร Xendit (test) → ต่อ PSP: สร้าง QR dynamic (ยอดฝัง) → ลูกค้าสแกนจ่าย → Xendit webhook ยืนยัน → PAID เอง
+Backend:
+- gateway/xendit.gateway.ts (ใหม่): createQrCharge(amount, refId=bookingId) POST /qr_codes (Basic auth secret key, api-version 2022-07-31, type DYNAMIC, channel TH_PROMPTPAY) → {chargeId, qrString}
+- schema Payment + gatewayChargeId String? @unique (match webhook) ; migration 20260806100000_payment_gateway_charge
+- payments.service: pay()→ createCharge() (สร้าง Payment PENDING ผูก chargeId + qrString) / confirmByCharge(chargeId) idempotent (webhook) → SETTLED + finalizePaid / finalizePaid(bookingId) = PAID+โทเค็น+ห้อง+แจ้ง 2 ฝั่ง (แยกจาก pay เดิม) / devConfirm() dev-only จำลองเงินเข้า (production โดนปฏิเสธ)
+- payments.controller: POST charge + POST dev-confirm (แทน pay+slip)
+- webhooks.controller.ts (ใหม่, public): POST bookings/payment/webhook/xendit — verify x-callback-token (XENDIT_WEBHOOK_TOKEN) → confirmByCharge(data.qr_id)
+- payments.module: + XenditGateway + WebhooksController (เอา SlipVerifyGateway ออก — ไฟล์ยังอยู่ dormant)
+Frontend:
+- pnpm --filter web add qrcode.react
+- pay page: POST charge → เรนเดอร์ QRCodeSVG(qrString) + poll GET /bookings/:id ทุก 3 วิ → PAID เด้งใบเสร็จ ; ปุ่ม "จำลองจ่าย (dev)" เรียก dev-confirm (โชว์เฉพาะ NODE_ENV!=production) ; ไม่มี dropzone สลิปแล้ว
+env: apps/api/.env มี PAYMENT_VERIFY_MODE=xendit + XENDIT_SECRET_KEY (test, gitignored) ; .env.example เพิ่ม XENDIT_* ; WEBHOOK_TOKEN ยังว่าง (dev ใช้ dev-confirm/poll)
+ยังต้องเทส/ยืนยัน: channel_code 'TH_PROMPTPAY' + response fields (id/qr_string) กับ Xendit จริง — ถ้า error ปรับใน xendit.gateway.ts จุดเดียว ; prod ต้องตั้ง webhook URL + XENDIT_WEBHOOK_TOKEN + migrate deploy
+tsc api+web ผ่าน
+
+[98] แก้สูตรค่าคอม — หัก 20% จาก "ค่าห้อง" เท่านั้น มัดจำคืนเต็ม + โชว์ breakdown หน้า partner income (06/08/2026)
+คำขอ: เดิมคอมคิดจากยอดรวม (ค่าห้อง+มัดจำ). ต้องการ: คอม 20% หักจากค่าห้องเท่านั้น → หอการค้า 10% ของคอม → ที่เหลือแพลตฟอร์ม ; มัดจำโอนคืนเจ้าของหอเต็ม
+- shared/logic/commission.ts: calc* รับ base (=ค่าห้อง) ; calcOwnerPayout(amount, commissionBase=amount) — คอมคิดจาก base, มัดจำเต็ม (ownerPayout = amount − คอม(ค่าห้อง)) ; คงเทสเดิม (default base=amount) 8/8 ผ่าน
+- fees.ts: คอมเมนต์ COMMISSION_RATE = 20% ของค่าห้อง
+- payments.service.createCharge: commissionBase = booking.roomPrice → commission/chamber/platform คิดจากค่าห้อง, ownerPayout = calcOwnerPayout(amount, roomPrice)
+- getOwnerIncome row + commission (โชว์ยอดที่โดนหัก)
+- partner/income: ตารางเพิ่มคอลัมน์ ค่าห้อง / มัดจำ(เต็ม เขียว) / คอม 20%(−แดง) / โอนสุทธิ + note อธิบาย "คอม 20% หักจากค่าห้องเท่านั้น มัดจำคืนเต็ม" ; total colSpan ปรับ
+- admin/finance label 'โอนเจ้าของ 80%' → 'โอนเจ้าของ (ค่าห้อง−คอม+มัดจำ)' (ไม่ใช่ 80% ของยอดรวมแล้ว)
+- import ดีไซน์ Hopak Partner Panel (ทั้ง panel มีในแอปแล้ว — ทำเฉพาะ breakdown หน้า income ตามคำขอ)
+หมายเหตุ: payment เก่าใน DB คิดฐานเดิม (ยอดรวม) ไม่ recalc — ของใหม่ใช้ฐานค่าห้อง ; tsc api+web ผ่าน
+
+[99] partner/requests crash "Cannot read properties of undefined (reading 'toLocaleString')" เมื่อมีการจองถูกจ่ายขณะเปิดหน้า (06/08/2026)
+เหตุ: payments.service.finalizePaid emit 'booking:updated' payload บางส่วน {id,status:'PAID'} — หน้า requests (+detail) เอาไป replace ทั้ง booking object → amount/contactName/rentalType หาย → b.amount.toLocaleString() crash
+fix: finalizePaid capture updated booking เต็มแถว (prisma.booking.update result) แล้ว emit ตัวเต็มแทน {id,status} ทั้ง 2 emit (tenant+owner) — ตรงพฤติกรรมเดิมของ bookings.service (adminCancel/cancel emit updated เต็ม) ; + กันเหนียว requests page (b.amount ?? 0) 3 จุด
+tsc api+web ผ่าน
+
+[100] ระบบ reservation hold — จองห้องชั่วคราวระหว่างชำระเงิน + นับถอยหลัง 10 นาที + กันจ่ายซ้อน (06/08/2026)
+คำขอ: ผู้เช่าเข้าหน้าจ่าย → รีบโอนใน 10 นาที ; ไม่โอน = คืนห้อง ; กันคนจ่ายห้องเดียวกันซ้อน (ใครกดจ่ายก่อนได้ก่อน)
+- schema: Room + heldUntil/heldByBookingId (atomic lock) ; Booking + paymentDeadline ; migration 20260806110000_payment_hold
+- Disbursement (โอน payout อัตโนมัติ Xendit): gateway/disbursement.gateway.ts (v2/payouts + map ธนาคาร→channel TH_KKB ฯลฯ) ; finance.transferForDormViaXendit + endpoint POST payouts/dorm/:id/transfer-xendit ; admin.module + DisbursementGateway
+- createCharge: ล็อกห้อง atomic ด้วย room.updateMany (status AVAILABLE + hold ว่าง/หมดเวลา/ของตัวเอง) count=0 → reject "มีคนกำลังชำระ" ; เฉพาะรายเดือน (รายวันกันด้วย overlap ตอนสร้าง) ; ตั้ง paymentDeadline=now+10min ; คืน paymentDeadline
+- finalizePaid: เคลียร์ hold (heldUntil/heldBy=null) + paymentDeadline=null + room OCCUPIED
+- cron @Cron(EVERY_MINUTE) releaseExpiredHolds: room heldUntil<now → ยกเลิก booking PENDING + ลบ payment PENDING + แจ้งผู้เช่า "หมดเวลาชำระเงิน คืนห้อง" + ปล่อย hold ; ScheduleModule.forRoot() ใน app.module
+- pay page: charge คืน paymentDeadline → นับถอยหลัง MM:SS (แดงเมื่อ<60s) ; หมดเวลา/ถูกยกเลิก → เด้งกลับ detail ; poll เจอ cancelled ด้วย
+เทส: concurrency A ได้ QR+deadline / B reject กันซ้อน / room heldBy=A ✓ ; cron release (force-expire) กำลังเทส
+tsc api+web ผ่าน
+หมายเหตุ: จ่ายเงินจริง 1 บาท = ต้อง live keys (test mode QR สแกนไม่ได้)
+
+[101] ผู้เช่าที่เข้ามาจ่ายห้องที่ถูก hold → โชว์ "ห้องนี้มีคนกำลังจองอยู่" + ปุ่มกลับไปเลือกห้อง (06/08/2026)
+- api-client: แนบ err.status = res.status ให้แยกเคส HTTP ได้
+- payments.service.createCharge: hold-taken เปลี่ยนจาก BadRequest → ConflictException (409) ข้อความ "เลือกห้องอื่น"
+- pay page: state roomTaken (จับ e.status===409) → เต็มหน้า: ไอคอนเตือน + takenTitle/takenDesc + ปุ่ม backToRooms → /dorms/:dormId (fallback /search)
+เทส: B charge ห้องที่ A ถืออยู่ → HTTP 409 ✓ ; tsc api+web ผ่าน

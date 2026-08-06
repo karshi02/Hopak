@@ -16,16 +16,15 @@ const TEXT = {
   th: {
     title: 'รายละเอียดการจอง',
     stepLabel: {
-      pending: 'ส่งคำขอจอง',
-      confirmed: 'เจ้าของหอยืนยัน',
+      pending: 'รอชำระเงิน',
       paid: 'ชำระเงินแล้ว',
       completed: 'เข้าพักแล้ว · เสร็จสิ้น',
     } as Record<string, string>,
     pay: 'ชำระเงิน',
     cancel: 'ยกเลิกการจอง',
     receiptTitle: 'ใบเสร็จรับเงิน',
-    receiptDone: 'ยืนยันการชำระเงินสำเร็จ',
-    receiptDesc: 'แอดมินตรวจสอบสลิปเรียบร้อยแล้ว นี่คือใบเสร็จของคุณ นำโค้ดด้านล่างไปยืนยันกับเจ้าของหอตอนเข้าพัก',
+    receiptDone: 'ชำระเงินสำเร็จ',
+    receiptDesc: 'เงินเข้าระบบเรียบร้อย นี่คือใบเสร็จของคุณ นำโค้ดด้านล่างไปยืนยันกับเจ้าของหอตอนเข้าพักเพื่อรับกุญแจ',
     rowTenant: 'ผู้เช่า',
     rowDorm: 'หอพัก',
     rowCheckIn: 'วันเข้าอยู่',
@@ -33,35 +32,24 @@ const TEXT = {
     rowRent: 'ค่าเช่าเดือนแรก',
     rowDeposit: 'ค่ามัดจำ',
     totalPaid: 'ยอดชำระทั้งหมด',
-    paidBadge: 'ชำระเงินสำเร็จ · ยืนยันโดยแอดมิน Hoprak',
+    paidBadge: 'ชำระเงินสำเร็จ · ยืนยันโดยระบบ Hoprak',
     tokenTitle: 'โทเค็นยืนยันการเข้าพัก',
     copy: 'คัดลอก',
     copied: 'คัดลอกแล้ว',
     tokenHint: (d: string) => `แสดงโค้ดนี้ให้เจ้าของหอกรอกในระบบเพื่อยืนยันตัวตนและรับกุญแจ · ใช้ได้ถึง ${d}`,
     checkedInTitle: 'เข้าพักเรียบร้อยแล้ว',
     checkedInDesc: (d: string) => `เจ้าของหอยืนยันการเข้าพักของคุณเมื่อ ${d} · การจองนี้เสร็จสมบูรณ์`,
-    subPending: 'คำขอถูกส่งแล้ว กำลังรอการตอบกลับจากเจ้าของหอ',
-    subConfirmed: 'ดำเนินการชำระเงินเพื่อยืนยันการจอง',
+    subPending: 'สแกน QR พร้อมเพย์เพื่อชำระเงินและยืนยันการจอง',
     subPaid: 'รับใบเสร็จและนำไปยืนยันกับหอพัก',
-    subCancelled: 'คำขอสิ้นสุดแล้ว',
-    waitTitle: 'ส่งคำขอเรียบร้อย · รอเจ้าของหอยืนยัน',
-    waitDesc: 'เราได้ส่งคำขอจองไปยังเจ้าของหอแล้ว โดยปกติจะตอบกลับภายใน 1 ชั่วโมง เราจะแจ้งเตือนคุณทันทีที่มีการตอบกลับ',
-    waitWarn: 'หากเจ้าของหอไม่ยืนยัน คำขอจะสิ้นสุดทันที และคุณสามารถเลือกจองหอพักอื่นได้',
-    confTitle: 'เจ้าของหอยืนยันแล้ว! 🎉',
-    confDesc: 'เจ้าของหอยืนยันการจองของคุณแล้ว ขั้นตอนต่อไปคือการโอนเงินและแนบสลิปเพื่อยืนยันการชำระเงิน',
+    subCancelled: 'การจองสิ้นสุดแล้ว',
+    payTitle: 'จองสำเร็จ · ชำระเงินเพื่อยืนยัน',
+    payDesc: 'จองห้องเรียบร้อยแล้ว ขั้นตอนต่อไปคือสแกน QR พร้อมเพย์เพื่อชำระเงิน ระบบจะตรวจยอดอัตโนมัติและออกใบเสร็จให้ทันที',
     amountDue: 'ยอดที่ต้องชำระ',
-    subVerify: 'แนบสลิปแล้ว รอแอดมินตรวจสอบและออกใบเสร็จ',
-    verifyTitle: 'แนบสลิปเรียบร้อย · รอแอดมินตรวจสอบ',
-    verifyDesc: 'เราได้รับสลิปของคุณแล้ว แอดมินจะตรวจสอบและออกใบเสร็จภายใน 24 ชั่วโมง จากนั้นคุณจะได้รับใบเสร็จพร้อมโทเค็นยืนยันการเข้าพัก',
-    verifyCta: 'รอแอดมินตรวจสลิป',
-    hintVerify: 'ตรวจสอบภายใน 24 ชม. · ไม่ต้องโอนซ้ำ',
     cancelledTitle: 'การจองถูกยกเลิก',
     cancelledDesc: 'การจองนี้สิ้นสุดแล้ว คุณสามารถเลือกจองหอพักอื่นได้',
     ctaViewBookings: 'ดูการจองของฉัน',
-    waitCta: 'รอเจ้าของหอตอบกลับ',
     payCta: 'ไปหน้าชำระเงิน',
-    hintWait: 'รอเจ้าของหอกดยืนยันในระบบ',
-    hintPay: 'ชำระครั้งเดียว · หลังโอนแนบสลิป',
+    hintPay: 'สแกน QR พร้อมเพย์ · ระบบตรวจยอดอัตโนมัติ',
     hintReceipt: 'เก็บใบเสร็จไว้เป็นหลักฐาน',
     downloadReceipt: 'พิมพ์ / ดาวน์โหลดใบเสร็จ',
     roomAir: 'ห้องแอร์',
@@ -71,17 +59,16 @@ const TEXT = {
   en: {
     title: 'Booking Details',
     stepLabel: {
-      pending: 'Request submitted',
-      confirmed: 'Owner confirmed',
+      pending: 'Awaiting payment',
       paid: 'Paid',
       completed: 'Checked in · Completed',
     } as Record<string, string>,
     pay: 'Pay',
     cancel: 'Cancel booking',
     receiptTitle: 'Receipt',
-    receiptDone: 'Payment confirmed',
+    receiptDone: 'Payment successful',
     receiptDesc:
-      'The admin has verified your slip. This is your receipt — show the code below to the dorm owner when you check in.',
+      'Your payment has cleared. This is your receipt — show the code below to the dorm owner when you check in to get the key.',
     rowTenant: 'Tenant',
     rowDorm: 'Dorm',
     rowCheckIn: 'Move-in date',
@@ -89,7 +76,7 @@ const TEXT = {
     rowRent: 'First month rent',
     rowDeposit: 'Deposit',
     totalPaid: 'Total paid',
-    paidBadge: 'Payment successful · verified by Hoprak admin',
+    paidBadge: 'Payment successful · verified by Hoprak system',
     tokenTitle: 'Check-in verification token',
     copy: 'Copy',
     copied: 'Copied',
@@ -97,28 +84,17 @@ const TEXT = {
       `Show this code to the dorm owner to verify your identity and get the key · valid until ${d}`,
     checkedInTitle: 'Checked in',
     checkedInDesc: (d: string) => `The dorm owner confirmed your check-in on ${d} · this booking is complete.`,
-    subPending: 'Request sent, waiting for the owner to respond',
-    subConfirmed: 'Proceed with payment to confirm the booking',
+    subPending: 'Scan the PromptPay QR to pay and confirm your booking',
     subPaid: 'Get your receipt and show it to the dorm',
-    subCancelled: 'This request has ended',
-    waitTitle: 'Request sent · awaiting owner confirmation',
-    waitDesc: 'We sent your booking request to the owner. They usually respond within an hour. We will notify you as soon as they reply.',
-    waitWarn: 'If the owner does not confirm, the request ends immediately and you can book another dorm.',
-    confTitle: 'Owner confirmed! 🎉',
-    confDesc: 'The owner confirmed your booking. Next, transfer the payment and attach your slip to confirm.',
+    subCancelled: 'This booking has ended',
+    payTitle: 'Booked · pay to confirm',
+    payDesc: 'Your room is booked. Next, scan the PromptPay QR to pay — the system verifies automatically and issues your receipt instantly.',
     amountDue: 'Amount due',
-    subVerify: 'Slip attached — waiting for admin to verify and issue the receipt',
-    verifyTitle: 'Slip attached · awaiting admin review',
-    verifyDesc: 'We received your slip. The admin will review it and issue a receipt within 24 hours, then you will get the receipt with your check-in token.',
-    verifyCta: 'Awaiting slip review',
-    hintVerify: 'Reviewed within 24h · no need to transfer again',
     cancelledTitle: 'Booking cancelled',
-    cancelledDesc: 'This request has ended. You can book another dorm.',
+    cancelledDesc: 'This booking has ended. You can book another dorm.',
     ctaViewBookings: 'View my bookings',
-    waitCta: 'Awaiting owner reply',
     payCta: 'Go to payment',
-    hintWait: 'Waiting for the owner to confirm in the system',
-    hintPay: 'One-time payment · attach slip after transfer',
+    hintPay: 'Scan the PromptPay QR · verified automatically',
     hintReceipt: 'Keep the receipt as proof',
     downloadReceipt: 'Print / download receipt',
     roomAir: 'Air-conditioned room',
@@ -173,20 +149,10 @@ export default function BookingDetailPage() {
   const status = normalizeStatus(booking.status);
   const canCancel = new Date() <= new Date(booking.cancelDeadline) && status !== 'cancelled';
   const showReceipt = status === 'paid' || status === 'completed';
-  // จ่าย/แนบสลิปแล้ว (payment มีค่า) แต่ booking ยัง CONFIRMED = รอแอดมินเคลียร์บิล → step 4
-  const awaitingVerify = status === 'confirmed' && !!booking.payment;
-  const canPay = status === 'confirmed' && !booking.payment;
-  const stepNum = status === 'pending' ? 2 : canPay ? 3 : awaitingVerify ? 4 : showReceipt ? 5 : 2;
-  const sub =
-    status === 'pending'
-      ? t.subPending
-      : canPay
-        ? t.subConfirmed
-        : awaitingVerify
-          ? t.subVerify
-          : showReceipt
-            ? t.subPaid
-            : t.subCancelled;
+  // จองแล้วยังไม่จ่าย (PENDING) = พร้อมชำระเงินทันที ไม่มีด่านเจ้าของหอ/แอดมินคั่น → ขั้นที่ 2
+  const canPay = status === 'pending' && !booking.payment;
+  const stepNum = canPay ? 2 : showReceipt ? 4 : 2;
+  const sub = canPay ? t.subPending : showReceipt ? t.subPaid : t.subCancelled;
 
   const fmtDate = (v: string | Date) =>
     new Date(v).toLocaleDateString(t.dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -227,43 +193,7 @@ export default function BookingDetailPage() {
         <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_400px]">
           <div className="min-h-[440px] rounded-[20px] border border-[#EAEDF2] bg-white p-6 shadow-[0_2px_8px_rgba(16,24,40,0.05)] sm:p-[30px]">
 
-      {/* STEP 2 · WAITING */}
-      {status === 'pending' && (
-        <div className="flex flex-col items-center px-2 py-8 text-center sm:px-5">
-          <div className="relative flex h-24 w-24 items-center justify-center">
-            <div className="absolute inset-0 animate-spin rounded-full border-4 border-[#EAF1FF] border-t-tenant" />
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="9" stroke="#2F6FE0" strokeWidth="1.8" />
-              <path d="M12 7v5l3 3" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </div>
-          <div className="mt-6 text-xl font-bold text-ink-strong">{t.waitTitle}</div>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-[#8A909F]">{t.waitDesc}</p>
-          <div className="mt-5 flex max-w-md gap-2.5 rounded-[13px] border border-[#F5E4C3] bg-[#FFF8EC] px-4 py-3 text-left">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-0.5 shrink-0">
-              <path d="M12 9v4M12 17h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="#C77B14" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-[12.5px] leading-snug text-[#8A6A2E]">{t.waitWarn}</span>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4 · AWAITING ADMIN SLIP REVIEW (จ่ายแล้ว รอเคลียร์บิล) */}
-      {awaitingVerify && (
-        <div className="flex flex-col items-center px-2 py-8 text-center sm:px-5">
-          <div className="relative flex h-24 w-24 items-center justify-center">
-            <div className="absolute inset-0 animate-spin rounded-full border-4 border-[#EAF1FF] border-t-tenant" />
-            <svg width="38" height="38" viewBox="0 0 24 24" fill="none">
-              <path d="M9 11l3 3L22 4" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M21 12a9 9 0 11-6.2-8.5" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </div>
-          <div className="mt-6 text-xl font-bold text-ink-strong">{t.verifyTitle}</div>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-[#8A909F]">{t.verifyDesc}</p>
-        </div>
-      )}
-
-      {/* STEP 3 · CONFIRMED */}
+      {/* STEP 2 · READY TO PAY (จองแล้ว พร้อมชำระเงินทันที) */}
       {canPay && (
         <div className="flex flex-col items-center px-2 py-8 text-center sm:px-5">
           <div className="flex h-[88px] w-[88px] items-center justify-center rounded-full bg-[#E7F7EF]">
@@ -272,8 +202,8 @@ export default function BookingDetailPage() {
               <path d="M7.5 12.5l3 3 6-7" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <div className="mt-5 text-xl font-bold text-ink-strong">{t.confTitle}</div>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-[#8A909F]">{t.confDesc}</p>
+          <div className="mt-5 text-xl font-bold text-ink-strong">{t.payTitle}</div>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-[#8A909F]">{t.payDesc}</p>
           <div className="mt-5 w-full max-w-md overflow-hidden rounded-[14px] border border-[#EAEDF2] text-left">
             {[
               { label: t.rowDorm, value: dormLine },
@@ -292,7 +222,7 @@ export default function BookingDetailPage() {
         </div>
       )}
 
-      {/* STEP 5 · RECEIPT */}
+      {/* STEP 4 · RECEIPT */}
       {showReceipt && (
         <div className="flex flex-col items-center text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-pill bg-success-tint">
@@ -419,26 +349,6 @@ export default function BookingDetailPage() {
 
           {/* RIGHT · summary */}
           <BookingSummary booking={booking} lang={lang}>
-            {status === 'pending' && (
-              <>
-                <div className="mt-[18px] flex h-[52px] w-full items-center justify-center gap-2 rounded-[13px] bg-gradient-to-br from-[#B4BAC5] to-[#9AA0AB] text-base font-bold text-white">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin">
-                    <circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2" strokeOpacity="0.4" />
-                    <path d="M21 12a9 9 0 00-9-9" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  {t.waitCta}
-                </div>
-                <p className="mt-2 text-center text-[11.5px] text-[#9AA0AB]">{t.hintWait}</p>
-                {canCancel && (
-                  <button
-                    onClick={handleCancel}
-                    className="mt-3 flex h-[46px] w-full items-center justify-center rounded-[13px] border border-danger text-sm font-semibold text-danger hover:bg-danger-tint"
-                  >
-                    {t.cancel}
-                  </button>
-                )}
-              </>
-            )}
             {canPay && (
               <>
                 <button
@@ -448,18 +358,14 @@ export default function BookingDetailPage() {
                   {t.payCta}
                 </button>
                 <p className="mt-2 text-center text-[11.5px] text-[#9AA0AB]">{t.hintPay}</p>
-              </>
-            )}
-            {awaitingVerify && (
-              <>
-                <div className="mt-[18px] flex h-[52px] w-full items-center justify-center gap-2 rounded-[13px] bg-gradient-to-br from-[#B4BAC5] to-[#9AA0AB] text-base font-bold text-white">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin">
-                    <circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="2" strokeOpacity="0.4" />
-                    <path d="M21 12a9 9 0 00-9-9" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  {t.verifyCta}
-                </div>
-                <p className="mt-2 text-center text-[11.5px] text-[#9AA0AB]">{t.hintVerify}</p>
+                {canCancel && (
+                  <button
+                    onClick={handleCancel}
+                    className="mt-3 flex h-[46px] w-full items-center justify-center rounded-[13px] border border-danger text-sm font-semibold text-danger hover:bg-danger-tint"
+                  >
+                    {t.cancel}
+                  </button>
+                )}
               </>
             )}
             {showReceipt && (

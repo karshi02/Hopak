@@ -91,7 +91,7 @@ const TEXT = {
     commissionCut: 'คอม 20%',
     chamberCut: 'หอการค้า',
     platformCut: 'แพลตฟอร์ม',
-    ownerPayout: 'โอนเจ้าของ 80%',
+    ownerPayout: 'โอนเจ้าของ (ค่าห้อง−คอม+มัดจำ)',
     status: 'สถานะ',
     statusLabel: { PENDING: 'รอเคลียร์บิล', SETTLED: 'รอโอน', TRANSFERRED: 'โอนแล้ว' } as Record<string, string>,
     settleBtn: 'เคลียร์บิล',
@@ -156,7 +156,7 @@ const TEXT = {
     commissionCut: '20% commission',
     chamberCut: 'Chamber',
     platformCut: 'Platform',
-    ownerPayout: '80% owner payout',
+    ownerPayout: 'Owner payout (rent−comm+deposit)',
     status: 'Status',
     statusLabel: { PENDING: 'Awaiting review', SETTLED: 'Pending transfer', TRANSFERRED: 'Transferred' } as Record<
       string,
@@ -219,7 +219,6 @@ export default function AdminFinancePage() {
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [pendingPayouts, setPendingPayouts] = useState<PendingPayout[]>([]);
   const [transferTarget, setTransferTarget] = useState<PendingPayout | null>(null);
-  const [settlingId, setSettlingId] = useState<string | null>(null);
   const [payoutSearch, setPayoutSearch] = useState('');
   const [transferLogs, setTransferLogs] = useState<TransferLogRow[]>([]);
 
@@ -255,19 +254,6 @@ export default function AdminFinancePage() {
   useEffect(() => {
     apiClient.get<Period[]>('/admin/finance/periods').then(setPeriods).catch(() => setPeriods([]));
   }, []);
-
-  async function handleSettle(paymentId: string) {
-    if (!window.confirm(t.settleConfirm)) return;
-    setSettlingId(paymentId);
-    try {
-      await apiClient.patch(`/admin/finance/payments/${paymentId}/settle`);
-      reload();
-    } catch {
-      // เงียบไว้ก่อน — กดใหม่ได้ปกติ ไม่ต้องพังทั้งหน้า
-    } finally {
-      setSettlingId(null);
-    }
-  }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(reload, [selectedPeriod]);
@@ -434,7 +420,6 @@ export default function AdminFinancePage() {
               <th className="p-3 font-normal">{t.status}</th>
               <th className="p-3 font-normal">{t.slip}</th>
               <th className="p-3 font-normal">{t.ownerTransferSlip}</th>
-              <th className="p-3 font-normal"></th>
             </tr>
           </thead>
           <tbody>
@@ -476,17 +461,6 @@ export default function AdminFinancePage() {
                       </a>
                     ) : (
                       <span className="text-ink-faint">{t.noSlip}</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {p.status === 'PENDING' && (
-                      <button
-                        onClick={() => handleSettle(p.id)}
-                        disabled={settlingId === p.id}
-                        className="rounded-btn bg-admin-sidebar px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
-                      >
-                        {settlingId === p.id ? t.settling : t.settleBtn}
-                      </button>
                     )}
                   </td>
                 </tr>

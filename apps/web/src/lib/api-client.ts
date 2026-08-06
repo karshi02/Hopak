@@ -25,7 +25,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     // ซึ่งไม่มี token ส่งไปตั้งแต่แรก จึงไม่เข้าเงื่อนไขนี้
     if (res.status === 401 && token) handleSessionExpired();
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? `Request failed: ${res.status}`);
+    const err = new Error(body.message ?? `Request failed: ${res.status}`);
+    // แนบ HTTP status ไว้ให้ผู้เรียกแยกเคสได้ (เช่น 409 = ห้องถูกจองอยู่)
+    (err as Error & { status?: number }).status = res.status;
+    throw err;
   }
   return res.json();
 }
