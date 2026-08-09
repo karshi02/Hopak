@@ -83,6 +83,7 @@ const TEXT = {
     perMonth: '/ เดือน',
     perNight: '/ คืน',
     full: 'ห้องเต็ม',
+    popular: 'ยอดฮิต',
     allDormsIn: (p: string) => `หอพักทั้งหมด${p ? `ใน${p}` : ''}`,
     count: (n: number) => `${n} แห่ง`,
     recommended: '★ แนะนำ',
@@ -135,6 +136,7 @@ const TEXT = {
     perMonth: '/ month',
     perNight: '/ night',
     full: 'Fully booked',
+    popular: 'Popular',
     allDormsIn: (p: string) => (p ? `Dorms in ${p}` : 'All dorms'),
     count: (n: number) => `${n} listings`,
     recommended: '★ Top rated',
@@ -203,6 +205,8 @@ export default function SearchPage() {
   const placeLng = params.get('lng') ? Number(params.get('lng')) : null;
   const placeName = params.get('placeName');
   const hasPlace = placeLat != null && placeLng != null && !Number.isNaN(placeLat) && !Number.isNaN(placeLng);
+  // ตำแหน่งจริงของผู้ใช้ (device geolocation) — ใช้คิดระยะทางเมื่อค้นด้วยจังหวัด (ไม่มีพิกัดสถานที่ใน URL)
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (hasPlace) setSortBy('distance_asc');
@@ -216,6 +220,16 @@ export default function SearchPage() {
       .catch(() => setSponsored([]));
   }, []);
 
+  // ขอตำแหน่งเครื่อง (กดอนุญาตเอง) — ไม่ได้ก็แค่ไม่โชว์ระยะทาง ไม่เดาค่า
+  useEffect(() => {
+    if (hasPlace || !navigator.geolocation) return; // มีพิกัดสถานที่ใน URL แล้ว ไม่ต้องใช้ตำแหน่งเครื่อง
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setMyLocation(null),
+      { enableHighAccuracy: false, timeout: 8000 },
+    );
+  }, [hasPlace]);
+
   const amenityOptions = useMemo(() => {
     const set = new Set<string>();
     dorms.forEach((d) => d.amenities.forEach((a) => set.add(a)));
@@ -223,10 +237,13 @@ export default function SearchPage() {
   }, [dorms]);
 
   const filteredDorms = useMemo(() => {
+    // จุดอ้างอิงระยะทาง: พิกัดสถานที่ใน URL ก่อน ถ้าไม่มีใช้ตำแหน่งเครื่อง
+    const ref = hasPlace ? { lat: placeLat!, lng: placeLng! } : myLocation;
     let list = dorms.map((dorm) => {
       const availableRooms = dorm.rooms.filter(rOk);
       const startingRoom = [...availableRooms].sort((a, b) => rPrice(a) - rPrice(b))[0];
-      const distanceKm = hasPlace ? haversineKm(placeLat!, placeLng!, dorm.lat, dorm.lng) : null;
+      // ต้องมีจุดอ้างอิง + หอมีพิกัดจริง (ไม่ใช่ 0,0) ถึงจะคิดระยะ
+      const distanceKm = ref && dorm.lat && dorm.lng ? haversineKm(ref.lat, ref.lng, dorm.lat, dorm.lng) : null;
       return { dorm, availableRooms, startingRoom, distanceKm };
     });
 
@@ -258,7 +275,7 @@ export default function SearchPage() {
     }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng, dailyMode]);
+  }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng, dailyMode, myLocation]);
 
   const heroStats = useMemo(() => {
     let cheapest: number | null = null;
@@ -555,6 +572,8 @@ export default function SearchPage() {
             {filteredDorms.map(({ dorm, availableRooms, startingRoom, distanceKm }) => {
               const isFavorited = favoriteIds.has(dorm.id);
               const hasRating = (dorm.reviewCount ?? 0) > 0 && dorm.avgRating != null;
+              // ยอดฮิต = รีวิวดี (คะแนน ≥ 4.5 จากรีวิว ≥ 3 ครั้ง)
+              const isPopular = (dorm.avgRating ?? 0) >= 4.5 && (dorm.reviewCount ?? 0) >= 3;
               return (
                 <Link
                   key={dorm.id}
@@ -573,6 +592,15 @@ export default function SearchPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 
                     <FavoriteButton active={isFavorited} onToggle={() => toggle(dorm.id)} className="absolute right-3.5 top-3.5" />
+
+                    {isPopular && (
+                      <span className="absolute left-3.5 top-3.5 inline-flex items-center gap-1 rounded-full bg-[#FF6B35] px-2.5 py-1 text-[11.5px] font-bold text-white shadow">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2c1 3-1 4-2 6-1 2 0 4 2 4s2-2 1-4c3 1 5 4 5 7a6 6 0 11-12 0c0-4 3-6 6-13z" />
+                        </svg>
+                        {t.popular}
+                      </span>
+                    )}
 
                     {availableRooms.length > 0 && (
                       <div className="absolute bottom-3.5 left-3.5 flex items-center gap-1.5 rounded-full bg-[linear-gradient(135deg,#178F5A,#1FB56E)] px-3 py-1.5 text-xs font-bold text-white shadow-[0_6px_14px_rgba(23,143,90,0.45)]">

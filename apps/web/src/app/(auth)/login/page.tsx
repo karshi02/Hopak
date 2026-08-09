@@ -181,6 +181,7 @@ export default function LoginPage() {
 
           <a
             href={`${API_URL}/auth/google`}
+            onClick={() => sessionStorage.removeItem('googleIntent')}
             className="mt-6 flex items-center justify-center gap-2 rounded-btn border border-card-border py-2.5 text-sm font-medium text-ink hover:bg-black/[0.02]"
           >
             <GoogleIcon />

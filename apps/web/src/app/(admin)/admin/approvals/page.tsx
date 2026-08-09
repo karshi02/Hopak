@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { getSocket } from '@/lib/ws';
@@ -48,6 +48,10 @@ const TEXT = {
 
     roomsTitle: 'ห้องพักรอตรวจสอบ',
     roomsNone: 'ไม่มีห้องรอตรวจสอบ',
+    roomsCountUnit: (n: number) => `${n} ห้อง`,
+    approveAll: 'อนุมัติทั้งกลุ่ม',
+    rejectAll: 'ปฏิเสธทั้งกลุ่ม',
+    confirmRejectGroup: (n: number) => `ยืนยันปฏิเสธทั้ง ${n} ห้องในกลุ่มนี้? ข้อมูลห้องจะถูกลบถาวร (ระบบเก็บ log ไว้)`,
     room: 'ห้อง',
     dorm: 'หอพัก',
     price: 'ราคา',
@@ -129,6 +133,10 @@ const TEXT = {
 
     roomsTitle: 'Rooms pending review',
     roomsNone: 'No rooms pending review',
+    roomsCountUnit: (n: number) => `${n} room${n > 1 ? 's' : ''}`,
+    approveAll: 'Approve all',
+    rejectAll: 'Reject all',
+    confirmRejectGroup: (n: number) => `Reject all ${n} rooms in this group? Their data will be permanently deleted (a log is kept).`,
     room: 'Room',
     dorm: 'Dorm',
     price: 'Price',
@@ -196,6 +204,7 @@ export default function AdminApprovalsPage() {
   const [pending, setPending] = useState<PendingDorm[]>([]);
   const [allDorms, setAllDorms] = useState<AllDorm[]>([]);
   const [pendingRooms, setPendingRooms] = useState<PendingRoom[]>([]);
+  const [expandedRoomGroups, setExpandedRoomGroups] = useState<Set<string>>(new Set());
   const [log, setLog] = useState<LogEntry[]>([]);
   const [editTarget, setEditTarget] = useState<Dorm | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -248,6 +257,7 @@ export default function AdminApprovalsPage() {
     }
   }
 
+  // อนุมัติ/ปฏิเสธรายห้อง (ใช้ตอนกดแตกกลุ่มดูรายห้อง)
   async function approveRoom(id: string) {
     setBusyId(id);
     try {
@@ -271,6 +281,41 @@ export default function AdminApprovalsPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  // อนุมัติ/ปฏิเสธห้องทั้งกลุ่มครั้งเดียว — ยิงทีละห้องขนานกัน (backend มี endpoint รายห้อง)
+  async function approveGroup(key: string, ids: string[]) {
+    setBusyId(key);
+    try {
+      await Promise.all(ids.map((id) => apiClient.patch(`/admin/approvals/rooms/${id}/approve`)));
+      reload();
+    } catch {
+      // เงียบไว้ก่อน
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function rejectGroup(key: string, ids: string[]) {
+    if (!window.confirm(t.confirmRejectGroup(ids.length))) return;
+    setBusyId(key);
+    try {
+      await Promise.all(ids.map((id) => apiClient.patch(`/admin/approvals/rooms/${id}/reject`)));
+      reload();
+    } catch {
+      // เงียบไว้ก่อน
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function toggleExpand(key: string) {
+    setExpandedRoomGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   async function toggleAutoApprove(dormId: string, enabled: boolean) {
@@ -438,32 +483,108 @@ export default function AdminApprovalsPage() {
               </tr>
             </thead>
             <tbody>
-              {pendingRooms.map((r) => (
-                <tr key={r.id} className="border-b border-hairline last:border-0">
-                  <td className="p-3 font-medium text-ink-strong">{r.name || r.type}</td>
-                  <td className="p-3 text-ink-subtitle">{r.dorm.name}</td>
-                  <td className="p-3 text-ink-subtitle">{r.dorm.owner.name}</td>
-                  <td className="p-3 font-sans tabular-nums">฿{r.pricePerMonth.toLocaleString()}</td>
-                  <td className="p-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => approveRoom(r.id)}
-                        disabled={busyId === r.id}
-                        className="rounded-lg bg-success px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                      >
-                        {t.approve}
-                      </button>
-                      <button
-                        onClick={() => rejectRoom(r.id)}
-                        disabled={busyId === r.id}
-                        className="rounded-lg bg-danger-tint px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
-                      >
-                        {t.reject}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {(() => {
+                // รวมห้องเหมือนกันของหอเดียวกัน (ประเภท+ราคา+มัดจำ) เป็นกลุ่ม — กดแตกดูรายห้อง + อนุมัติ/ปฏิเสธทั้งกลุ่ม
+                const map = new Map<
+                  string,
+                  { key: string; dormName: string; ownerName: string; type: string; price: number; ids: string[]; rooms: PendingRoom[] }
+                >();
+                for (const r of pendingRooms) {
+                  const key = `${r.dormId}|${r.type}|${r.pricePerMonth}|${r.deposit ?? 0}`;
+                  const g = map.get(key);
+                  if (g) {
+                    g.ids.push(r.id);
+                    g.rooms.push(r);
+                  } else {
+                    map.set(key, {
+                      key,
+                      dormName: r.dorm.name,
+                      ownerName: r.dorm.owner.name,
+                      type: r.type,
+                      price: r.pricePerMonth,
+                      ids: [r.id],
+                      rooms: [r],
+                    });
+                  }
+                }
+                return [...map.values()].map((g) => {
+                  const open = expandedRoomGroups.has(g.key);
+                  const busy = busyId === g.key;
+                  return (
+                    <Fragment key={g.key}>
+                      <tr className="border-b border-hairline">
+                        <td className="p-3 font-medium text-ink-strong">
+                          <button onClick={() => toggleExpand(g.key)} className="inline-flex items-center gap-1.5 hover:text-tenant">
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              className={`transition-transform ${open ? 'rotate-90' : ''}`}
+                            >
+                              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            {g.type} · {t.roomsCountUnit(g.ids.length)}
+                          </button>
+                        </td>
+                        <td className="p-3 text-ink-subtitle">{g.dormName}</td>
+                        <td className="p-3 text-ink-subtitle">{g.ownerName}</td>
+                        <td className="p-3 font-sans tabular-nums">฿{g.price.toLocaleString()}</td>
+                        <td className="p-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => approveGroup(g.key, g.ids)}
+                              disabled={busy}
+                              className="rounded-lg bg-success px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              {g.ids.length > 1 ? t.approveAll : t.approve}
+                            </button>
+                            <button
+                              onClick={() => rejectGroup(g.key, g.ids)}
+                              disabled={busy}
+                              className="rounded-lg bg-danger-tint px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
+                            >
+                              {g.ids.length > 1 ? t.rejectAll : t.reject}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {open &&
+                        g.rooms.map((r) => (
+                          <tr key={r.id} className="border-b border-hairline bg-surface-canvas/40 last:border-0">
+                            <td className="py-2 pl-10 pr-3 text-[13px] font-medium text-ink-strong">{r.name || r.type}</td>
+                            <td className="py-2 pr-3 text-[13px] text-ink-subtitle">
+                              {r.type}
+                              {(r.deposit ?? 0) > 0 && ` · ${lang === 'th' ? 'มัดจำ' : 'Deposit'} ฿${(r.deposit ?? 0).toLocaleString()}`}
+                            </td>
+                            <td className="py-2 pr-3 text-[13px] text-ink-subtitle">
+                              {(r.amenities ?? []).slice(0, 3).join(', ')}
+                            </td>
+                            <td className="py-2 pr-3 font-sans text-[13px] tabular-nums">฿{r.pricePerMonth.toLocaleString()}</td>
+                            <td className="py-2 pr-3 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => approveRoom(r.id)}
+                                  disabled={busyId === r.id}
+                                  className="rounded-lg bg-success px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+                                >
+                                  {t.approve}
+                                </button>
+                                <button
+                                  onClick={() => rejectRoom(r.id)}
+                                  disabled={busyId === r.id}
+                                  className="rounded-lg bg-danger-tint px-2.5 py-1 text-[11px] font-semibold text-danger disabled:opacity-50"
+                                >
+                                  {t.reject}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </Fragment>
+                  );
+                });
+              })()}
             </tbody>
           </table>
           {pendingRooms.length === 0 && <p className="p-4 text-ink-faint">{t.roomsNone}</p>}

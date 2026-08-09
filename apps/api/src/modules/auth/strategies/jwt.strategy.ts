@@ -3,7 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma.service';
 import { requireEnv } from '../../../common/env.util';
-
+//import { PrismaService } from '../../../prisma.service'; --- IGNORE ---
+// idle timeout: ไม่มี activity เกิน 30 นาที → session หมดอายุ auto-logout
 // ไม่มี activity เกิน 30 นาที = session หมดอายุ auto-logout (กัน session ค้างถูกขโมยใช้ต่อ)
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -16,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       secretOrKey: requireEnv('JWT_SECRET'),
     });
   }
-
+  //เช็ค session ทุก request (ถ้า token มี jti) — เตะออกจากอุปกรณ์นั้นได้จริงโดยไม่ต้อง
   // เช็ค session ทุก request (ถ้า token มี jti) — เตะออกจากอุปกรณ์นั้นได้จริงโดยไม่ต้อง
   // รอ token หมดอายุเอง (7 วัน) แค่ set revokedAt ฝั่ง Session แล้ว request ถัดไปโดนบล็อกทันที
   // token เก่าที่ไม่มี jti (ออกก่อนฟีเจอร์นี้มีอยู่) ปล่อยผ่านไป ไม่บังคับ logout ทุกคนทันที
@@ -38,3 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return { id: payload.sub, role: payload.role };
   }
 }
+//ปิด session ทุก request (ถ้า token มี jti) — เตะออกจากอุปกรณ์นั้นได้จริงโดยไม่ต้อง
+// ปิด session ทุก request (ถ้า token มี jti) — เตะออกจากอุปกรณ์นั้นได้จริงโดยไม่ต้อง
+// รอ token หมดอายุเอง (7 วัน) แค่ set revokedAt ฝั่ง Session แล้ว request ถัดไปโดนบล็อกทันที
+// token เก่าที่ไม่มี jti (ออกก่อนฟีเจอร์นี้มีอยู่) ปล่อยผ่านไป ไม่บังคับ logout ทุกคนทันที

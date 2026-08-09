@@ -1,0 +1,57 @@
+รายงานความปลอดภัย — 9 สิงหาคม 2026
+สถานะ: Static analysis โดย Codex Security; ยังไม่ได้ทดสอบระบบที่รันจริง
+
+สรุป: พบ 9 ประเด็น
+- Critical: 1
+- High: 2
+- Medium: 5
+- Low: 1
+
+1) [CRITICAL] Payment webhook ปลอมการชำระเงินได้เมื่อไม่มี XENDIT_WEBHOOK_TOKEN
+ตำแหน่ง: apps/api/src/modules/payments/webhooks.controller.ts:19-32
+ผลกระทบ: ผู้โจมตีสามารถส่ง charge ID ของ booking ที่ตนสร้างไปยัง public webhook เพื่อเปลี่ยนสถานะเป็นชำระเงินสำเร็จ ออก check-in token และทำให้เกิดยอดค้างจ่ายแก่เจ้าของหอ
+แนวทางแก้: บังคับให้มี token ตั้งแต่เริ่มระบบ, ปฏิเสธ request หาก token ไม่มี/ไม่ตรง, ตรวจลายเซ็นจาก raw body และยืนยันสถานะ/ยอดกับ payment provider ก่อนเปลี่ยนสถานะแบบ atomic
+
+2) [HIGH] Nginx production ในรีโปส่ง app และ API ผ่าน HTTP
+ตำแหน่ง: docker/nginx-hopak.conf:13-58
+ผลกระทบ: หาก deploy ตามไฟล์นี้โดยไม่มี TLS override ผู้โจมตีบนเครือข่ายสามารถดักหรือแก้ไข bearer token และ traffic ได้
+แนวทางแก้: เพิ่ม TLS server block, redirect ทุก port 80 ไป HTTPS, เปิด HSTS หลังตรวจสอบ TLS และพิจารณาใช้ Secure/HttpOnly/SameSite cookie
+
+3) [HIGH] Admin sub-role ถูกเก็บในฐานข้อมูลแต่ไม่ถูกตรวจสิทธิ์
+ตำแหน่ง: apps/api/src/common/guards/roles.guard.ts:10-19
+ผลกระทบ: บัญชี FINANCE หรือ SUPPORT ที่เป็น ADMIN ผ่าน guard เดียวกับ SUPER_ADMIN และอาจเรียก payout หรือสร้าง SUPER_ADMIN ได้
+แนวทางแก้: สร้าง permission/admin-subrole guard ที่ตรวจ Admin.adminRole และจำกัด payout/การยกระดับสิทธิ์ไว้กับ role ที่ได้รับอนุญาตเท่านั้น
+
+4) [MEDIUM] Google OAuth ไม่มี state binding (login CSRF)
+ตำแหน่ง: apps/api/src/modules/auth/strategies/google.strategy.ts:8-13
+ผลกระทบ: ผู้ใช้สามารถถูกหลอกให้ล็อกอินเข้า account ของผู้โจมตีและกรอกข้อมูลลงใน account นั้น
+แนวทางแก้: ใช้ random OAuth state ผูกกับ Secure, HttpOnly, SameSite transaction cookie หรือ server-side session และตรวจทุก callback/exchange
+
+5) [MEDIUM] WebSocket ไม่ตรวจ session revocation/idle/suspension
+ตำแหน่ง: apps/api/src/modules/realtime/realtime.gateway.ts:15-25
+ผลกระทบ: JWT ที่ถูก revoke หรือบัญชีที่ถูก suspend ยังเชื่อม Socket และรับ event ได้จน JWT หมดอายุ
+แนวทางแก้: ใช้ logic ตรวจ session เดียวกับ JwtStrategy และ disconnect socket เมื่อ revoke/suspend/เปลี่ยน role
+
+6) [MEDIUM] หอหรือห้องที่ยังไม่อนุมัติถูกเปิดดูและจองได้เมื่อรู้ ID
+ตำแหน่ง: apps/api/src/modules/dorms/dorms.service.ts:42-50; apps/api/src/modules/bookings/bookings.service.ts:40-55
+ผลกระทบ: ข้าม approval/suspension lifecycle และสร้าง booking/payment สำหรับ inventory ที่ไม่ควรเปิดขาย
+แนวทางแก้: Public detail และ booking query ต้องบังคับ dorm.status = APPROVED และ room.approved = true
+
+7) [MEDIUM] Race condition ในการจองรายวัน
+ตำแหน่ง: apps/api/src/modules/bookings/bookings.service.ts:117-147
+ผลกระทบ: Request พร้อมกันอาจผ่าน overlap check ทั้งคู่และสร้าง booking ช่วงวันเดียวกันซ้ำ
+แนวทางแก้: ใช้ PostgreSQL exclusion constraint สำหรับ date range หรือ transaction/lock ที่ serialize การจอง
+
+8) [LOW] รู้เพียงอีเมลก็ reset ใบสมัครเจ้าของหอที่ยังไม่เสร็จได้
+ตำแหน่ง: apps/api/src/modules/owner-applications/owner-applications.service.ts:76-110
+ผลกระทบ: ลบ/แก้ข้อมูล draft และขัดขวางการสมัครได้; OTP ยังป้องกันการ finish หากไม่เข้าถึงอีเมล
+แนวทางแก้: ใช้ verified identity หรือ resume secret แบบสุ่มสูงที่เก็บ hash ก่อนอ่านหรือแก้ draft
+
+9) [MEDIUM] Public owner-application flow ใช้ upload storage และ OTP ได้ไม่จำกัด
+ตำแหน่ง: apps/api/src/modules/owner-applications/owner-applications.controller.ts:27-63
+ผลกระทบ: โจมตี resource exhaustion ต่อ memory, storage และ email provider ได้
+แนวทางแก้: rate-limit ตาม IP/email, จำกัดจำนวน/ขนาดไฟล์รวม, บังคับ draft credential และลบ draft ที่หมดอายุ
+
+ข้อสังเกตการครอบคลุม
+- ตรวจจุดเสี่ยงหลัก: auth, authorization, payments, uploads, owner applications, booking lifecycle, deployment และ frontend session
+- ยังไม่ได้ review ทุกไฟล์ใน repository หรือทำ dynamic/runtime test

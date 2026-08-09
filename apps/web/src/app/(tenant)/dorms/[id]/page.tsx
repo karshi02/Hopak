@@ -310,7 +310,8 @@ export default function DormDetailPage() {
     [dorm],
   );
 
-  // จัดกลุ่มตามประเภท → แบบห้อง (ชื่อ+ราคาเดียวกัน) นับจำนวนห้องว่าง + รวมรูปทุกห้องในกลุ่ม
+  // จัดกลุ่มตามประเภท → แบบห้อง (ราคา/มัดจำเดียวกัน) นับจำนวนห้องว่าง + รวมรูปทุกห้องในกลุ่ม
+  // ไม่รวม name ในคีย์ — ชื่อห้องสุ่มอัตโนมัติต่อห้อง ทำให้ห้องเหมือนกันไม่รวมกลุ่ม (10 ห้องโชว์แยก)
   const roomGroups = useMemo(() => {
     return (['AIR', 'FAN'] as const)
       .map((type) => {
@@ -318,7 +319,7 @@ export default function DormDetailPage() {
         const images = Array.from(new Set(rooms.flatMap((r) => r.images ?? [])));
         const variantMap = new Map<string, RoomVariant>();
         for (const room of rooms) {
-          const key = `${room.name ?? ''}|${room.pricePerMonth}`;
+          const key = `${room.pricePerMonth}|${room.deposit ?? 0}|${room.pricePerDay ?? 0}|${room.allowDaily ? 1 : 0}`;
           const existing = variantMap.get(key);
           if (existing) existing.count += 1;
           else variantMap.set(key, { key, room, count: 1 });

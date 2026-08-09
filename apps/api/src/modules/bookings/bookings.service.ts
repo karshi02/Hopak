@@ -56,7 +56,9 @@ export class BookingsService {
     }
     // เก็บค่าเช่า+มัดจำเป็น snapshot ตอนจอง (ราคาห้องอาจเปลี่ยนภายหลัง) — มัดจำใช้ระดับห้องก่อน
     // ถ้าห้องไม่ได้ตั้ง (0) ตกไปใช้ค่ามัดจำระดับหอ. ผู้เช่าจ่ายรวมกับเรา (กันจ่ายมัดจำตรงเจ้าของหอแล้วโดนโกง)
-    const roomPrice = room.pricePerMonth;
+    // จ่ายเต็มสัญญาล่วงหน้า: ค่าเช่า = ราคา/เดือน × จำนวนเดือนที่เลือก (1/3/6) — มัดจำจ่ายครั้งเดียว
+    const months = dto.leaseMonths ?? 1;
+    const roomPrice = room.pricePerMonth * months;
     const deposit = room.deposit > 0 ? room.deposit : room.dorm.deposit;
     const booking = await this.prisma.booking.create({
       data: {
@@ -66,7 +68,7 @@ export class BookingsService {
         amount: roomPrice + deposit,
         roomPrice,
         deposit,
-        leaseMonths: dto.leaseMonths ?? 1,
+        leaseMonths: months,
         status: 'PENDING',
         contactName: dto.contactName,
         contactPhone: dto.contactPhone,

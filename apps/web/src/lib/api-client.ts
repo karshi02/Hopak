@@ -33,7 +33,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-const MIN_LOAD_MS = 1000; 
+const MIN_LOAD_MS = 250; // หน่วงขั้นต่ำกัน spinner กระพริบ (เดิม 1000 = ช้าเกินจำเป็น)
 
 function withMinDelay<T>(promise: Promise<T>): Promise<T> {
   const delay = new Promise((resolve) => setTimeout(resolve, MIN_LOAD_MS));

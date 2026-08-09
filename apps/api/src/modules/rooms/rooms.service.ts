@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { UploadsService } from '../uploads/uploads.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -129,6 +129,17 @@ export class RoomsService {
       if (data[key] !== undefined) patch[key] = data[key];
     }
     return this.prisma.room.update({ where: { id: roomId }, data: patch });
+  }
+
+  // ลบห้อง — ได้เฉพาะห้องที่ไม่มีประวัติการจอง (ห้องที่มีคนจอง/เคยจองลบไม่ได้ กันประวัติหาย + FK)
+  async remove(ownerId: string, roomId: string) {
+    await this.assertOwnsRoom(ownerId, roomId);
+    const bookingCount = await this.prisma.booking.count({ where: { roomId } });
+    if (bookingCount > 0) {
+      throw new BadRequestException('ห้องนี้มีประวัติการจอง ลบไม่ได้');
+    }
+    await this.prisma.room.delete({ where: { id: roomId } });
+    return { deleted: true };
   }
 
   async addImages(ownerId: string, roomId: string, files: Express.Multer.File[]) {

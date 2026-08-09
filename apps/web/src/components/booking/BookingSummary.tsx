@@ -11,15 +11,19 @@ const TEXT: Record<Lang, Record<string, string>> = {
     noReview: 'ยังไม่มีรีวิว',
     summary: 'สรุปค่าใช้จ่าย',
     firstMonth: 'ค่าเช่าเดือนแรก',
+    rent: 'ค่าเช่า',
+    monthsWord: 'เดือน',
     deposit: 'ค่ามัดจำ',
     fee: 'ค่าจองผ่าน Hoprak',
     free: 'ฟรี',
     payTotal: 'ยอดชำระวันเข้าอยู่',
     payNote: 'ค่าเช่าเดือนแรก + ค่ามัดจำ',
     secure: 'ข้อมูลของคุณถูกเข้ารหัสและปลอดภัย',
-    r1: 'จองสำเร็จ · สแกน QR พร้อมเพย์เพื่อชำระเงิน',
-    r2: 'ระบบตรวจยอดอัตโนมัติ ไม่ต้องรอเจ้าของหอ/แอดมินยืนยัน',
-    r3: 'ชำระแล้วออกใบเสร็จ + โทเค็นทันที นำโค้ดไปยืนยันกับหอพักตอนเข้าพัก',
+    recommended: 'แนะนำ',
+    cancelFree: 'ยกเลิกฟรี 24 ชม.',
+    r1: 'ชำระผ่าน Hoprak แบบปลอดภัย · ไม่ต้องโอนตรงเจ้าของหอ',
+    r2: 'ยกเลิกฟรีภายใน 24 ชม. · คืนเงินเต็มจำนวน',
+    r3: 'ยืนยันทันทีหลังชำระเงิน · ได้รหัสเข้าพักเลย',
   },
   en: {
     roomAir: 'Air-con room',
@@ -27,15 +31,19 @@ const TEXT: Record<Lang, Record<string, string>> = {
     noReview: 'No reviews yet',
     summary: 'Cost summary',
     firstMonth: 'First month rent',
+    rent: 'Rent',
+    monthsWord: 'mo',
     deposit: 'Deposit',
     fee: 'Hoprak booking fee',
     free: 'Free',
     payTotal: 'Due on move-in',
     payNote: 'First month rent + deposit',
     secure: 'Your information is encrypted and secure',
-    r1: 'Booked · scan the PromptPay QR to pay',
-    r2: 'The system verifies automatically — no waiting for owner/admin',
-    r3: 'Once paid, the receipt & check-in code are issued instantly to show the dorm',
+    recommended: 'Recommended',
+    cancelFree: 'Free cancel 24h',
+    r1: 'Pay securely via Hoprak · no direct transfer to the owner',
+    r2: 'Free cancellation within 24h · full refund',
+    r3: 'Confirmed instantly after payment · get your check-in code',
   },
 };
 
@@ -62,44 +70,58 @@ export function BookingSummary({
 }) {
   const t = TEXT[lang];
   const room = booking.room;
+  // รายเดือนหลายเดือน = โชว์ "ค่าเช่า N เดือน" (roomPrice เป็นยอดรวมทั้งสัญญาแล้ว) ; รายวัน/1 เดือน = ป้ายเดิม
+  const months = booking.leaseMonths ?? 1;
+  const rentLabel = booking.rentalType !== 'DAILY' && months > 1 ? `${t.rent} ${months} ${t.monthsWord}` : t.firstMonth;
   const roomLabel = room?.name || (room?.type?.toUpperCase() === 'AIR' ? t.roomAir : t.roomFan);
   const cover = room?.images?.[0] ?? room?.dorm?.images?.[0] ?? null;
   const rating = room?.dorm?.avgRating;
   const reviewCount = room?.dorm?.reviewCount ?? 0;
+  const isPopular = (rating ?? 0) >= 4.5 && reviewCount >= 3;
 
   return (
     <div className="lg:sticky lg:top-6">
-      <div className="overflow-hidden rounded-[20px] border border-[#EAEDF2] bg-white shadow-[0_8px_26px_rgba(16,24,40,0.1)]">
-        <div className="flex gap-3.5 p-[18px]">
-          <div className="h-[74px] w-[88px] shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-[#3E5C8A] to-[#1E4FB0]">
-            {cover && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover} alt="" className="h-full w-full object-cover" />
+      <div className="overflow-hidden rounded-[22px] border border-[#EEF1F6] bg-white shadow-[0_12px_30px_rgba(16,30,70,0.1)]">
+        {/* hero image + badges (Booking 2.0) */}
+        <div className="relative h-[132px] bg-gradient-to-br from-[#3E5C8A] to-[#1B44A6]">
+          {cover && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover} alt="" className="h-full w-full object-cover" />
+          )}
+          {isPopular && (
+            <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-pill bg-black/45 px-3 py-1 text-[12px] font-bold text-white backdrop-blur-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#FFC24D">
+                <path d="M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z" />
+              </svg>
+              {t.recommended}
+            </span>
+          )}
+          <span className="absolute bottom-3 right-3 inline-flex items-center rounded-[9px] bg-white/95 px-3 py-1 text-[12px] font-bold text-[#12704A]">
+            {t.cancelFree}
+          </span>
+        </div>
+        <div className="px-[18px] pt-[15px]">
+          <div className="mb-1 flex items-center gap-1.5">
+            {rating ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="#E0902F">
+                  <path d="M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z" />
+                </svg>
+                <span className="text-[12.5px] font-bold text-ink-strong">{rating.toFixed(1)}</span>
+                <span className="text-[11.5px] text-[#9AA0AB]">({reviewCount})</span>
+              </>
+            ) : (
+              <span className="text-[11.5px] text-[#9AA0AB]">{t.noReview}</span>
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-1.5">
-              {rating ? (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#E0902F">
-                    <path d="M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z" />
-                  </svg>
-                  <span className="text-[12.5px] font-bold text-ink-strong">{rating.toFixed(1)}</span>
-                  <span className="text-[11.5px] text-[#9AA0AB]">({reviewCount})</span>
-                </>
-              ) : (
-                <span className="text-[11.5px] text-[#9AA0AB]">{t.noReview}</span>
-              )}
-            </div>
-            <div className="truncate text-[15px] font-bold tracking-tight text-ink-strong">{room?.dorm?.name ?? '—'}</div>
-            <div className="mt-0.5 truncate text-xs text-[#8A909F]">{roomLabel}</div>
-          </div>
+          <div className="truncate text-[16px] font-bold tracking-tight text-ink-strong">{room?.dorm?.name ?? '—'}</div>
+          <div className="mt-0.5 truncate text-xs text-[#8A909F]">{roomLabel}</div>
         </div>
 
         <div className="px-[18px] pb-[18px]">
           <div className="mb-3.5 h-px bg-[#F0F2F6]" />
           <div className="mb-3 text-sm font-bold text-ink-strong">{t.summary}</div>
-          <Row label={t.firstMonth} value={`฿${booking.roomPrice.toLocaleString()}`} />
+          <Row label={rentLabel} value={`฿${booking.roomPrice.toLocaleString()}`} />
           {booking.deposit > 0 && <Row label={t.deposit} value={`฿${booking.deposit.toLocaleString()}`} />}
           <Row label={t.fee} value={t.free} valueClass="text-[#12A150]" />
           <div className="my-3.5 h-px bg-[#F0F2F6]" />

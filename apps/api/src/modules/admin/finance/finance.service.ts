@@ -183,9 +183,12 @@ export class FinanceService {
 
     return payments.map((p) => ({
       id: p.id,
+      dormId: p.booking.room.dorm.id,
+      ownerId: p.booking.room.dorm.owner.id,
       ownerName: p.booking.room.dorm.owner.name,
       dormName: p.booking.room.dorm.name,
       contactName: p.booking.contactName,
+      method: p.method,
       amount: p.amount,
       roomPrice: p.booking.roomPrice,
       deposit: p.booking.deposit,

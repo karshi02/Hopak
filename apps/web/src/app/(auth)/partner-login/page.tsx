@@ -89,7 +89,8 @@ export default function PartnerLoginPage() {
 
   useEffect(() => {
     const queryError = searchParams.get('error');
-    if (queryError) setError(queryError);
+    if (queryError === 'not_owner') setError(t.notOwnerError);
+    else if (queryError) setError(queryError);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -160,6 +161,7 @@ export default function PartnerLoginPage() {
 
           <a
             href={`${API_URL}/auth/google`}
+            onClick={() => sessionStorage.setItem('googleIntent', 'owner')}
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-3 text-sm font-medium text-gray-800 hover:bg-gray-50"
           >
             <GoogleIcon />

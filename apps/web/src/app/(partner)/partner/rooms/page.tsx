@@ -72,6 +72,12 @@ const TEXT = {
     all: 'ทั้งหมด',
     available: 'ว่าง',
     occupied: 'ไม่ว่าง',
+    totalRooms: (n: number) => `รวม ${n} ห้อง`,
+    editAll: 'แก้ไขทั้งกลุ่ม',
+    addRoom: 'เพิ่มห้อง',
+    deleteGroup: 'ลบ',
+    addQtyPrompt: 'เพิ่มกี่ห้อง? (1-50)',
+    confirmDeleteGroup: (n: number) => `ลบห้องในกลุ่มนี้? (${n} ห้อง) — ลบได้เฉพาะห้องที่ไม่มีการจอง ห้องที่มีคนจองจะคงไว้`,
     air: 'ห้องแอร์',
     fan: 'ห้องพัดลม',
     markOccupied: 'ตัดห้อง',
@@ -104,6 +110,12 @@ const TEXT = {
     all: 'All',
     available: 'Available',
     occupied: 'Occupied',
+    totalRooms: (n: number) => `${n} room${n > 1 ? 's' : ''} total`,
+    editAll: 'Edit all',
+    addRoom: 'Add rooms',
+    deleteGroup: 'Delete',
+    addQtyPrompt: 'How many rooms to add? (1-50)',
+    confirmDeleteGroup: (n: number) => `Delete rooms in this group? (${n}) — only rooms without bookings are removed; booked ones are kept`,
     air: 'Air-conditioned',
     fan: 'Fan room',
     markOccupied: 'Mark occupied',
@@ -139,7 +151,7 @@ export default function PartnerRoomsPage() {
   const [dorms, setDorms] = useState<DormWithRooms[]>([]);
   const [selectedDormId, setSelectedDormId] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied'>('all');
-  const [editTarget, setEditTarget] = useState<Room | null>(null);
+  const [editTarget, setEditTarget] = useState<{ room: Room; ids: string[] } | null>(null);
 
   function reload() {
     apiClient
@@ -153,14 +165,76 @@ export default function PartnerRoomsPage() {
 
   useEffect(reload, []);
 
+  // ลบทั้งกลุ่ม — ลบได้เฉพาะห้องที่ไม่มีการจอง (backend กัน) ห้องที่มีคนจองจะข้ามไป
+  async function deleteGroup(ids: string[]) {
+    if (!window.confirm(t.confirmDeleteGroup(ids.length))) return;
+    await Promise.allSettled(ids.map((id) => apiClient.delete(`/rooms/${id}`)));
+    reload();
+  }
+
+  // เพิ่มห้องเข้ากลุ่มเดิม (spec เดียวกัน) โดยไม่ต้องตั้งโพสใหม่
+  async function addRooms(rep: Room) {
+    const input = window.prompt(t.addQtyPrompt, '1');
+    if (!input) return;
+    const qty = Math.max(1, Math.min(50, Math.floor(Number(input)) || 0));
+    if (qty < 1) return;
+    const fd = new FormData();
+    fd.append('type', rep.type.toUpperCase());
+    fd.append('pricePerMonth', String(rep.pricePerMonth));
+    fd.append('pricePerDay', String(rep.pricePerDay ?? 0));
+    fd.append('allowDaily', String(!!rep.allowDaily));
+    fd.append('deposit', String(rep.deposit ?? 0));
+    fd.append('waterRate', String(rep.waterRate ?? 0));
+    fd.append('electricRate', String(rep.electricRate ?? 0));
+    fd.append('description', rep.description ?? '');
+    fd.append('amenities', JSON.stringify(rep.amenities ?? []));
+    fd.append('quantity', String(qty));
+    await fetch(`${API_URL}/dorms/${rep.dormId}/rooms`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: fd,
+    });
+    reload();
+  }
+
   const selectedDorm = dorms.find((d) => d.id === selectedDormId);
   const rooms = selectedDorm?.rooms ?? [];
   const available = rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE').length;
   const occupied = rooms.length - available;
-  const filteredRooms = rooms.filter((r) => {
-    if (statusFilter === 'all') return true;
-    return normalizeStatus(r.status) === statusFilter;
-  });
+
+  // รวมห้องเหมือนกัน (ประเภท+ราคา+มัดจำ+รายวัน) เป็นกลุ่มเดียว โชว์จำนวน — ไม่รวม name (สุ่มต่อห้อง)
+  const groups = (() => {
+    const map = new Map<
+      string,
+      { key: string; rep: Room; ids: string[]; total: number; available: number; occupied: number; pending: boolean }
+    >();
+    for (const r of rooms) {
+      const key = `${r.type}|${r.pricePerMonth}|${r.deposit ?? 0}|${r.pricePerDay ?? 0}|${r.allowDaily ? 1 : 0}`;
+      const isAvail = r.status.toUpperCase() === 'AVAILABLE';
+      const g = map.get(key);
+      if (g) {
+        g.ids.push(r.id);
+        g.total += 1;
+        g[isAvail ? 'available' : 'occupied'] += 1;
+        if (r.approved === false) g.pending = true;
+        if (!isAvail && g.rep.status.toUpperCase() !== 'AVAILABLE') g.rep = r; // ตัวแทนควรเป็นห้องว่างถ้ามี
+      } else {
+        map.set(key, {
+          key,
+          rep: r,
+          ids: [r.id],
+          total: 1,
+          available: isAvail ? 1 : 0,
+          occupied: isAvail ? 0 : 1,
+          pending: r.approved === false,
+        });
+      }
+    }
+    let list = [...map.values()];
+    if (statusFilter === 'available') list = list.filter((g) => g.available > 0);
+    else if (statusFilter === 'occupied') list = list.filter((g) => g.occupied > 0);
+    return list;
+  })();
 
   if (dorms.length === 0) {
     return <p className="text-ink-faint">{t.noDorms}</p>;
@@ -202,31 +276,30 @@ export default function PartnerRoomsPage() {
       </div>
 
       <div className="mt-[18px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3">
-        {filteredRooms.map((room) => {
-          const isAvailable = normalizeStatus(room.status) === 'available';
-          // รูปที่ผู้เช่าเห็นจริง: รูปเฉพาะห้อง (ถ้ามี) ไม่งั้นรูปหอ — คลิกเลื่อนดูได้ทุกรูป
+        {groups.map((g) => {
+          const room = g.rep;
           const coverImages = room.images?.length ? room.images : selectedDorm?.images ?? [];
-          const pendingReview = room.approved === false;
           return (
             <div
-              key={room.id}
+              key={g.key}
               className={`overflow-hidden rounded-card-lg border bg-white shadow-card ${
-                pendingReview ? 'border-warning' : 'border-card-border'
+                g.pending ? 'border-warning' : 'border-card-border'
               }`}
             >
               <div className="relative h-[130px] overflow-hidden bg-gradient-to-br from-tenant-tint to-tenant/25">
                 <RoomCover images={coverImages} />
+                {/* สรุปว่าง/ไม่ว่างของทั้งกลุ่ม */}
                 <span
                   className={`absolute left-3 top-3 rounded-pill px-2.5 py-1 text-[11.5px] font-semibold ${
-                    isAvailable ? 'bg-success-tint text-success' : 'bg-danger-tint text-danger'
+                    g.available > 0 ? 'bg-success-tint text-success' : 'bg-danger-tint text-danger'
                   }`}
                 >
-                  {isAvailable ? t.available : t.occupied}
+                  {t.available} {g.available}/{g.total}
                 </span>
                 <span className="absolute right-3 top-3 rounded-pill bg-black/35 px-2.5 py-1 text-[11px] font-semibold text-white">
                   {room.type.toUpperCase() === 'AIR' ? t.air : t.fan}
                 </span>
-                {pendingReview && (
+                {g.pending && (
                   <span className="absolute inset-x-0 bottom-0 bg-warning/90 px-3 py-1.5 text-center text-[11.5px] font-semibold text-white">
                     {t.pendingReview}
                   </span>
@@ -235,12 +308,26 @@ export default function PartnerRoomsPage() {
               <div className="p-[18px]">
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="truncate text-[16px] font-bold text-ink-strong">
-                    {room.name || (room.type.toUpperCase() === 'AIR' ? t.air : t.fan)}
+                    {room.type.toUpperCase() === 'AIR' ? t.air : t.fan}
                   </div>
                   <div className="shrink-0 text-[17px] font-bold text-tenant">
                     ฿{room.pricePerMonth.toLocaleString()}
                     <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>
                   </div>
+                </div>
+                {/* จำนวนห้องในกลุ่ม: รวม N · ว่าง X · ไม่ว่าง Y */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12px]">
+                  <span className="rounded-md bg-surface-canvas px-2 py-0.5 font-semibold text-ink-body">
+                    {t.totalRooms(g.total)}
+                  </span>
+                  <span className="rounded-md bg-success-tint px-2 py-0.5 font-semibold text-success">
+                    {t.available} {g.available}
+                  </span>
+                  {g.occupied > 0 && (
+                    <span className="rounded-md bg-danger-tint px-2 py-0.5 font-semibold text-danger">
+                      {t.occupied} {g.occupied}
+                    </span>
+                  )}
                 </div>
                 {room.amenities && room.amenities.length > 0 && (
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -251,12 +338,12 @@ export default function PartnerRoomsPage() {
                     ))}
                   </div>
                 )}
-                <div className="mt-3.5 flex gap-2">
+                <div className="mt-3.5 flex flex-wrap gap-2">
                   <button
-                    onClick={() => setEditTarget(room)}
+                    onClick={() => setEditTarget({ room, ids: g.ids })}
                     className="flex-1 rounded-[9px] bg-surface-canvas py-2 text-[13px] font-semibold text-ink-body"
                   >
-                    {t.edit}
+                    {g.total > 1 ? t.editAll : t.edit}
                   </button>
                   <Link
                     href={`/dorms/${room.dormId}`}
@@ -264,6 +351,18 @@ export default function PartnerRoomsPage() {
                   >
                     {t.viewPost}
                   </Link>
+                  <button
+                    onClick={() => addRooms(room)}
+                    className="flex-1 rounded-[9px] bg-success-tint py-2 text-[13px] font-semibold text-success"
+                  >
+                    + {t.addRoom}
+                  </button>
+                  <button
+                    onClick={() => deleteGroup(g.ids)}
+                    className="flex-1 rounded-[9px] border border-danger py-2 text-[13px] font-semibold text-danger hover:bg-danger-tint"
+                  >
+                    {t.deleteGroup}
+                  </button>
                 </div>
               </div>
             </div>
@@ -281,11 +380,12 @@ export default function PartnerRoomsPage() {
         </Link>
       </div>
 
-      {filteredRooms.length === 0 && rooms.length > 0 && <p className="mt-4 text-ink-faint">{t.noRooms}</p>}
+      {groups.length === 0 && rooms.length > 0 && <p className="mt-4 text-ink-faint">{t.noRooms}</p>}
 
       {editTarget && (
         <EditRoomModal
-          room={editTarget}
+          room={editTarget.room}
+          groupIds={editTarget.ids}
           dormImages={selectedDorm?.images ?? []}
           t={t}
           lang={lang}
@@ -302,6 +402,7 @@ export default function PartnerRoomsPage() {
 
 function EditRoomModal({
   room,
+  groupIds,
   dormImages,
   t,
   lang,
@@ -309,6 +410,7 @@ function EditRoomModal({
   onSaved,
 }: {
   room: Room;
+  groupIds: string[];
   dormImages: string[];
   t: (typeof TEXT)['th'];
   lang: Lang;
@@ -332,15 +434,9 @@ function EditRoomModal({
     setSaving(true);
     setError(null);
     try {
-      await apiClient.patch(`/rooms/${room.id}`, {
-        name,
-        type,
-        description,
-        pricePerMonth: price,
-        deposit,
-        waterRate,
-        electricRate,
-      });
+      // แก้ทั้งกลุ่ม: อัปเดตทุกห้องที่เหมือนกันให้ค่าตรงกัน (ราคา/ประเภท/มัดจำ/ค่าน้ำไฟ) — ยกเว้น name (คงชื่อเฉพาะห้อง)
+      const body = { type, description, pricePerMonth: price, deposit, waterRate, electricRate };
+      await Promise.all(groupIds.map((rid) => apiClient.patch(`/rooms/${rid}`, rid === room.id ? { ...body, name } : body)));
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.saveError);

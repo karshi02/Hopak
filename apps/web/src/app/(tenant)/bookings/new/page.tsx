@@ -31,12 +31,14 @@ const TEXT = {
     notePlaceholder: 'เช่น ต้องการเข้าดูห้องก่อน, สอบถามเรื่องสัตว์เลี้ยง...',
     summaryTitle: 'สรุปค่าใช้จ่าย',
     firstMonth: 'ค่าเช่าเดือนแรก',
+    rentMonths: (n: number) => `ค่าเช่า ${n} เดือน`,
+    recommended: 'แนะนำ',
     deposit: 'ค่ามัดจำ',
     depositNote: 'ชำระผ่าน Hoprak พร้อมค่าเช่า (ปลอดภัย ไม่ต้องโอนตรงเจ้าของหอ)',
     bookingFee: 'ค่าจองผ่าน Hoprak',
     free: 'ฟรี',
     payNow: 'ยอดชำระผ่าน Hoprak',
-    payNowNote: 'ค่าเช่าเดือนแรก + ค่ามัดจำ · ชำระหลังเจ้าของหอยืนยัน',
+    payNowNote: 'ค่าเช่าตามจำนวนเดือน + ค่ามัดจำ',
     submit: 'ส่งคำขอจอง',
     submitting: 'กำลังส่งคำขอ...',
     ctaHint: 'กดเพื่อส่งคำขอไปยังเจ้าของหอ',
@@ -83,12 +85,14 @@ const TEXT = {
     notePlaceholder: 'e.g. I would like to view the room first, question about pets...',
     summaryTitle: 'Cost summary',
     firstMonth: 'First month rent',
+    rentMonths: (n: number) => `Rent × ${n} month${n > 1 ? 's' : ''}`,
+    recommended: 'Recommended',
     deposit: 'Deposit',
     depositNote: 'Paid via Hoprak with the rent (safe — no direct transfer to the owner)',
     bookingFee: 'Hoprak booking fee',
     free: 'Free',
     payNow: 'Payable through Hoprak',
-    payNowNote: 'First month rent + deposit · paid after the owner confirms',
+    payNowNote: 'Rent for the selected months + deposit',
     submit: 'Send booking request',
     submitting: 'Sending request...',
     ctaHint: 'Tap to send the request to the dorm owner',
@@ -297,8 +301,9 @@ function NewBookingForm() {
   // รายวันไม่เก็บมัดจำ (ตามนโยบาย) — รายเดือนใช้มัดจำระดับห้อง/หอ
   const deposit = isDaily ? 0 : roomDeposit > 0 ? roomDeposit : room.dorm.deposit ?? 0;
   const pricePerDay = room.pricePerDay ?? 0;
-  // ยอดจ่ายรวม: รายเดือน = ค่าเช่าเดือนแรก + มัดจำ · รายวัน = ค่าห้อง/คืน × จำนวนคืน
-  const payTotal = isDaily ? pricePerDay * nights : room.pricePerMonth + deposit;
+  // ยอดจ่ายรวม: รายเดือน = ค่าเช่า/เดือน × จำนวนเดือน + มัดจำ · รายวัน = ค่าห้อง/คืน × จำนวนคืน
+  const rentTotal = room.pricePerMonth * leaseMonths;
+  const payTotal = isDaily ? pricePerDay * nights : rentTotal + deposit;
   const allowDaily = room.allowDaily && pricePerDay > 0;
   const cover = room.images?.[0] ?? room.dorm.images?.[0] ?? null;
   const locale = t.dateLocale;
@@ -404,7 +409,8 @@ function NewBookingForm() {
             </div>
           )}
 
-          {/* check-in date */}
+          {/* check-in date — โชว์เฉพาะรายวัน (รายเดือนใช้วันนี้เป็นวันเข้าอยู่อัตโนมัติ) */}
+          {isDaily && (
           <div className="mt-5">
             <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.checkInLabel}</label>
             <div className="grid grid-cols-3 gap-3">
@@ -454,6 +460,28 @@ function NewBookingForm() {
               </div>
             </div>
           </div>
+          )}
+
+          {/* รายเดือน: วันเข้าอยู่ — กรอกเอง/เลือกจากปฏิทิน (native date) */}
+          {!isDaily && (
+            <div className="mt-5">
+              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.checkInLabel}</label>
+              <div className={`${fieldBase} ${checkInDate ? fieldActive : fieldIdle}`}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <rect x="3" y="5" width="18" height="16" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
+                  <path d="M3 10h18M8 3v4M16 3v4" stroke="#9AA0AB" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="date"
+                  value={checkInDate}
+                  min={toISODate(new Date())}
+                  onChange={(e) => setCheckInDate(e.target.value)}
+                  className={`${inputBase} font-sans`}
+                  required
+                />
+              </div>
+            </div>
+          )}
 
           {/* รายวัน: วันคืนห้อง + จำนวนคืน + ช่วงที่ถูกจองแล้ว */}
           {isDaily ? (
@@ -503,10 +531,16 @@ function NewBookingForm() {
                       key={m}
                       type="button"
                       onClick={() => setLeaseMonths(m)}
-                      className={`flex-1 rounded-xl border-[1.5px] py-2.5 text-sm font-semibold ${
+                      className={`relative flex-1 rounded-xl border-[1.5px] py-2.5 text-sm font-semibold ${
                         active ? 'border-tenant bg-tenant-tint text-tenant' : 'border-card-border bg-white text-ink-body'
                       }`}
                     >
+                      {/* ป้ายแนะนำบนตัวเลือก 3 เดือน */}
+                      {m === 3 && (
+                        <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-tenant px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                          {t.recommended}
+                        </span>
+                      )}
                       {t.leaseUnit(m)}
                     </button>
                   );
@@ -579,10 +613,15 @@ function NewBookingForm() {
                 </>
               ) : (
                 <>
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <span className="text-[13.5px] text-ink-subtitle">{t.firstMonth}</span>
+                  <div className="mb-2.5 flex items-start justify-between gap-3">
+                    <span className="text-[13.5px] text-ink-subtitle">
+                      {t.rentMonths(leaseMonths)}
+                      <span className="block text-[11px] text-ink-faint">
+                        ฿{room.pricePerMonth.toLocaleString()}/{lang === 'th' ? 'เดือน' : 'mo'} × {leaseMonths}
+                      </span>
+                    </span>
                     <span className="font-sans text-sm font-semibold tabular-nums text-ink-strong">
-                      ฿{room.pricePerMonth.toLocaleString()}
+                      ฿{rentTotal.toLocaleString()}
                     </span>
                   </div>
 

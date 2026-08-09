@@ -22,7 +22,7 @@ function write(key: string, items: string[]) {
     // localStorage ปิด/เต็ม — ข้ามไป ไม่กระทบการกรอกฟอร์ม
   }
 }
-
+//store field suggestions in localStorage (per field) to show as a dropdown for selection — not auto-fill the entire form
 // เก็บค่าที่เคยกรอกไว้ในเครื่อง (ต่อ field) ไว้โชว์เป็น dropdown ให้เลือก — ไม่ใช่ auto-fill ทั้งฟอร์ม
 // ผู้ใช้ต้องกดเลือกเองเท่านั้น ฟอร์มยังเริ่มว่างทุกครั้งเหมือนเดิม
 export function useFieldSuggestions(key: string) {
@@ -42,3 +42,4 @@ export function useFieldSuggestions(key: string) {
 
   return { items, remember };
 }
+//exit

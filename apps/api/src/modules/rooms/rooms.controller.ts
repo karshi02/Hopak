@@ -87,6 +87,14 @@ export class RoomsController {
     return this.roomsService.update(user.id, id, body);
   }
 
+  // เจ้าของหอลบห้อง (เฉพาะห้องที่ไม่มีประวัติการจอง)
+  @Delete('rooms/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('owner')
+  remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.roomsService.remove(user.id, id);
+  }
+
   @Post('rooms/:id/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('owner')

@@ -13,8 +13,9 @@ export function calcCommission(base: number): number {
 export function calcChamberShare(base: number): number {
   return round2(calcCommission(base) * CHAMBER_RATE);
 }
-
+// เเยกรักว่าง หอการค้าเเละหุ้นว่งยของ   roll = orisis lcaol 
 // ส่วนแพลตฟอร์ม = ค่าคอมที่เหลือหลังหักส่วนหอการค้า (90% ของค่าคอม)
+
 export function calcPlatformShare(base: number): number {
   return round2(calcCommission(base) - calcChamberShare(base));
 }

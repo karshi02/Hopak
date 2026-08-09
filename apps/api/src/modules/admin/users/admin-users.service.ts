@@ -44,7 +44,10 @@ export class AdminUsersService {
 
   // เดือน/ปีที่มีประวัติการเข้าสู่ระบบจริง — ใช้ทำ dropdown เลือกดูย้อนหลังทีละเดือน
   async sessionPeriods() {
-    const sessions = await this.prisma.session.findMany({ select: { createdAt: true } });
+    const sessions = await this.prisma.session.findMany({
+      where: { user: { role: { in: ['OWNER', 'ADMIN'] } } },
+      select: { createdAt: true },
+    });
     const set = new Set(sessions.map((s) => `${s.createdAt.getFullYear()}-${s.createdAt.getMonth() + 1}`));
     return Array.from(set)
       .map((key) => {
@@ -59,8 +62,12 @@ export class AdminUsersService {
   // ไม่เลือกเดือน = 200 รายการล่าสุดทั้งหมด · เลือกเดือน = ทุกรายการของเดือนนั้น (ดูย้อนหลัง)
   async listSessions(year?: number, month?: number) {
     const createdAt = this.sessionPeriodRange(year, month);
+    // โชว์เฉพาะ session ของเจ้าของหอ + แอดมิน — ผู้เช่า (tenant) ไม่เกี่ยวกับการตรวจสอบฝั่งจัดการ
     const sessions = await this.prisma.session.findMany({
-      where: createdAt ? { createdAt } : {},
+      where: {
+        user: { role: { in: ['OWNER', 'ADMIN'] } },
+        ...(createdAt ? { createdAt } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: createdAt ? 1000 : 200,
       include: { user: { select: { name: true, email: true, phone: true, role: true } } },
