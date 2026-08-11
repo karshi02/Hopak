@@ -21,6 +21,7 @@ import { UploadsService } from '../uploads/uploads.service';
 import { DisbursementGateway } from '../payments/gateway/disbursement.gateway';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { PrismaService } from '../../prisma.service';
+import { AdminRolesGuard } from '../../common/guards/admin-roles.guard';
 
 @Module({
   imports: [RealtimeModule],
@@ -48,6 +49,7 @@ import { PrismaService } from '../../prisma.service';
     DisbursementGateway,
     PrismaService,
     AdminSearchService,
+    AdminRolesGuard,
   ],
 })
 export class AdminModule {}

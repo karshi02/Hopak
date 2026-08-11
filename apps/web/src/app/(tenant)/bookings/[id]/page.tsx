@@ -11,6 +11,7 @@ import type { Booking } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
 import { BookingStepper } from '@/components/booking/BookingStepper';
 import { BookingSummary } from '@/components/booking/BookingSummary';
+import { HopakIcon } from '@/components/HopakIcon';
 
 const TEXT = {
   th: {
@@ -244,9 +245,7 @@ export default function BookingDetailPage() {
           <div className="mt-6 w-full max-w-[430px] overflow-hidden rounded-card-lg border border-card-border bg-white text-left shadow-card-hover">
             <div className="flex items-center justify-between bg-gradient-to-br from-tenant-dark to-tenant px-5 py-4">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 font-sans font-extrabold text-white">
-                  H
-                </span>
+                <HopakIcon size={28} className="rounded-lg ring-1 ring-white/40" />
                 <span className="text-[15px] font-bold text-white">{t.receiptTitle}</span>
               </div>
               <span className="font-sans text-xs text-[#CFE0FF]">#{booking.id.slice(-8).toUpperCase()}</span>

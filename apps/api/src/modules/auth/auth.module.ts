@@ -8,6 +8,8 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { PrismaService } from '../../prisma.service';
 import { MailService } from '../mail/mail.service';
 import { requireEnv } from '../../common/env.util';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { GoogleCallbackGuard } from './guards/google-callback.guard';
 
 @Module({
   imports: [
@@ -18,6 +20,14 @@ import { requireEnv } from '../../common/env.util';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, PrismaService, MailService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    GoogleAuthGuard,
+    GoogleCallbackGuard,
+    PrismaService,
+    MailService,
+  ],
 })
 export class AuthModule {}

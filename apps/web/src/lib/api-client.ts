@@ -44,6 +44,8 @@ export const apiClient = {
   get: <T>(path: string) => withMinDelay(request<T>(path)),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  postWithCredentials: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined, credentials: 'include' }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),

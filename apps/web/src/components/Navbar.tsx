@@ -8,6 +8,7 @@ import { getToken, clearToken } from '@/lib/auth';
 import { resetSocket, getSocket } from '@/lib/ws';
 import { useLang } from '@/hooks/useLang';
 import { useTypewriter } from '@/hooks/useTypewriter';
+import { HopakIcon } from '@/components/HopakIcon';
 import { LangSwitch } from '@/components/LangSwitch';
 import type { User } from '@hopak/shared';
 
@@ -116,9 +117,7 @@ export function Navbar() {
     <header className="border-b border-card-border bg-white dark:border-white/10 dark:bg-[#1a1a19]">
       <div className="mx-auto flex max-w-6xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:p-4">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-tenant font-sans text-base font-bold text-white">
-            H
-          </span>
+          <HopakIcon size={32} />
           <span className="hidden text-lg font-bold text-ink-strong dark:text-white sm:inline">Hoprak</span>
         </Link>
 

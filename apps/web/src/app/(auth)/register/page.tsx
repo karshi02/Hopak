@@ -1,143 +1,112 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
+import { HopakIcon } from '@/components/HopakIcon';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-const TOTAL_STEPS = 2;
 
 const TEXT = {
   th: {
-    heroTitle1: 'สมัครสมาชิกฟรี',
-    heroTitle2: 'เริ่มหาหอพักใกล้มหาวิทยาลัยก่อนใคร',
-    perks: [
-      'ค้นหาและเปรียบเทียบหอพักได้ไม่จำกัด',
-      'บันทึกหอที่ถูกใจไว้ดูภายหลังได้',
-      'จองและชำระเงินปลอดภัยในระบบ',
-    ],
-    haveAccount: 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ',
-    step1Title: 'สมัครสมาชิก',
-    step1Subtitle: 'สร้างบัญชีเพื่อเริ่มค้นหาและจองหอพัก',
-    google: 'สมัครด้วย Google',
-    or: 'หรือ',
-    namePlaceholder: 'ชื่อ-นามสกุล',
-    emailPlaceholder: 'อีเมล',
-    phonePlaceholder: 'เบอร์โทร',
-    passwordPlaceholder: 'รหัสผ่าน',
-    createAccountError: 'สร้างบัญชีไม่สำเร็จ',
-    submit: 'สมัครสมาชิก',
-    acceptTerms: 'ฉันยอมรับเงื่อนไขการใช้งาน และนโยบายความเป็นส่วนตัว ของ Hoprak',
-    haveAccount2: 'มีบัญชีแล้ว?',
+    brandTitle1: 'หาหอในฝัน',
+    brandTitle2: 'จองได้ในไม่กี่คลิก',
+    brandSub: 'รวมหอพักใกล้มหาวิทยาลัย ราคาโปร่งใส จองและชำระเงินจบในที่เดียว',
+    perks: ['ค้นหาหอใกล้ ม. ราคาดี รีวิวจริง', 'ชำระเงินปลอดภัย ยืนยันทันที', 'เช่ารายวันหรือรายเดือนก็ได้'],
+    rating: '4.8 จาก 1,200+ รีวิวผู้เช่า',
+    stepOf: (n: number) => `ขั้นตอนที่ ${n} จาก 2`,
     login: 'เข้าสู่ระบบ',
-    ownerLink: 'มีหอพักให้เช่า? สมัครเปิดหอพักกับ Hoprak',
-    step2Title: 'ตั้งค่าโปรไฟล์',
-    step2Subtitle: 'เพิ่มรูปโปรไฟล์ (ข้ามได้)',
-    photoLabel: 'รูป',
-    avatarPlaceholder: 'ลิงก์รูปโปรไฟล์ (ถ้ามี)',
-    addressLabel: 'ที่อยู่',
-    addressPlaceholder: 'กรอกที่อยู่ของคุณ',
-    useLocation: 'ใช้ตำแหน่งปัจจุบัน',
-    locating: 'กำลังค้นหาตำแหน่ง...',
-    locationDenied: 'ไม่สามารถเข้าถึงตำแหน่งได้ กรุณากรอกที่อยู่เอง',
-    locationUnsupported: 'เบราว์เซอร์นี้ไม่รองรับการค้นหาตำแหน่ง',
-    saveProfileError: 'บันทึกโปรไฟล์ไม่สำเร็จ',
-    start: 'เริ่มใช้งาน Hoprak',
+    stepAccount: 'สร้างบัญชี',
+    stepProfile: 'โปรไฟล์',
+    // step 1
+    title1: 'สร้างบัญชี Hoprak',
+    sub1: 'เริ่มด้วย Google หรือกรอกอีเมลของคุณ',
+    google: 'ดำเนินการต่อด้วย Google',
+    or: 'หรือ',
+    fName: 'ชื่อ-นามสกุล',
+    fEmail: 'อีเมล',
+    fPhone: 'เบอร์โทรศัพท์',
+    fPass: 'รหัสผ่าน',
+    phName: 'เช่น วิชัย ใจดี',
+    phEmail: 'you@gmail.com',
+    phPhone: '08x-xxx-xxxx',
+    phPass: 'อย่างน้อย 6 ตัวอักษร',
+    submit1: 'สมัครสมาชิก',
+    submitting: 'กำลังสมัคร...',
+    haveAccount: 'มีบัญชีแล้ว?',
+    terms: 'การสมัครถือว่ายอมรับเงื่อนไขการใช้งานและนโยบายความเป็นส่วนตัว',
+    err1: 'สร้างบัญชีไม่สำเร็จ',
+    // step 2
+    title2: 'ตั้งค่าโปรไฟล์',
+    sub2: 'เพื่อให้หอพักติดต่อคุณได้สะดวก',
+    uploadPhoto: 'อัปโหลดรูปโปรไฟล์',
+    newUser: 'ผู้ใช้ใหม่',
+    fDisplayName: 'ชื่อที่แสดง',
+    intentTitle: 'คุณสนใจแบบไหน',
+    intentMonthly: 'เช่ารายเดือน',
+    intentDaily: 'เช่ารายวัน',
+    back: 'ย้อนกลับ',
+    finish: 'เริ่มใช้งาน',
+    err2: 'บันทึกโปรไฟล์ไม่สำเร็จ',
   },
   en: {
-    heroTitle1: 'Sign up for free',
-    heroTitle2: 'Start finding dorms near your university first',
-    perks: [
-      'Search and compare unlimited dorms',
-      'Save favorite dorms to view later',
-      'Book and pay safely through the platform',
-    ],
-    haveAccount: 'Already have an account? Log in',
-    step1Title: 'Sign up',
-    step1Subtitle: 'Create an account to start finding and booking dorms',
-    google: 'Sign up with Google',
-    or: 'or',
-    namePlaceholder: 'Full name',
-    emailPlaceholder: 'Email',
-    phonePlaceholder: 'Phone number',
-    passwordPlaceholder: 'Password',
-    createAccountError: 'Failed to create account',
-    submit: 'Sign up',
-    acceptTerms: "I accept Hoprak's Terms of Use and Privacy Policy",
-    haveAccount2: 'Already have an account?',
+    brandTitle1: 'Find your dorm',
+    brandTitle2: 'Book it in a few clicks',
+    brandSub: 'Dorms near your university, transparent pricing, book and pay in one place',
+    perks: ['Dorms near campus, good prices, real reviews', 'Secure payment, instant confirmation', 'Daily or monthly rental'],
+    rating: '4.8 from 1,200+ tenant reviews',
+    stepOf: (n: number) => `Step ${n} of 2`,
     login: 'Log in',
-    ownerLink: 'Have a dorm to rent? List it with Hoprak',
-    step2Title: 'Set up your profile',
-    step2Subtitle: 'Add a profile photo (optional)',
-    photoLabel: 'Photo',
-    avatarPlaceholder: 'Profile photo link (optional)',
-    addressLabel: 'Address',
-    addressPlaceholder: 'Enter your address',
-    useLocation: 'Use current location',
-    locating: 'Locating...',
-    locationDenied: "Couldn't access your location — please enter your address manually",
-    locationUnsupported: "This browser doesn't support location lookup",
-    saveProfileError: 'Failed to save profile',
-    start: 'Get started with Hoprak',
+    stepAccount: 'Account',
+    stepProfile: 'Profile',
+    title1: 'Create your Hoprak account',
+    sub1: 'Start with Google or use your email',
+    google: 'Continue with Google',
+    or: 'or',
+    fName: 'Full name',
+    fEmail: 'Email',
+    fPhone: 'Phone number',
+    fPass: 'Password',
+    phName: 'e.g. Wichai Jaidee',
+    phEmail: 'you@gmail.com',
+    phPhone: '08x-xxx-xxxx',
+    phPass: 'At least 6 characters',
+    submit1: 'Sign up',
+    submitting: 'Signing up...',
+    haveAccount: 'Already have an account?',
+    terms: 'By signing up you accept our Terms of Service and Privacy Policy',
+    err1: 'Could not create account',
+    title2: 'Set up your profile',
+    sub2: 'So dorms can reach you easily',
+    uploadPhoto: 'Upload profile photo',
+    newUser: 'New user',
+    fDisplayName: 'Display name',
+    intentTitle: 'What are you looking for?',
+    intentMonthly: 'Monthly rental',
+    intentDaily: 'Daily rental',
+    back: 'Back',
+    finish: 'Get started',
+    err2: 'Could not save profile',
   },
 };
 
-function BrandPanel({ step, t }: { step: number; t: (typeof TEXT)['th'] }) {
+const inputBase =
+  'h-[52px] w-full rounded-[13px] border-[1.5px] border-[#E7ECEA] bg-[#F6F8FB] px-4 text-[15px] text-[#12151C] outline-none transition focus:border-[#2F6FE0] focus:bg-white focus:ring-[3px] focus:ring-[#2F6FE0]/10 placeholder:text-[#9AA5A0]';
+const labelBase = 'mb-2 block text-[13.5px] font-medium text-[#5B655F]';
+
+function GoogleIcon({ size = 22 }: { size?: number }) {
   return (
-    <div className="relative hidden w-[38%] shrink-0 flex-col justify-between overflow-hidden bg-[linear-gradient(165deg,#1E4FB0_0%,#173A87_55%,#0E1220_130%)] p-10 text-white lg:flex">
-      <div className="pointer-events-none absolute -right-10 -top-14 h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(47,111,224,0.55),transparent_68%)] blur-xl" />
-      <div className="pointer-events-none absolute -bottom-20 -left-10 h-[260px] w-[260px] rounded-full bg-[radial-gradient(circle,rgba(23,143,90,0.35),transparent_66%)] blur-lg" />
-
-      <div className="relative">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[10px] bg-tenant font-sans text-xl font-extrabold leading-none text-white">
-            H
-          </span>
-          <span className="text-lg font-bold tracking-tight text-white">
-            Hoprak<span className="text-[#6BA0F5]">.com</span>
-          </span>
-        </div>
-
-        <h1 className="mt-10 text-[26px] font-bold leading-snug tracking-tight">
-          {t.heroTitle1}
-          <br />
-          {t.heroTitle2}
-        </h1>
-
-        <ul className="mt-7 flex flex-col gap-3.5">
-          {t.perks.map((perk) => (
-            <li key={perk} className="flex items-center gap-3 text-[14.5px] font-medium text-[#E4EBF7]">
-              <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-white/12">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                  <path d="M5 12l5 5 9-11" stroke="#7FE0A8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              {perk}
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-8 flex gap-1.5">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <span key={i} className={`h-1.5 w-6 rounded-full ${i + 1 <= step ? 'bg-white' : 'bg-white/25'}`} />
-          ))}
-        </div>
-      </div>
-
-      <div className="relative font-sans text-xs text-[#BFCDE6]">
-        © 2026 Hoprak ·{' '}
-        <a href="/login" className="underline">
-          {t.haveAccount}
-        </a>
-      </div>
-    </div>
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.9a5 5 0 01-2.2 3.3v2.7h3.5c2-1.9 3.3-4.7 3.3-7.9z" />
+      <path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1-3.8 1-2.9 0-5.4-2-6.3-4.6H2v2.8A11 11 0 0012 23z" />
+      <path fill="#FBBC05" d="M5.7 14c-.2-.7-.4-1.4-.4-2.1s.2-1.4.4-2.1V7H2a11 11 0 000 9.9L5.7 14z" />
+      <path fill="#EA4335" d="M12 5.4c1.6 0 3 .5 4.2 1.6l3.1-3.1A11 11 0 002 7l3.7 2.8C6.6 7.3 9.1 5.4 12 5.4z" />
+    </svg>
   );
 }
-
-const inputClass =
-  'rounded-btn border border-card-border px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -145,25 +114,19 @@ export default function RegisterPage() {
   const t = TEXT[lang];
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
+  const [intent, setIntent] = useState<'monthly' | 'daily'>('monthly');
   const [address, setAddress] = useState('');
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const autoSavedRef = useRef(false);
 
-  function handleUseLocation() {
-    if (!navigator.geolocation) {
-      setLocationError(t.locationUnsupported);
-      return;
-    }
-    setLocating(true);
-    setLocationError(null);
+  // เก็บที่อยู่จากตำแหน่งเครื่องแบบเงียบๆ (ไม่มี UI) — บันทึกให้อัตโนมัติครั้งเดียวหลังมีบัญชี
+  useEffect(() => {
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
@@ -173,26 +136,14 @@ export default function RegisterPage() {
           const data = await res.json();
           if (data?.display_name) setAddress(data.display_name);
         } catch {
-          setLocationError(t.locationDenied);
-        } finally {
-          setLocating(false);
+          /* ไม่ได้ก็ข้ามไป ไม่รบกวนผู้ใช้ */
         }
       },
-      () => {
-        setLocationError(t.locationDenied);
-        setLocating(false);
-      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000 },
     );
-  }
-
-  // ขอตำแหน่งทันทีที่เข้าหน้าสมัครสมาชิก (ทั้งมือถือและคอมพิวเตอร์) แทนที่จะรอให้กดปุ่มเอง
-  useEffect(() => {
-    handleUseLocation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ทันทีที่มีบัญชี (เข้า step 2) และมีที่อยู่จากตำแหน่งแล้ว บันทึกให้อัตโนมัติครั้งเดียว
-  // จากนั้นผู้ใช้แก้ไขเองได้อีก โดยจะถูกบันทึกจริงตอนกด "เริ่มใช้งาน Hoprak"
   useEffect(() => {
     if (step === 2 && address && !autoSavedRef.current) {
       autoSavedRef.current = true;
@@ -203,6 +154,7 @@ export default function RegisterPage() {
   async function handleCreateAccount(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
       const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/register', {
         name,
@@ -213,213 +165,301 @@ export default function RegisterPage() {
       setToken(accessToken);
       setStep(2);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.createAccountError);
+      setError(err instanceof Error ? err.message : t.err1);
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  async function handleFinishProfile(e: React.FormEvent) {
+  async function handleFinish(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
-      if (avatarUrl || address) {
-        await apiClient.patch('/users/me', {
-          ...(avatarUrl ? { avatarUrl } : {}),
-          ...(address ? { address } : {}),
-        });
-      }
-      router.push('/');
+      if (name) await apiClient.patch('/users/me', { name });
+      // ความสนใจ: รายวัน → เข้าโหมดหอรายวันเลย ; รายเดือน → หน้าแรก
+      router.push(intent === 'daily' ? '/daily' : '/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.saveProfileError);
+      setError(err instanceof Error ? err.message : t.err2);
+      setSubmitting(false);
     }
   }
 
-  return (
-    <main className="flex min-h-[calc(100vh-65px)] bg-surface-web">
-      <BrandPanel step={step} t={t} />
+  const initial = (name.trim()[0] ?? (lang === 'th' ? 'ผ' : 'U')).toUpperCase();
+  const nameShown = name.trim() || t.newUser;
 
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-sm">
+  return (
+    <main className="flex min-h-screen flex-col lg:flex-row">
+      {/* LEFT · brand panel */}
+      <div className="relative hidden w-[40%] max-w-[600px] flex-col overflow-hidden bg-[linear-gradient(160deg,#12224E,#1E4FB0_62%,#2F6FE0)] px-[54px] py-14 text-white lg:flex">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_10%,rgba(120,180,255,0.22),transparent_46%),radial-gradient(circle_at_0%_100%,rgba(90,150,255,0.14),transparent_44%)]" />
+        {/* กดโลโก้ = กลับหน้าแรก */}
+        <Link href="/" aria-label="Hoprak" className="relative flex items-center gap-3.5 transition hover:opacity-80">
+          <HopakIcon size={44} className="ring-1 ring-white/25 rounded-[11px]" />
+          <span className="text-[22px] font-bold">Hoprak</span>
+        </Link>
+
+        <div className="relative mt-auto">
+          <h1 className="text-[42px] font-extrabold leading-[1.18] tracking-tight">
+            {t.brandTitle1}
+            <br />
+            {t.brandTitle2}
+          </h1>
+          <p className="mt-4 max-w-[440px] text-[17px] leading-relaxed text-[#CFE0FF]">{t.brandSub}</p>
+
+          <div className="mt-9 flex flex-col gap-4">
+            {t.perks.map((p, i) => (
+              <div key={p} className="flex items-center gap-3.5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.14]">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    {i === 0 && (
+                      <>
+                        <circle cx="11" cy="11" r="7" stroke="#fff" strokeWidth="1.9" />
+                        <path d="M20 20l-4-4" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" />
+                      </>
+                    )}
+                    {i === 1 && (
+                      <>
+                        <path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7l7-4z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+                        <path d="M9 12l2 2 4-4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </>
+                    )}
+                    {i === 2 && (
+                      <>
+                        <rect x="4" y="5" width="16" height="15" rx="2" stroke="#fff" strokeWidth="1.8" />
+                        <path d="M8 3v4M16 3v4M4 10h16" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+                      </>
+                    )}
+                  </svg>
+                </span>
+                <span className="text-base text-[#EAF2FF]">{p}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative mt-11 flex items-center gap-3 border-t border-white/[0.16] pt-6">
+          <span className="flex gap-0.5">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <svg key={i} width="16" height="16" viewBox="0 0 24 24" fill="#FFC24D">
+                <path d="M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 8.9l6.8-.7L12 2z" />
+              </svg>
+            ))}
+          </span>
+          <span className="text-[14.5px] text-[#CFE0FF]">{t.rating}</span>
+        </div>
+      </div>
+
+      {/* RIGHT · form */}
+      <div className="flex flex-1 items-center justify-center bg-white px-5 py-10 sm:px-14">
+        <div className="w-full max-w-[520px]">
+          {/* topbar */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[14.5px] text-[#7A808B]">{t.stepOf(step)}</span>
+            <Link
+              href="/login"
+              className="inline-flex h-[38px] items-center gap-1.5 rounded-[10px] bg-[#2F6FE0] px-4 text-sm font-bold text-white shadow-[0_6px_14px_rgba(47,111,224,0.28)] hover:bg-[#1E4FB0]"
+            >
+              {t.login}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M10 17l5-5-5-5M15 12H3M14 4h5a1 1 0 011 1v14a1 1 0 01-1 1h-5" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          </div>
+
+          {/* stepper */}
+          <div className="mt-4 flex items-center">
+            {[
+              { n: 1, label: t.stepAccount },
+              { n: 2, label: t.stepProfile },
+            ].map((s, i) => {
+              const on = step >= s.n;
+              return (
+                <div key={s.n} className={`flex items-center ${i === 0 ? 'flex-1' : ''}`}>
+                  <div className="flex shrink-0 items-center gap-2.5">
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-bold"
+                      style={
+                        on
+                          ? { background: '#2F6FE0', borderColor: '#2F6FE0', color: '#fff' }
+                          : { background: '#fff', borderColor: '#E0E5E3', color: '#A6AFAA' }
+                      }
+                    >
+                      {s.n}
+                    </span>
+                    <span className="text-[13.5px] font-semibold" style={{ color: on ? '#12151C' : '#A6AFAA' }}>
+                      {s.label}
+                    </span>
+                  </div>
+                  {i === 0 && (
+                    <div className="mx-3 h-0.5 flex-1 rounded" style={{ background: step > 1 ? '#2F6FE0' : '#E7ECEA' }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* STEP 1 */}
           {step === 1 && (
-            <div>
-              <h2 className="text-xl font-semibold text-ink-strong">{t.step1Title}</h2>
-              <p className="mt-1 text-sm text-ink-subtitle">{t.step1Subtitle}</p>
+            <form onSubmit={handleCreateAccount}>
+              <h2 className="mt-8 text-[32px] font-extrabold tracking-tight text-[#12151C]">{t.title1}</h2>
+              <p className="mt-2 text-[15.5px] text-[#7A808B]">{t.sub1}</p>
 
               <a
                 href={`${API_URL}/auth/google`}
-                className="mt-6 flex items-center justify-center gap-2 rounded-btn border border-card-border py-2.5 text-sm font-medium text-ink hover:bg-black/[0.02]"
+                onClick={() => sessionStorage.removeItem('googleIntent')}
+                className="mt-6 flex h-[58px] items-center justify-center gap-3 rounded-[14px] border border-[#E4E7EC] bg-white text-[16px] font-bold text-[#12151C] hover:bg-[#F8FAFD]"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.9a5 5 0 01-2.2 3.3v2.7h3.5c2-1.9 3.3-4.7 3.3-7.8z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.8A11 11 0 0012 23z"
-                  />
-                  <path fill="#FBBC05" d="M5.7 14.1a6.6 6.6 0 010-4.2V7.1H2a11 11 0 000 9.8l3.7-2.8z" />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.4c1.6 0 3 .6 4.1 1.6l3.1-3.1A11 11 0 002 7.1l3.7 2.8C6.6 7.3 9.1 5.4 12 5.4z"
-                  />
-                </svg>
+                <GoogleIcon />
                 {t.google}
               </a>
 
-              <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
-                <span className="h-px flex-1 bg-card-border" />
-                {t.or}
-                <span className="h-px flex-1 bg-card-border" />
+              <div className="my-6 flex items-center gap-3.5">
+                <span className="h-px flex-1 bg-[#EEF1F0]" />
+                <span className="text-[13px] text-[#9AA5A0]">{t.or}</span>
+                <span className="h-px flex-1 bg-[#EEF1F0]" />
               </div>
 
-              <form onSubmit={handleCreateAccount} className="flex flex-col gap-3">
-                <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-card-border bg-white px-3.5">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                    <circle cx="12" cy="8" r="4" stroke="#9AA0AB" strokeWidth="1.8" />
-                    <path d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1" stroke="#9AA0AB" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder={t.namePlaceholder}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-faint"
-                    required
-                  />
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className={labelBase}>{t.fName}</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.phName} required className={inputBase} />
                 </div>
-
-                <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-tenant bg-white px-3.5 shadow-[0_0_0_3px_rgba(47,111,224,0.12)]">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                    <rect x="3" y="5" width="18" height="14" rx="2" stroke="#2F6FE0" strokeWidth="1.8" />
-                    <path d="M4 7l8 6 8-6" stroke="#2F6FE0" strokeWidth="1.8" />
-                  </svg>
-                  <input
-                    type="email"
-                    placeholder={t.emailPlaceholder}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-transparent font-sans text-[15px] text-ink outline-none placeholder:font-sans placeholder:text-ink-faint"
-                    required
-                  />
+                <div>
+                  <label className={labelBase}>{t.fEmail}</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.phEmail} required className={inputBase} />
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-card-border bg-white px-3.5">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                      <path
-                        d="M5 4h4l2 5-3 2a12 12 0 005 5l2-3 5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"
-                        stroke="#9AA0AB"
-                        strokeWidth="1.8"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <input
-                      type="tel"
-                      placeholder={t.phonePlaceholder}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full min-w-0 bg-transparent font-sans text-[15px] text-ink outline-none placeholder:font-sans placeholder:text-ink-faint"
-                    />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelBase}>{t.fPhone}</label>
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phPhone} className={`${inputBase} font-sans`} />
                   </div>
-                  <div className="flex h-[50px] items-center gap-2.5 rounded-xl border-[1.5px] border-card-border bg-white px-3.5">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                      <rect x="4" y="10" width="16" height="10" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
-                      <path d="M8 10V7a4 4 0 018 0v3" stroke="#9AA0AB" strokeWidth="1.8" />
-                    </svg>
-                    <input
-                      type="password"
-                      placeholder={t.passwordPlaceholder}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full min-w-0 bg-transparent font-sans text-[15px] text-ink outline-none placeholder:font-sans placeholder:text-ink-faint"
-                      required
-                      minLength={6}
-                    />
+                  <div>
+                    <label className={labelBase}>{t.fPass}</label>
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.phPass} required minLength={6} className={inputBase} />
                   </div>
                 </div>
+              </div>
 
-                <label className="mt-1 flex cursor-pointer items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    checked={acceptedTerms}
-                    onChange={(e) => setAcceptedTerms(e.target.checked)}
-                    className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded accent-tenant"
-                    required
-                  />
-                  <span className="text-[13px] leading-relaxed text-ink-subtitle">{t.acceptTerms}</span>
-                </label>
+              {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
-                {error && <p className="text-sm text-danger">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={!acceptedTerms}
-                  className="mt-1 rounded-xl bg-tenant py-3 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.35)] hover:bg-tenant-dark disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {t.submit}
-                </button>
-              </form>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-6 flex h-[56px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#2F6FE0] text-[17px] font-bold text-white shadow-[0_12px_26px_rgba(47,111,224,0.3)] hover:bg-[#1E4FB0] disabled:opacity-60"
+              >
+                {submitting ? t.submitting : t.submit1}
+                {!submitting && (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12h14M13 6l6 6-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
 
-              <p className="mt-5 text-center text-sm text-ink-subtitle lg:hidden">
-                {t.haveAccount2}{' '}
-                <a href="/login" className="font-medium text-tenant">
+              <p className="mt-4 text-center text-sm text-[#7A808B]">
+                {t.haveAccount}{' '}
+                <Link href="/login" className="font-bold text-[#2F6FE0] underline">
                   {t.login}
-                </a>
+                </Link>
               </p>
-              <p className="mt-2 text-center text-xs text-ink-faint">
-                <a href="/partner-register" className="underline">
-                  {t.ownerLink}
-                </a>
-              </p>
-            </div>
+              <p className="mt-3 text-center text-[12.5px] leading-relaxed text-[#9AA5A0]">{t.terms}</p>
+            </form>
           )}
 
+          {/* STEP 2 */}
           {step === 2 && (
-            <div>
-              <h2 className="text-xl font-semibold text-ink-strong">{t.step2Title}</h2>
-              <p className="mt-1 text-sm text-ink-subtitle">{t.step2Subtitle}</p>
-              <form onSubmit={handleFinishProfile} className="mt-6 flex flex-col gap-3">
-                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-surface-canvas text-xs text-ink-faint">
-                  {t.photoLabel}
-                </div>
-                <input
-                  type="url"
-                  placeholder={t.avatarPlaceholder}
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  className={`${inputClass} font-sans`}
-                />
+            <form onSubmit={handleFinish}>
+              <h2 className="mt-8 text-[32px] font-extrabold tracking-tight text-[#12151C]">{t.title2}</h2>
+              <p className="mt-2 text-[15.5px] text-[#7A808B]">{t.sub2}</p>
 
-                <label className="text-sm font-medium text-ink-strong">{t.addressLabel}</label>
-                <textarea
-                  placeholder={t.addressPlaceholder}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  rows={2}
-                  className={`${inputClass} resize-none`}
-                />
+              {/* avatar card */}
+              <div className="mt-6 flex items-center gap-4 rounded-2xl bg-[#F6F8FB] p-5">
+                <div className="relative shrink-0">
+                  <span className="flex h-[74px] w-[74px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#3B82F6,#1E4FB0)] text-[30px] font-extrabold text-white">
+                    {initial}
+                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#2F6FE0]">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[17px] font-bold text-[#12151C]">{nameShown}</div>
+                  <span className="mt-0.5 block text-[13.5px] font-semibold text-[#2F6FE0]">{t.uploadPhoto}</span>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <label className={labelBase}>{t.fDisplayName}</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.phName} className={inputBase} />
+              </div>
+
+              {/* intent cards */}
+              <div className="mt-6">
+                <div className="mb-3 text-[16px] font-bold text-[#12151C]">{t.intentTitle}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {(
+                    [
+                      ['monthly', t.intentMonthly],
+                      ['daily', t.intentDaily],
+                    ] as const
+                  ).map(([key, label]) => {
+                    const on = intent === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setIntent(key)}
+                        className="flex flex-col items-center gap-2.5 rounded-2xl border-2 px-4 py-5 transition"
+                        style={
+                          on
+                            ? { borderColor: '#2F6FE0', background: '#EAF1FF', color: '#1E4FB0' }
+                            : { borderColor: '#E4E7EC', background: '#fff', color: '#3A3F49' }
+                        }
+                      >
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                          {key === 'monthly' ? (
+                            <>
+                              <path d="M4 20V9l8-5 8 5v11" stroke={on ? '#2F6FE0' : '#8A909B'} strokeWidth="1.8" strokeLinejoin="round" />
+                              <path d="M9 20v-6h6v6" stroke={on ? '#2F6FE0' : '#8A909B'} strokeWidth="1.8" />
+                            </>
+                          ) : (
+                            <>
+                              <rect x="4" y="5" width="16" height="15" rx="2" stroke={on ? '#2F6FE0' : '#8A909B'} strokeWidth="1.8" />
+                              <path d="M8 3v4M16 3v4M4 10h16" stroke={on ? '#2F6FE0' : '#8A909B'} strokeWidth="1.8" strokeLinecap="round" />
+                            </>
+                          )}
+                        </svg>
+                        <span className="text-[15px] font-bold">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+
+              <div className="mt-7 flex gap-3">
                 <button
                   type="button"
-                  onClick={handleUseLocation}
-                  disabled={locating}
-                  className="flex items-center justify-center gap-1.5 rounded-btn border border-card-border py-2 text-sm font-medium text-ink hover:bg-black/[0.02] disabled:opacity-50"
+                  onClick={() => setStep(1)}
+                  className="h-[56px] rounded-[14px] border-[1.5px] border-[#E1E7E4] bg-white px-6 text-base font-semibold text-[#5B655F] hover:bg-[#F6F8FB]"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 21s-7-6.5-7-11a7 7 0 0114 0c0 4.5-7 11-7 11z" />
-                    <circle cx="12" cy="10" r="2.5" />
-                  </svg>
-                  {locating ? t.locating : t.useLocation}
+                  {t.back}
                 </button>
-                {locationError && <p className="text-sm text-danger">{locationError}</p>}
-
-                {error && <p className="text-sm text-danger">{error}</p>}
                 <button
                   type="submit"
-                  className="rounded-btn bg-tenant py-2.5 text-sm font-medium text-white shadow-sm hover:bg-tenant-dark"
+                  disabled={submitting}
+                  className="flex h-[56px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-[#2F6FE0] text-[17px] font-bold text-white shadow-[0_12px_26px_rgba(47,111,224,0.3)] hover:bg-[#1E4FB0] disabled:opacity-60"
                 >
-                  {t.start}
+                  {t.finish}
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12h14M13 6l6 6-6 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
-              </form>
-            </div>
+              </div>
+            </form>
           )}
         </div>
       </div>

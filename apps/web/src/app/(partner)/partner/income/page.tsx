@@ -204,7 +204,7 @@ export default function PartnerIncomePage() {
             <span className="text-[13.5px] font-semibold text-[#7C4DB8]">{t.commTitle}</span>
           </div>
           <div className="mt-1.5 font-sans text-[36px] font-bold tracking-tight text-[#7C4DBB]">
-            −฿{totalCommission.toLocaleString()}
+            ฿{totalCommission.toLocaleString()}
           </div>
           <div className="mt-1 text-[12.5px] text-[#9578B5]">{t.commSub}</div>
         </div>
@@ -323,40 +323,53 @@ export default function PartnerIncomePage() {
       {view === 'booking' && (
       <div className="mt-3.5 rounded-card-lg border border-card-border bg-white p-6 shadow-card">
         <div className="mb-3.5 text-[17px] font-bold text-ink-strong">{t.tableTitle}</div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+        {/* จอกลางขึ้นไป: ตารางเต็มความกว้าง ไม่ต้องเลื่อนแนวนอน (ตัด min-width ออก + บีบ padding/ฟอนต์) */}
+        <div className="hidden md:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[9%]" />
+              <col className="w-[18%]" />
+              <col className="w-[11%]" />
+              <col className="w-[12%]" />
+              <col className="w-[11%]" />
+              <col className="w-[11%]" />
+              <col className="w-[12%]" />
+              <col className="w-[16%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-hairline text-xs font-semibold text-ink-faint">
-                <th className="py-2.5 pr-3 font-semibold">{t.thRef}</th>
-                <th className="py-2.5 pr-3 font-semibold">{t.thTenant}</th>
-                <th className="py-2.5 pr-3 font-semibold">{t.thRoom}</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">{t.thRoomPrice}</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">{t.thDeposit}</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">{t.thComm}</th>
-                <th className="py-2.5 pr-3 text-right font-semibold">{t.thRent}</th>
+              <tr className="border-b border-hairline text-[11.5px] font-semibold text-ink-faint">
+                <th className="py-2.5 pr-2 font-semibold">{t.thRef}</th>
+                <th className="py-2.5 pr-2 font-semibold">{t.thTenant}</th>
+                <th className="py-2.5 pr-2 font-semibold">{t.thRoom}</th>
+                <th className="py-2.5 pr-2 text-right font-semibold">{t.thRoomPrice}</th>
+                <th className="py-2.5 pr-2 text-right font-semibold">{t.thDeposit}</th>
+                <th className="py-2.5 pr-2 text-right font-semibold">{t.thComm}</th>
+                <th className="py-2.5 pr-2 text-right font-semibold">{t.thRent}</th>
                 <th className="py-2.5 font-semibold">{t.thStatus}</th>
               </tr>
             </thead>
             <tbody>
               {income.rows.map((r) => (
                 <tr key={r.paymentId} className="border-b border-hairline last:border-0">
-                  <td className="py-3.5 pr-3 font-sans font-bold text-tenant">#{r.ref}</td>
-                  <td className="py-3.5 pr-3 text-ink-subtitle">{r.tenantName}</td>
-                  <td className="py-3.5 pr-3 text-ink-subtitle">{roomTypeLabel(r.roomType)}</td>
-                  <td className="py-3.5 pr-3 text-right font-sans tabular-nums text-ink-subtitle">
+                  <td className="py-3 pr-2 truncate font-sans font-bold text-tenant">#{r.ref}</td>
+                  <td className="py-3 pr-2 truncate text-ink-subtitle" title={r.tenantName}>
+                    {r.tenantName}
+                  </td>
+                  <td className="py-3 pr-2 truncate text-ink-subtitle">{roomTypeLabel(r.roomType)}</td>
+                  <td className="py-3 pr-2 text-right font-sans tabular-nums text-ink-subtitle">
                     ฿{r.roomPrice.toLocaleString()}
                   </td>
-                  <td className="py-3.5 pr-3 text-right font-sans tabular-nums text-[#12A150]">
+                  <td className="py-3 pr-2 text-right font-sans tabular-nums text-[#12A150]">
                     ฿{r.deposit.toLocaleString()}
                   </td>
-                  <td className="py-3.5 pr-3 text-right font-sans tabular-nums text-danger">
-                    −฿{r.commission.toLocaleString()}
+                  <td className="py-3 pr-2 text-right font-sans tabular-nums text-danger">
+                    ฿{r.commission.toLocaleString()}
                   </td>
-                  <td className="py-3.5 pr-3 text-right font-sans font-bold tabular-nums text-ink-strong">
+                  <td className="py-3 pr-2 text-right font-sans font-bold tabular-nums text-ink-strong">
                     ฿{r.ownerPayout.toLocaleString()}
                   </td>
-                  <td className="py-3.5">
-                    <div className="flex flex-wrap items-center gap-2">
+                  <td className="py-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {r.status === 'transferred' ? (
                         <span className="inline-flex items-center gap-1.5 rounded-pill bg-[#E7F7EF] px-3 py-1 text-[12px] font-bold text-[#12704A]">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
@@ -404,15 +417,63 @@ export default function PartnerIncomePage() {
             </tbody>
           </table>
         </div>
-        {income.rows.length === 0 && <p className="py-4 text-ink-faint">{t.none}</p>}
-        <div className="mt-3.5 flex items-start gap-2 rounded-[11px] border border-[#D5E4FF] bg-[#F3F7FE] px-4 py-3">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-0.5 shrink-0">
-            <circle cx="12" cy="12" r="9" stroke="#2F6FE0" strokeWidth="1.8" />
-            <path d="M12 8h.01M11 12h1v4h1" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="text-[12.5px] leading-relaxed text-[#1E4FB0]">{t.breakdownNote}</span>
+        {/* มือถือ: การ์ดต่อรายการ แทนตาราง (ไม่ต้องเลื่อนแนวนอน) */}
+        <div className="flex flex-col gap-2.5 md:hidden">
+          {income.rows.map((r) => (
+            <div key={r.paymentId} className="rounded-[13px] border border-hairline p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-sans text-[13px] font-bold text-tenant">#{r.ref}</span>
+                {r.status === 'transferred' ? (
+                  <span className="rounded-pill bg-[#E7F7EF] px-2.5 py-0.5 text-[11.5px] font-bold text-[#12704A]">
+                    {t.transferred}
+                  </span>
+                ) : (
+                  <span className="rounded-pill bg-[#FFF3E0] px-2.5 py-0.5 text-[11.5px] font-bold text-[#C77B14]">
+                    {t.pending}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 truncate text-[13.5px] font-semibold text-ink-strong">{r.tenantName}</div>
+              <div className="text-[12px] text-ink-muted">{roomTypeLabel(r.roomType)}</div>
+
+              <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12.5px]">
+                <dt className="text-ink-muted">{t.thRoomPrice}</dt>
+                <dd className="text-right font-sans tabular-nums text-ink-subtitle">
+                  ฿{r.roomPrice.toLocaleString()}
+                </dd>
+                <dt className="text-ink-muted">{t.thDeposit}</dt>
+                <dd className="text-right font-sans tabular-nums text-[#12A150]">฿{r.deposit.toLocaleString()}</dd>
+                <dt className="text-ink-muted">{t.thComm}</dt>
+                <dd className="text-right font-sans tabular-nums text-danger">฿{r.commission.toLocaleString()}</dd>
+                <dt className="font-semibold text-ink-body">{t.thRent}</dt>
+                <dd className="text-right font-sans font-bold tabular-nums text-ink-strong">
+                  ฿{r.ownerPayout.toLocaleString()}
+                </dd>
+              </dl>
+
+              {r.transferSlipUrl && (
+                <a
+                  href={r.transferSlipUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-1 text-[12px] font-semibold text-ink-body"
+                >
+                  {t.viewSlip}
+                </a>
+              )}
+            </div>
+          ))}
+          {income.rows.length > 0 && (
+            <div className="flex items-center justify-between rounded-[13px] bg-surface-canvas px-3.5 py-3">
+              <span className="text-[13px] font-bold text-ink-strong">{t.totalReceived}</span>
+              <span className="font-sans text-[16px] font-bold text-[#12A150]">
+                ฿{income.received.toLocaleString()}
+              </span>
+            </div>
+          )}
         </div>
-        <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-faint">{t.note}</p>
+
+        {income.rows.length === 0 && <p className="py-4 text-ink-faint">{t.none}</p>}
       </div>
       )}
     </div>

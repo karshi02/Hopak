@@ -37,6 +37,7 @@ import { haversineKm } from '@/lib/geo';
 import { StarRating } from '@/components/StarRating';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { LangSwitch } from '@/components/LangSwitch';
+import { HopakIcon } from '@/components/HopakIcon';
 
 const PROVINCE_LABEL: Record<Lang, Record<string, string>> = {
   th: { มหาสารคาม: 'มหาสารคาม', ขอนแก่น: 'ขอนแก่น', เชียงใหม่: 'เชียงใหม่' },
@@ -333,14 +334,19 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   });
   const provinceLabel = (p: string) => PROVINCE_LABEL[lang][p] ?? p;
 
-  // โหมดรายวัน: ห้องต้องเปิดรายวัน (allowDaily) + ราคาที่ใช้คือ pricePerDay ; โหมดเดือนใช้ pricePerMonth
+  // รายเดือนกับรายวันแยกขาดจากกัน — ห้องหนึ่งเป็นได้อย่างเดียว (allowDaily เป็นตัวแบ่ง)
+  // รายวันใช้ pricePerDay, รายเดือนใช้ pricePerMonth และต้องไม่เห็นห้องรายวันเลย
   const roomOk = (r: (typeof dorms)[number]['rooms'][number]) =>
-    r.status.toUpperCase() === 'AVAILABLE' && (!dailyMode || (r.allowDaily && (r.pricePerDay ?? 0) > 0));
+    r.status.toUpperCase() === 'AVAILABLE' &&
+    (dailyMode ? Boolean(r.allowDaily) && (r.pricePerDay ?? 0) > 0 : !r.allowDaily);
   const roomPrice = (r: (typeof dorms)[number]['rooms'][number]) => (dailyMode ? r.pricePerDay ?? 0 : r.pricePerMonth);
 
-  // โหมดรายวันแสดงเฉพาะหอที่มีห้องเปิดรายวันอย่างน้อย 1 ห้อง
+  // แต่ละโหมดแสดงเฉพาะหอที่มีห้องของโหมดนั้นอย่างน้อย 1 ห้อง
   const catDorms = useMemo(
-    () => (dailyMode ? dorms.filter((d) => d.rooms.some((r) => r.allowDaily && (r.pricePerDay ?? 0) > 0)) : dorms),
+    () =>
+      dailyMode
+        ? dorms.filter((d) => d.rooms.some((r) => r.allowDaily && (r.pricePerDay ?? 0) > 0))
+        : dorms.filter((d) => d.rooms.some((r) => !r.allowDaily)),
     [dorms, dailyMode],
   );
 
@@ -422,9 +428,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       <div className="bg-gradient-to-b from-[#0E1220] to-[#151C30]">
         <div className="mx-auto flex h-auto min-h-[62px] max-w-[1240px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-tenant font-sans text-xl font-extrabold leading-none text-white">
-              H
-            </span>
+            <HopakIcon size={34} />
             <span className="whitespace-nowrap text-[17px] font-bold tracking-tight text-white sm:text-[19px]">
               Hoprak<span className="text-[#6BA0F5]">.com</span>
             </span>
@@ -982,9 +986,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-5">
             <div className="col-span-2 max-w-[290px] sm:col-span-1">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-tenant font-sans text-xl font-extrabold text-white">
-                  H
-                </span>
+                <HopakIcon size={34} />
                 <span className="text-[18px] font-bold text-ink-strong">
                   Hoprak<span className="text-tenant">.com</span>
                 </span>
@@ -1043,9 +1045,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         {/* dark bottom bar */}
         <div className="bg-[#14171C] px-6 py-6">
           <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-tenant font-sans font-bold text-white">
-              H
-            </span>
+            <HopakIcon size={32} />
             <span className="text-sm font-bold text-white">Hoprak.com</span>
             <span className="ml-auto text-[13px] text-[#5B616C]">{t.copyright}</span>
           </div>

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { useLang } from '@/hooks/useLang';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 const TEXT = {
   th: {
@@ -42,10 +43,17 @@ const inputClass =
 export default function ForgotPasswordPage() {
   const { lang } = useLang();
   const t = TEXT[lang];
+  const { user } = useCurrentUser();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // เข้ามาจากเมนูตอนล็อกอินอยู่ → เติมอีเมลของบัญชีให้เลย (ไม่ส่งผ่าน URL)
+  useEffect(() => {
+    const mail = user?.email;
+    if (mail) setEmail((prev) => prev || mail);
+  }, [user]);
 
   async function handleSubmit() {
     setError(null);

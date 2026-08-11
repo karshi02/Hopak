@@ -4,12 +4,15 @@ import { documentFileFilter, DOC_LIMIT } from '../../../common/upload-filters';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { AdminRoles } from '../../../common/decorators/admin-roles.decorator';
+import { AdminRolesGuard } from '../../../common/guards/admin-roles.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { FinanceService } from './finance.service';
 
 @Controller('admin/finance')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, AdminRolesGuard)
 @Roles('admin')
+@AdminRoles('SUPER_ADMIN', 'FINANCE')
 export class FinanceController {
   constructor(private financeService: FinanceService) {}
 

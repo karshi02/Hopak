@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 import { AuthService, type DeviceInfo } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -8,6 +7,9 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { GoogleCallbackGuard } from './guards/google-callback.guard';
+import { consumeGoogleOAuthExchangeBinding, issueGoogleOAuthExchangeBinding } from './google-oauth-state';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
@@ -61,26 +63,31 @@ export class AuthController {
   // web callback เอาโค้ดจาก ?code= มาแลกเป็น JWT จริงผ่าน POST (ไม่ผ่าน URL/log)
   @Post('google/exchange')
   @RateLimit(20, 60_000)
-  googleExchange(@Body() body: { code: string }) {
-    return this.authService.exchangeGoogleCode(body.code);
+  googleExchange(@Body() body: { code: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.authService.exchangeGoogleCode(body.code, consumeGoogleOAuthExchangeBinding(req, res));
   }
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   googleAuth() {}
 
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleCallbackGuard)
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
     try {
       const { accessToken } = await this.authService.loginWithGoogle(req.user, deviceFromReq(req));
       // ส่ง "โค้ดแลก token" ชั่วคราวผ่าน query (?code=) ไม่ใช่ JWT ตรงๆ — query รอด redirect ข้าม origin
       // (fragment # หายตอน 302) โค้ดใช้ครั้งเดียว/หมดอายุ 2 นาที หลุด log ก็ไร้ค่า ต่างจาก JWT 7 วัน
-      const code = this.authService.createGoogleExchangeCode(accessToken);
+      const binding = issueGoogleOAuthExchangeBinding(res);
+      const code = this.authService.createGoogleExchangeCode(accessToken, binding);
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Referrer-Policy', 'no-referrer');
       res.redirect(`${FRONTEND_URL}/auth/google/callback?code=${code}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'google_login_failed';
-      res.redirect(`${FRONTEND_URL}/login?error=${encodeURIComponent(message)}`);
+      // ส่งเป็น "โค้ด" คงที่เท่านั้น ไม่ส่งข้อความ error ดิบออก URL (กันข้อมูลภายในรั่วเข้า history/log/Referer)
+      const raw = err instanceof Error ? err.message : '';
+      const code = raw.includes('ระงับ') ? 'account_suspended' : 'google_login_failed';
+      res.redirect(`${FRONTEND_URL}/login?error=${code}`);
     }
   }
 }

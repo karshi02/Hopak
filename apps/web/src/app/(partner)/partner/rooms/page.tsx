@@ -8,6 +8,7 @@ import { normalizeStatus } from '@/lib/normalize';
 import { useLang, type Lang } from '@/hooks/useLang';
 import { Badge } from '@/components/dashboard/Badge';
 import { AdminIcon } from '@/components/admin/AdminIcon';
+import { usePartnerMode } from '@/hooks/usePartnerMode';
 import type { Dorm, Room } from '@hopak/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -147,6 +148,7 @@ const TEXT = {
 
 export default function PartnerRoomsPage() {
   const { lang } = useLang();
+  const { isDaily } = usePartnerMode();
   const t = TEXT[lang];
   const [dorms, setDorms] = useState<DormWithRooms[]>([]);
   const [selectedDormId, setSelectedDormId] = useState('');
@@ -198,7 +200,8 @@ export default function PartnerRoomsPage() {
   }
 
   const selectedDorm = dorms.find((d) => d.id === selectedDormId);
-  const rooms = selectedDorm?.rooms ?? [];
+  // แยกโหมด — หน้ารายเดือนเห็นเฉพาะห้องรายเดือน, หน้ารายวันเห็นเฉพาะห้องรายวัน
+  const rooms = (selectedDorm?.rooms ?? []).filter((r) => Boolean(r.allowDaily) === isDaily);
   const available = rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE').length;
   const occupied = rooms.length - available;
 
@@ -369,14 +372,47 @@ export default function PartnerRoomsPage() {
           );
         })}
 
+        {/* เพิ่มห้อง — ตามโหมดที่เลือกอยู่เท่านั้น (รายเดือน=น้ำเงิน / รายวัน=เขียว) */}
         <Link
-          href="/partner/rooms/new"
-          className="flex min-h-[250px] flex-col items-center justify-center gap-2.5 rounded-card-lg border-[1.5px] border-dashed border-card-border text-ink-muted hover:border-tenant hover:text-tenant"
+          href={isDaily ? '/partner/rooms/new?mode=daily' : '/partner/rooms/new'}
+          className="group flex min-h-[250px] flex-col items-center justify-center gap-3 rounded-card-lg border-[1.5px] border-dashed transition-all duration-200 hover:-translate-y-0.5 hover:border-solid hover:shadow-[0_10px_26px_rgba(16,24,40,0.10)]"
+          style={{
+            color: isDaily ? '#0C7A3C' : '#1E4FB0',
+            borderColor: isDaily ? '#9FDCBB' : '#B7CDF6',
+            background: isDaily ? 'linear-gradient(180deg,#F6FDF9,#FFFFFF)' : 'linear-gradient(180deg,#F6F9FF,#FFFFFF)',
+          }}
         >
-          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl bg-tenant-tint text-tenant">
-            <AdminIcon name="plus" size={24} />
+          <span
+            className="flex h-14 w-14 items-center justify-center rounded-2xl text-white transition-transform duration-200 group-hover:scale-105"
+            style={{
+              background: isDaily
+                ? 'linear-gradient(135deg,#12A150,#0C7A3C)'
+                : 'linear-gradient(135deg,#2F6FE0,#1E4FB0)',
+              boxShadow: isDaily ? '0 8px 18px rgba(18,161,80,0.32)' : '0 8px 18px rgba(47,111,224,0.32)',
+            }}
+          >
+            <AdminIcon name="plus" size={26} />
           </span>
-          <div className="text-sm font-semibold text-ink-body">{t.addNew}</div>
+          <div className="text-center">
+            <div className="text-[14.5px] font-bold">
+              {isDaily
+                ? lang === 'th'
+                  ? 'เพิ่มห้องรายวัน'
+                  : 'Add daily room'
+                : lang === 'th'
+                  ? 'เพิ่มห้องรายเดือน'
+                  : 'Add monthly room'}
+            </div>
+            <div className="mt-1 text-[12px] text-ink-muted">
+              {isDaily
+                ? lang === 'th'
+                  ? 'คิดราคาต่อคืน'
+                  : 'Charged per night'
+                : lang === 'th'
+                  ? 'คิดค่าเช่าต่อเดือน'
+                  : 'Charged per month'}
+            </div>
+          </div>
         </Link>
       </div>
 

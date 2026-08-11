@@ -198,7 +198,10 @@ export default function SearchPage() {
   const dailyMode = params.get('rental') === 'daily';
   type RoomT = (typeof dorms)[number]['rooms'][number];
   const rPrice = (r: RoomT) => (dailyMode ? r.pricePerDay ?? 0 : r.pricePerMonth);
-  const rOk = (r: RoomT) => r.status.toUpperCase() === 'AVAILABLE' && (!dailyMode || (!!r.allowDaily && (r.pricePerDay ?? 0) > 0));
+  // แยกขาด — รายวันเห็นเฉพาะห้องรายวัน, รายเดือนเห็นเฉพาะห้องรายเดือน
+  const rOk = (r: RoomT) =>
+    r.status.toUpperCase() === 'AVAILABLE' &&
+    (dailyMode ? !!r.allowDaily && (r.pricePerDay ?? 0) > 0 : !r.allowDaily);
   const perUnit = dailyMode ? t.perNight : t.perMonth;
 
   const placeLat = params.get('lat') ? Number(params.get('lat')) : null;

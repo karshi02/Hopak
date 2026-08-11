@@ -10,9 +10,11 @@ import { clearToken } from '@/lib/auth';
 import { LangSwitch } from '@/components/LangSwitch';
 import { PageLoader } from '@/components/PageLoader';
 import { AdminIcon } from '@/components/admin/AdminIcon';
+import { PartnerModeSwitch } from '@/components/partner/PartnerModeSwitch';
+import { usePartnerMode } from '@/hooks/usePartnerMode';
 import type { Booking } from '@hopak/shared';
 
-type IconKey = 'dash' | 'bed' | 'book' | 'money' | 'bell' | 'gear' | 'shield';
+type IconKey = 'dash' | 'bed' | 'book' | 'money' | 'bell' | 'gear' | 'shield' | 'menu';
 interface NavItem {
   href: string;
   icon: IconKey;
@@ -30,6 +32,7 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/partner/slips', icon: 'money', label: 'ใบจอง' },
     { href: '/partner/notifications', icon: 'bell', label: 'แจ้งเตือน' },
     { href: '/partner/settings', icon: 'gear', label: 'ตั้งค่า' },
+    { href: '/forgot-password', icon: 'shield', label: 'ลืมรหัสผ่าน' },
   ],
   en: [
     { href: '/partner/dashboard', icon: 'dash', label: 'Dashboard' },
@@ -40,6 +43,28 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/partner/slips', icon: 'money', label: 'Slips' },
     { href: '/partner/notifications', icon: 'bell', label: 'Notifications' },
     { href: '/partner/settings', icon: 'gear', label: 'Settings' },
+    { href: '/forgot-password', icon: 'shield', label: 'Forgot password' },
+  ],
+};
+
+// แท็บล่างบนมือถือ — href ว่าง = เปิดลิ้นชักเมนู (เมนูเต็มอยู่ใน sidebar อยู่แล้ว)
+interface BottomItem {
+  href?: string;
+  icon: IconKey;
+  label: string;
+}
+const BOTTOM_NAV: Record<'th' | 'en', BottomItem[]> = {
+  th: [
+    { href: '/partner/dashboard', icon: 'dash', label: 'หน้าหลัก' },
+    { href: '/partner/rooms', icon: 'bed', label: 'ห้องพัก' },
+    { href: '/partner/requests', icon: 'book', label: 'การจอง' },
+    { icon: 'menu', label: 'เมนู' },
+  ],
+  en: [
+    { href: '/partner/dashboard', icon: 'dash', label: 'Home' },
+    { href: '/partner/rooms', icon: 'bed', label: 'Rooms' },
+    { href: '/partner/requests', icon: 'book', label: 'Bookings' },
+    { icon: 'menu', label: 'Menu' },
   ],
 };
 
@@ -91,6 +116,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const { user, loading } = useCurrentUser();
   const { lang, setLang } = useLang();
+  const { isDaily } = usePartnerMode();
   const isOwner = user?.role.toLowerCase() === 'owner';
   const [pendingCount, setPendingCount] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
@@ -225,13 +251,9 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
             <div className="mt-1 hidden text-[12.5px] text-ink-muted sm:block">{t.subtitle}</div>
           </div>
           <div className="ml-auto flex items-center gap-2.5">
-            <Link
-              href="/partner/rooms/new"
-              className="flex h-10 items-center gap-2 rounded-[11px] bg-tenant px-3 text-sm font-semibold text-white hover:bg-tenant-dark sm:px-4"
-            >
-              <AdminIcon name="plus" size={17} />
-              <span className="hidden sm:inline">{lang === 'th' ? 'เพิ่มห้องพัก' : 'Add Room'}</span>
-            </Link>
+            {/* สลับโหมดหอพัก — รายเดือน/รายวัน แยกข้อมูลกันทั้งคอนโซล
+                (แทนที่ปุ่ม + เดิม ; การเพิ่มห้องจะเพิ่มได้เฉพาะโหมดที่เลือกอยู่) */}
+            <PartnerModeSwitch lang={lang} compact />
             <Link
               href="/partner/notifications"
               className="relative hidden h-10 w-10 items-center justify-center rounded-[11px] border border-card-border bg-white text-ink-subtitle sm:flex"
@@ -253,8 +275,55 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           </div>
         </div>
 
-        <main className="flex-1 overflow-auto px-4 py-5 sm:px-7 sm:py-6">{children}</main>
+        {/* pb ล่างเผื่อที่ให้ bottom nav บนมือถือ ไม่ให้ทับเนื้อหาบรรทัดสุดท้าย */}
+        <main className="flex-1 overflow-auto px-4 py-5 pb-24 sm:px-7 sm:py-6 lg:pb-6">{children}</main>
       </div>
+
+      {/* ===== BOTTOM NAV (มือถือ) — 4 แท็บ + FAB เพิ่มห้องตรงกลาง ===== */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-[64px] items-stretch border-t border-card-border bg-white lg:hidden">
+        {BOTTOM_NAV[lang].map((item, i) => {
+          const active = item.href
+            ? pathname === item.href || pathname?.startsWith(item.href + '/')
+            : false;
+          const content = (
+            <>
+              <AdminIcon name={item.icon} size={20} />
+              <span className="text-[11px] font-semibold">{item.label}</span>
+            </>
+          );
+          const cls = `flex flex-1 flex-col items-center justify-center gap-1 ${
+            active ? 'text-seller' : 'text-ink-faint'
+          }`;
+          // ช่องว่างตรงกลางไว้ให้ FAB ลอยทับ
+          return (
+            <div key={item.label} className="contents">
+              {i === 2 && <span className="w-[68px] shrink-0" aria-hidden />}
+              {item.href ? (
+                <Link href={item.href} className={cls}>
+                  {content}
+                </Link>
+              ) : (
+                <button type="button" onClick={() => setNavOpen(true)} className={cls}>
+                  {content}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+      <Link
+        href={isDaily ? '/partner/rooms/new?mode=daily' : '/partner/rooms/new'}
+        aria-label={lang === 'th' ? 'เพิ่มห้องพัก' : 'Add room'}
+        className="fixed bottom-[26px] left-1/2 z-40 flex h-[56px] w-[56px] -translate-x-1/2 items-center justify-center rounded-pill text-white lg:hidden"
+        style={{
+          background: isDaily
+            ? 'linear-gradient(135deg,#12A150,#0C7A3C)'
+            : 'linear-gradient(135deg,#2F6FE0,#1E4FB0)',
+          boxShadow: isDaily ? '0 8px 20px rgba(18,161,80,0.42)' : '0 8px 20px rgba(47,111,224,0.42)',
+        }}
+      >
+        <AdminIcon name="plus" size={24} />
+      </Link>
     </div>
   );
 }

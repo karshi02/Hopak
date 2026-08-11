@@ -14,7 +14,8 @@ type IconKey =
   | 'bed'
   | 'chat'
   | 'plus'
-  | 'star';
+  | 'star'
+  | 'menu';
 
 const PATHS: Record<IconKey, string> = {
   dash: 'M4 13h6V4H4v9zM14 20h6V4h-6v16zM4 20h6v-5H4v5z',
@@ -33,6 +34,7 @@ const PATHS: Record<IconKey, string> = {
   chat: 'M4 5h16v11H8l-4 3V5z',
   plus: 'M12 5v14M5 12h14',
   star: 'M12 3l2.5 5.2 5.5.8-4 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4-3.9 5.5-.8L12 3z',
+  menu: 'M4 7h16M4 12h16M4 17h16',
 };
 
 export function AdminIcon({ name, size = 20, className }: { name: IconKey; size?: number; className?: string }) {

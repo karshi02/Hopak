@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { getSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
+import { usePartnerMode } from '@/hooks/usePartnerMode';
 import { Badge, bookingStatusBadge } from '@/components/dashboard/Badge';
 import type { Booking } from '@hopak/shared';
 
@@ -75,6 +76,7 @@ function RentalTag({ b, t }: { b: Booking; t: (typeof TEXT)['th'] }) {
 
 export default function PartnerRequestsPage() {
   const { lang } = useLang();
+  const { isDaily } = usePartnerMode();
   const t = TEXT[lang];
   const [bookings, setBookings] = useState<Booking[]>([]);
 
@@ -98,9 +100,11 @@ export default function PartnerRequestsPage() {
     };
   }, []);
 
-  const pending = bookings.filter((b) => normalizeStatus(b.status) === 'pending');
+  // แยกโหมด — รายเดือนเห็นเฉพาะการจองรายเดือน, รายวันเห็นเฉพาะรายวัน
+  const modeBookings = bookings.filter((b) => (b.rentalType === 'DAILY') === isDaily);
+  const pending = modeBookings.filter((b) => normalizeStatus(b.status) === 'pending');
   // ประวัติ = คำขอที่ไม่ใช่ pending แล้ว (ยืนยัน/ปฏิเสธ/จ่าย/เข้าพัก/ยกเลิก) เรียงใหม่สุดก่อน
-  const history = bookings
+  const history = modeBookings
     .filter((b) => normalizeStatus(b.status) !== 'pending')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -108,30 +112,42 @@ export default function PartnerRequestsPage() {
     <div>
       <p className="text-sm text-ink-faint">{t.pendingCount(pending.length)}</p>
 
-      <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-        <table className="w-full min-w-[720px] text-left text-sm">
+      {/* จอ sm ขึ้นไป: ตารางพอดีความกว้าง ไม่ต้องเลื่อนแนวนอน */}
+      <div className="mt-4 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card sm:block">
+        <table className="w-full table-fixed text-left text-[13px]">
+          <colgroup>
+            <col className="w-[30%]" />
+            <col className="w-[17%]" />
+            <col className="w-[21%]" />
+            <col className="w-[14%]" />
+            <col className="w-[18%]" />
+          </colgroup>
           <thead>
-            <tr className="border-b border-hairline text-xs text-ink-faint">
-              <th className="p-3 font-normal">{t.booker}</th>
-              <th className="p-3 font-normal">{t.phone}</th>
-              <th className="p-3 font-normal">{t.checkIn}</th>
-              <th className="p-3 font-normal">{t.amount}</th>
-              <th className="p-3 font-normal"></th>
+            <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+              <th className="p-2.5 font-normal">{t.booker}</th>
+              <th className="p-2.5 font-normal">{t.phone}</th>
+              <th className="p-2.5 font-normal">{t.checkIn}</th>
+              <th className="p-2.5 text-right font-normal">{t.amount}</th>
+              <th className="p-2.5 font-normal"></th>
             </tr>
           </thead>
           <tbody>
             {pending.map((b) => (
               <tr key={b.id} className="border-b border-hairline last:border-0">
-                <td className="p-3 font-medium text-ink-strong">
-                  {b.contactName}
+                <td className="p-2.5 font-medium text-ink-strong">
+                  <span className="block truncate" title={b.contactName}>
+                    {b.contactName}
+                  </span>
                   <RentalTag b={b} t={t} />
                 </td>
-                <td className="p-3 font-sans tabular-nums text-ink-subtitle">{b.contactPhone.slice(0, 8)}**-*</td>
-                <td className="p-3 text-ink-subtitle">{rentalCell(b, t)}</td>
-                <td className="p-3 font-sans font-semibold tabular-nums">฿{(b.amount ?? 0).toLocaleString()}</td>
-                <td className="p-3">
+                <td className="p-2.5 font-sans tabular-nums text-ink-subtitle">{b.contactPhone.slice(0, 8)}**-*</td>
+                <td className="p-2.5 text-ink-subtitle">{rentalCell(b, t)}</td>
+                <td className="p-2.5 text-right font-sans font-semibold tabular-nums">
+                  ฿{(b.amount ?? 0).toLocaleString()}
+                </td>
+                <td className="p-2.5">
                   <div className="flex justify-end">
-                    <span className="inline-flex items-center gap-1.5 rounded-pill bg-[#FFF3E0] px-3 py-1.5 text-xs font-semibold text-[#C77B14]">
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill bg-[#FFF3E0] px-2.5 py-1 text-[11.5px] font-semibold text-[#C77B14]">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#E0902F]" />
                       {t.waitingPay}
                     </span>
@@ -144,6 +160,32 @@ export default function PartnerRequestsPage() {
         {pending.length === 0 && <p className="p-4 text-ink-faint">{t.none}</p>}
       </div>
 
+      {/* มือถือ: การ์ดต่อรายการ */}
+      <div className="mt-4 flex flex-col gap-2.5 sm:hidden">
+        {pending.map((b) => (
+          <div key={b.id} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
+            <div className="flex items-start justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate font-semibold text-ink-strong">
+                {b.contactName}
+                <RentalTag b={b} t={t} />
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill bg-[#FFF3E0] px-2.5 py-1 text-[11.5px] font-semibold text-[#C77B14]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#E0902F]" />
+                {t.waitingPay}
+              </span>
+            </div>
+            <div className="mt-1 text-[12.5px] text-ink-muted">{b.contactPhone.slice(0, 8)}**-*</div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[13px]">
+              <span className="min-w-0 flex-1 truncate text-ink-muted">{rentalCell(b, t)}</span>
+              <span className="font-sans font-bold tabular-nums text-ink-strong">
+                ฿{(b.amount ?? 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        ))}
+        {pending.length === 0 && <p className="text-ink-faint">{t.none}</p>}
+      </div>
+
       <p className="mt-3 text-xs text-ink-faint">{t.footnote}</p>
 
       {/* ประวัติการยืนยัน/ปฏิเสธ */}
@@ -154,14 +196,20 @@ export default function PartnerRequestsPage() {
         </div>
 
         {/* จอใหญ่: ตาราง */}
-        <div className="mt-3 hidden overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card sm:block">
-          <table className="w-full text-left text-sm">
+        <div className="mt-3 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card sm:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[34%]" />
+              <col className="w-[26%]" />
+              <col className="w-[18%]" />
+              <col className="w-[22%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-hairline text-xs text-ink-faint">
-                <th className="p-3 font-normal">{t.booker}</th>
-                <th className="p-3 font-normal">{t.checkIn}</th>
-                <th className="p-3 font-normal">{t.amount}</th>
-                <th className="p-3 font-normal">{t.status}</th>
+              <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+                <th className="p-2.5 font-normal">{t.booker}</th>
+                <th className="p-2.5 font-normal">{t.checkIn}</th>
+                <th className="p-2.5 text-right font-normal">{t.amount}</th>
+                <th className="p-2.5 font-normal">{t.status}</th>
               </tr>
             </thead>
             <tbody>
@@ -169,13 +217,17 @@ export default function PartnerRequestsPage() {
                 const badge = bookingStatusBadge(normalizeStatus(b.status), lang);
                 return (
                   <tr key={b.id} className="border-b border-hairline last:border-0">
-                    <td className="p-3 font-medium text-ink-strong">
-                      {b.contactName}
+                    <td className="p-2.5 font-medium text-ink-strong">
+                      <span className="block truncate" title={b.contactName}>
+                        {b.contactName}
+                      </span>
                       <RentalTag b={b} t={t} />
                     </td>
-                    <td className="p-3 text-ink-subtitle">{rentalCell(b, t)}</td>
-                    <td className="p-3 font-sans font-semibold tabular-nums">฿{(b.amount ?? 0).toLocaleString()}</td>
-                    <td className="p-3">
+                    <td className="p-2.5 text-ink-subtitle">{rentalCell(b, t)}</td>
+                    <td className="p-2.5 text-right font-sans font-semibold tabular-nums">
+                      ฿{(b.amount ?? 0).toLocaleString()}
+                    </td>
+                    <td className="p-2.5">
                       <Badge label={badge.label} variant={badge.variant} />
                     </td>
                   </tr>

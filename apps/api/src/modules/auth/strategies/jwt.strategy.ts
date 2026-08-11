@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma.service';
 import { requireEnv } from '../../../common/env.util';
+import type { AdminRole } from '../../../common/decorators/admin-roles.decorator';
 //import { PrismaService } from '../../../prisma.service'; --- IGNORE ---
 // idle timeout: ไม่มี activity เกิน 30 นาที → session หมดอายุ auto-logout
 // ไม่มี activity เกิน 30 นาที = session หมดอายุ auto-logout (กัน session ค้างถูกขโมยใช้ต่อ)
@@ -36,7 +37,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
       this.prisma.session.update({ where: { jti: payload.jti }, data: { lastSeenAt: new Date() } }).catch(() => {});
     }
-    return { id: payload.sub, role: payload.role };
+    let adminRole: AdminRole | undefined;
+    if (payload.role === 'admin') {
+      const admin = await this.prisma.admin.findUnique({
+        where: { userId: payload.sub },
+        select: { adminRole: true },
+      });
+      if (!admin) throw new UnauthorizedException('บัญชีแอดมินไม่มีสิทธิ์ที่กำหนด');
+      adminRole = admin.adminRole as AdminRole;
+    }
+
+    return { id: payload.sub, role: payload.role, adminRole };
   }
 }
 //ปิด session ทุก request (ถ้า token มี jti) — เตะออกจากอุปกรณ์นั้นได้จริงโดยไม่ต้อง

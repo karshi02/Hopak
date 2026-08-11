@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, Unauthorize
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
@@ -30,20 +30,26 @@ export class AuthService {
   // โค้ดแลก token ชั่วคราวสำหรับ Google login — ส่งผ่าน query (?code=) ซึ่งรอด redirect ข้าม origin
   // ต่างจาก JWT ที่ส่งผ่าน fragment (#) แล้วหายตอน 302. โค้ดใช้ครั้งเดียว + หมดอายุ 2 นาที
   // จึงไม่อันตรายแม้หลุดเข้า log (ต่างจาก JWT อายุ 7 วันที่หลุดแล้วใช้เข้าบัญชีได้เลย)
-  private googleCodes = new Map<string, { token: string; expiresAt: number }>();
+  private googleCodes = new Map<string, { token: string; bindingHash: string; expiresAt: number }>();
 
-  createGoogleExchangeCode(token: string): string {
+  createGoogleExchangeCode(token: string, binding: string): string {
     const code = randomBytes(24).toString('hex');
-    this.googleCodes.set(code, { token, expiresAt: Date.now() + GOOGLE_CODE_TTL_MS });
+    const bindingHash = createHash('sha256').update(binding).digest('hex');
+    this.googleCodes.set(code, { token, bindingHash, expiresAt: Date.now() + GOOGLE_CODE_TTL_MS });
     // กวาดโค้ดหมดอายุทิ้ง กัน map โตไม่มีที่สิ้นสุด
     for (const [k, v] of this.googleCodes) if (v.expiresAt < Date.now()) this.googleCodes.delete(k);
     return code;
   }
 
-  exchangeGoogleCode(code: string): { accessToken: string } {
+  exchangeGoogleCode(code: string, binding?: string): { accessToken: string } {
     const entry = this.googleCodes.get(code);
     this.googleCodes.delete(code); // ใช้ครั้งเดียวเสมอ
-    if (!entry || entry.expiresAt < Date.now()) {
+    const bindingHash = binding ? createHash('sha256').update(binding).digest('hex') : undefined;
+    const bindingMatches =
+      !!entry &&
+      !!bindingHash &&
+      timingSafeEqual(Buffer.from(entry.bindingHash, 'hex'), Buffer.from(bindingHash, 'hex'));
+    if (!entry || entry.expiresAt < Date.now() || !bindingMatches) {
       throw new UnauthorizedException('รหัสเข้าสู่ระบบไม่ถูกต้องหรือหมดอายุ');
     }
     return { accessToken: entry.token };
@@ -129,15 +135,12 @@ export class AuthService {
   async loginWithGoogle(profile: { googleId: string; email?: string; name: string }, device?: DeviceInfo) {
     let user = await this.prisma.user.findUnique({ where: { googleId: profile.googleId } });
 
-    // เคยสมัครด้วยอีเมล/รหัสผ่านปกติมาก่อนแล้วมา login ด้วย Google อีเมลเดียวกัน
-    // ผูก googleId เข้าบัญชีเดิมแทนที่จะสร้างใหม่ซ้ำ (ชน unique constraint ที่ email)
+    // ห้ามผูก Google identity กับบัญชีเดิมด้วย email เพียงอย่างเดียว เพราะผู้โจมตี
+    // อาจสมัครจอง email ของเหยื่อไว้ก่อนแล้วคง password ของตัวเองไว้ได้
     if (!user && profile.email) {
       const existingByEmail = await this.prisma.user.findUnique({ where: { email: profile.email } });
       if (existingByEmail) {
-        user = await this.prisma.user.update({
-          where: { id: existingByEmail.id },
-          data: { googleId: profile.googleId },
-        });
+        throw new ConflictException('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบด้วยวิธีเดิม');
       }
     }
 

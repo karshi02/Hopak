@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
+import { usePartnerMode } from '@/hooks/usePartnerMode';
+import { COMMISSION_RATE } from '@hopak/shared';
 import type { Dorm } from '@hopak/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -69,6 +71,12 @@ const TEXT = {
     descriptionPlaceholder: 'ห้องกว้าง ชั้น 3 วิวสระน้ำ ใกล้มหาลัย เดินทางสะดวก...',
     pricing: 'ราคา & ค่าสาธารณูปโภค',
     pricingSub: 'กำหนดค่าเช่า เงินมัดจำ และเรตค่าน้ำค่าไฟต่อหน่วย',
+    pricingDaily: 'ราคาต่อคืน',
+    pricingDailySub: 'ห้องรายวันคิดเป็นรายคืน ไม่มีมัดจำและค่าน้ำค่าไฟ',
+    netPerNight: 'เจ้าของได้รับ / คืน (หลังหัก 20%)',
+    titleMonthly: 'เพิ่มห้องพักรายเดือน',
+    titleDaily: 'เพิ่มห้องพักรายวัน',
+    submitDaily: 'เปิดจองรายวัน',
     rent: 'ค่าเช่า / เดือน',
     deposit: 'เงินมัดจำ',
     water: 'ค่าน้ำ / หน่วย',
@@ -111,6 +119,12 @@ const TEXT = {
     descriptionPlaceholder: 'Spacious room, 3rd floor, pool view, near university...',
     pricing: 'Pricing & Utilities',
     pricingSub: 'Set rent, deposit, and per-unit water/electricity rates',
+    pricingDaily: 'Nightly price',
+    pricingDailySub: 'Daily rooms are charged per night — no deposit or utility rates',
+    netPerNight: 'You receive / night (after 20%)',
+    titleMonthly: 'Add monthly room',
+    titleDaily: 'Add daily room',
+    submitDaily: 'Open for daily booking',
     rent: 'Rent / month',
     deposit: 'Deposit',
     water: 'Water / unit',
@@ -139,6 +153,8 @@ export default function NewRoomPage() {
   const router = useRouter();
   const { lang } = useLang();
   const t = TEXT[lang];
+  const searchParams = useSearchParams();
+  const { isDaily } = usePartnerMode();
   const [dorms, setDorms] = useState<Dorm[]>([]);
   const [dormId, setDormId] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -148,8 +164,9 @@ export default function NewRoomPage() {
   const [deposit, setDeposit] = useState(7000);
   const [waterRate, setWaterRate] = useState(18);
   const [electricRate, setElectricRate] = useState(8);
-  const [allowDaily, setAllowDaily] = useState(false);
-  const [pricePerDay, setPricePerDay] = useState(300);
+  // โหมดห้อง — มาจาก ?mode=daily หรือสวิตช์กลางของคอนโซล ; ห้องเป็นรายเดือน "หรือ" รายวัน อย่างใดอย่างหนึ่ง
+  const allowDaily = searchParams.get('mode') === 'daily' || (!searchParams.get('mode') && isDaily);
+  const [pricePerDay, setPricePerDay] = useState(590);
   const [amenities, setAmenities] = useState<Set<string>>(new Set(['ac', 'bath', 'wifi', 'bed']));
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -197,12 +214,13 @@ export default function NewRoomPage() {
     try {
       const formData = new FormData();
       formData.append('type', roomType);
-      formData.append('pricePerMonth', String(price));
+      // ห้องรายวันไม่มีค่าเช่ารายเดือน/มัดจำ/ค่าน้ำค่าไฟ — ส่ง 0 ไปเพื่อไม่ให้ไปโผล่ฝั่งรายเดือน
+      formData.append('pricePerMonth', String(allowDaily ? 0 : price));
       formData.append('name', ''); // เว้นว่างเสมอ — backend สุ่มชื่อห้องให้อัตโนมัติ
       formData.append('description', description);
-      formData.append('deposit', String(deposit));
-      formData.append('waterRate', String(waterRate));
-      formData.append('electricRate', String(electricRate));
+      formData.append('deposit', String(allowDaily ? 0 : deposit));
+      formData.append('waterRate', String(allowDaily ? 0 : waterRate));
+      formData.append('electricRate', String(allowDaily ? 0 : electricRate));
       formData.append('allowDaily', String(allowDaily));
       formData.append('pricePerDay', String(allowDaily ? pricePerDay : 0));
       formData.append('amenities', JSON.stringify(Array.from(amenities)));
@@ -352,8 +370,37 @@ export default function NewRoomPage() {
 
         {/* pricing */}
         <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
-          <div className="text-[15.5px] font-bold text-ink-strong">{t.pricing}</div>
-          <p className="mb-4 mt-1 text-[12.5px] text-ink-muted">{t.pricingSub}</p>
+          <div className="text-[15.5px] font-bold text-ink-strong">{allowDaily ? t.pricingDaily : t.pricing}</div>
+          <p className="mb-4 mt-1 text-[12.5px] text-ink-muted">{allowDaily ? t.pricingDailySub : t.pricingSub}</p>
+          {allowDaily ? (
+            // โหมดรายวัน — คิดต่อคืนอย่างเดียว ไม่มีค่าเช่ารายเดือน/มัดจำ/ค่าน้ำค่าไฟ
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <div className="rounded-[13px] border border-hairline p-3.5">
+                <div className="mb-2 text-xs text-ink-muted">{t.pricePerDay}</div>
+                <div className="flex items-center gap-1">
+                  <span className="font-sans text-lg font-bold">฿</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={pricePerDay}
+                    onChange={(e) => setPricePerDay(Math.max(0, Number(e.target.value)))}
+                    className="w-full font-sans text-2xl font-bold text-ink-strong outline-none"
+                  />
+                  <span className="shrink-0 text-sm font-medium text-ink-muted">{t.perNight}</span>
+                </div>
+              </div>
+              {/* ยอดที่เจ้าของได้รับจริงต่อคืน หลังหักค่าคอม 20% */}
+              <div className="rounded-[13px] border border-hairline bg-success-tint p-3.5">
+                <div className="mb-2 text-xs font-semibold text-success">{t.netPerNight}</div>
+                <div className="font-sans text-2xl font-bold text-success">
+                  ฿{Math.round(pricePerDay * (1 - COMMISSION_RATE)).toLocaleString()}
+                </div>
+                <div className="mt-1 text-[11.5px] text-ink-muted">
+                  ฿{pricePerDay.toLocaleString()} − ฿{Math.round(pricePerDay * COMMISSION_RATE).toLocaleString()} (20%)
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3.5">
             <div className="rounded-[13px] border border-hairline p-3.5">
               <div className="mb-2 text-xs text-ink-muted">{t.rent}</div>
@@ -404,42 +451,6 @@ export default function NewRoomPage() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* daily rental */}
-        <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[15.5px] font-bold text-ink-strong">{t.dailySection}</div>
-              <p className="mt-1 text-[12.5px] text-ink-muted">{t.dailySectionSub}</p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={allowDaily}
-              onClick={() => setAllowDaily((v) => !v)}
-              className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors ${allowDaily ? 'bg-success' : 'bg-card-border'}`}
-            >
-              <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${allowDaily ? 'left-[22px]' : 'left-0.5'}`}
-              />
-            </button>
-          </div>
-          {allowDaily && (
-            <div className="mt-4 rounded-[13px] border border-hairline p-3.5">
-              <div className="mb-2 text-xs text-ink-muted">{t.pricePerDay}</div>
-              <div className="flex items-center gap-1">
-                <span className="font-sans text-lg font-bold">฿</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={pricePerDay}
-                  onChange={(e) => setPricePerDay(Math.max(0, Number(e.target.value)))}
-                  className="w-full font-sans text-2xl font-bold text-ink-strong outline-none"
-                />
-                <span className="shrink-0 text-sm font-medium text-ink-muted">{t.perNight}</span>
-              </div>
-            </div>
           )}
         </div>
 
@@ -483,9 +494,10 @@ export default function NewRoomPage() {
             type="button"
             onClick={handleSubmit}
             disabled={submitting || !dormId}
-            className="flex-[1.6] rounded-[13px] bg-success py-3 text-[14.5px] font-bold text-white disabled:opacity-50"
+            className="flex-[1.6] rounded-[13px] py-3 text-[14.5px] font-bold text-white disabled:opacity-50"
+            style={{ background: allowDaily ? '#12A150' : '#2F6FE0' }}
           >
-            {submitting ? t.submitting : t.submit}
+            {submitting ? t.submitting : allowDaily ? t.submitDaily : t.submit}
           </button>
         </div>
       </div>
@@ -535,14 +547,15 @@ export default function NewRoomPage() {
             <div className="flex items-baseline justify-between">
               <div className="text-[17px] font-bold text-ink-strong">{roomType === 'AIR' ? t.previewAir : t.previewFan}</div>
               <div className="text-right">
-                <div className="font-sans text-lg font-bold text-tenant">
-                  ฿{price.toLocaleString()}
-                  <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>
-                </div>
-                {allowDaily && pricePerDay > 0 && (
-                  <div className="font-sans text-[12.5px] font-semibold text-success">
+                {allowDaily ? (
+                  <div className="font-sans text-lg font-bold text-success">
                     ฿{pricePerDay.toLocaleString()}
-                    <span className="text-ink-muted">{t.perNight}</span>
+                    <span className="text-xs font-medium text-ink-muted">{t.perNight}</span>
+                  </div>
+                ) : (
+                  <div className="font-sans text-lg font-bold text-tenant">
+                    ฿{price.toLocaleString()}
+                    <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>
                   </div>
                 )}
               </div>
