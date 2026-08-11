@@ -1,0 +1,41 @@
+รายงานช่องโหว่: JWT จาก Google login อาจถูกส่งผ่าน HTTP เพราะ mirror cookie ไม่มี Secure
+สถานะ: VALIDATED แบบมีเงื่อนไข (ต้องยืนยันว่า nginx config นี้เป็น public edge)
+ระดับ: HIGH หากเงื่อนไข deployment เป็นจริง
+หมวด: Sensitive Cookie Without 'Secure' Flag (CWE-614)
+วันที่: 2026-08-11
+
+## Executive Summary
+
+หาก docker/nginx-hopak.conf เป็น public edge และ Alice เปิด http://app.hoprak.com หลัง Google login, Eve ที่ดักเส้นทางเครือข่ายสามารถอ่านข้อความ JWT จาก hopak_token cookie ได้ แล้วนำไปใช้เป็น Authorization: Bearer token นี่ไม่ใช่ API ที่ยืนยันตัวตนจาก cookie โดยตรง และไม่ใช่การทำลาย Google OAuth หรือ HTTPS
+
+พบจาก source/configuration เท่านั้น ไม่มีการทดสอบ public deployment หรือ PoC จริง ไม่มี Git tag/release ให้ระบุ version Cookie line ถูกเพิ่ม 2026-07-19 และ HTTP app vhost ถูกเพิ่ม 2026-07-27; ยังไม่พบ fix ใน history ที่ตรวจ
+
+## Background
+
+Google callback แลก code เป็น accessToken แล้วเรียก setToken (apps/web/src/app/(auth)/auth/google/callback/page.tsx:37-51) API อ่าน JWT จาก Authorization header ไม่ได้อ่าน cookie โดยตรง (apps/api/src/modules/auth/strategies/jwt.strategy.ts:13-18)
+
+## Vulnerability Details
+
+setToken เก็บ JWT ใน localStorage และ document.cookie โดยไม่มี Secure หรือ HttpOnly (apps/web/src/lib/auth.ts:27-30):
+
+document.cookie = `${TOKEN_KEY}=${token}; path=/; max-age=604800; SameSite=Lax`;
+
+SameSite ไม่ป้องกันการส่ง cookie ผ่าน HTTP host เดิม ขณะเดียวกัน vhost app.hoprak.com รับ port 80 แล้ว proxy เข้าแอปแทน redirect HTTPS (docker/nginx-hopak.conf:13-26)
+
+## Exploitability Analysis
+
+Eve ต้องอยู่บน network path และ Alice ต้อง navigate ไป HTTP หลัง token ถูกตั้ง หาก public edge บังคับ HTTPS ก่อนถึง nginx นี้ หรือไม่มี HTTP navigation เส้นทางนี้ไม่เกิดจาก source ที่ตรวจ Token ที่ดักได้เป็น bearer credential จึงนำไปใส่ Authorization header ได้ภายในอายุ/เงื่อนไข session ของระบบ
+
+## Proof of Concept
+
+ไม่มีการดัก traffic หรือทดสอบ deployment จริง ลำดับที่ source รองรับคือ Google exchange -> setToken -> browser มี cookie ที่ไม่มี Secure -> HTTP request ไป host เดียวกัน -> Eve เห็น JWT และอาจ reuse ผ่าน Bearer header
+
+## Remediation
+
+หยุด mirror JWT ไป document.cookie/localStorage และย้ายเป็น server-set session แบบ opaque ด้วย Secure; HttpOnly; SameSite ที่เหมาะสม พร้อม CSRF protection สำหรับ state-changing endpoints ทำ HTTP listener ของ app.hoprak.com ให้ redirect HTTPS ก่อน proxy และเปิด HSTS หลังยืนยัน TLS ครบทุก hostname
+
+เพิ่ม test: port 80 ต้อง redirect HTTPS; callback ไม่เขียน JWT ไป localStorage/document.cookie; และ session cookie หลัง migration ต้องมี Secure/HttpOnly พร้อม negative test CSRF
+
+## Summary
+
+ข้อค้นพบนี้มีผลสูงเฉพาะเมื่อ config HTTP ที่ตรวจคือ public edge จริง งานถัดไปคือยืนยัน topology ใน staging/production และแก้ transport + session design ไม่ใช่เพียงเติม SameSite

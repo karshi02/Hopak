@@ -1,0 +1,24 @@
+รายงานช่องโหว่: ผู้ใช้ภายนอกรีเซ็ต draft สมัครเจ้าของหอของอีเมลอื่นได้
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: LOW (CVSS ประเมิน 4.3)
+หมวด: Improper Authorization (CWE-862)
+วันที่: 2026-08-10
+
+หลักฐาน
+- apps/api/src/modules/owner-applications/owner-applications.controller.ts:21-30 เปิด POST /owner-applications โดยไม่ต้องล็อกอิน
+- apps/api/src/modules/owner-applications/owner-applications.service.ts:76-85 ค้นหา draft ตามอีเมลที่ผู้เรียกส่งมา
+- apps/api/src/modules/owner-applications/owner-applications.service.ts:89-105 reset name, phone, images, documents และ OTP state ของ draft เดิมก่อนพิสูจน์ความเป็นเจ้าของอีเมล
+
+ผลกระทบ
+ผู้โจมตีที่รู้อีเมลของผู้สมัครซึ่งยังไม่จบขั้นตอน สามารถเริ่มใบสมัครด้วยอีเมลนั้นเพื่อทำให้ข้อมูล draft และไฟล์อ้างอิงเดิมถูกล้าง เป็น denial of service ต่อขั้นตอน onboarding และอาจทำให้เกิดอีเมล OTP ที่ไม่ได้ร้องขอ
+
+ข้อจำกัด
+source ปัจจุบันยังต้องใช้ OTP ของอีเมลนั้นเพื่อ finish จึงไม่พบเส้นทางยึดบัญชีโดยตรง; ระดับจึงเป็น Low
+
+การตรวจสอบอย่างปลอดภัย
+สร้าง draft สองรายการด้วยอีเมลทดสอบ, เริ่มใบสมัครซ้ำโดยไม่มี credential แล้วตรวจว่าระบบควรตอบ continuation ที่ปลอดภัยหรือปฏิเสธ โดยไม่ใช้ข้อมูลหรือเอกสารจริง
+
+คำแนะนำ
+อย่า reset draft จากอีเมลอย่างเดียว: ให้ continuation ต้องใช้ capability secret ที่ออกครั้งแรกและเก็บฝั่ง client อย่างปลอดภัย หรือพิสูจน์ OTP ก่อน overwrite; จำกัดการส่ง OTP และเก็บ audit trail
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

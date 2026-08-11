@@ -1,0 +1,39 @@
+รายงานช่องโหว่: Google OAuth auto-link ทำให้ยึดบัญชีก่อนเจ้าของสมัครได้
+สถานะ: VALIDATED (ตรวจ source และประวัติ Git แบบอ่านอย่างเดียว)
+ระดับ: HIGH
+หมวด: Improper Authentication (CWE-287)
+วันที่: 2026-08-11
+
+## Executive Summary
+
+Mallory สามารถสมัครบัญชีด้วยอีเมล Google ของ Alice และตั้งรหัสผ่านของตนเองได้ แม้อีเมลยังไม่ยืนยัน ต่อมาเมื่อ Alice Google login ระบบจะผูก Google ID ของ Alice เข้ากับบัญชีที่ Mallory สร้าง โดยไม่ลบรหัสผ่านเดิม ผลคือทั้งสองฝ่ายเข้า tenant account เดียวกันได้ นี่ไม่ใช่การขโมย Google account, session หรือสิทธิ์ ADMIN อัตโนมัติ
+
+ยืนยันจาก source ที่ HEAD ปัจจุบันเท่านั้น ไม่ได้รัน PoC หรือทดสอบระบบจริง ไม่มี Git tag/release จึงระบุ affected/fixed version ไม่ได้ Logic การผูกอีเมลถูกเพิ่มใน commit 24195950 เมื่อ 2026-07-28 และยังไม่พบการแก้ไข
+
+## Background
+
+POST /auth/register เปิดให้สาธารณะสมัครได้ โดย RegisterDto ตรวจเพียงรูปแบบอีเมล (apps/api/src/modules/auth/dto/register.dto.ts:7-9) User.emailVerified มีค่าเริ่มต้น false (apps/api/prisma/schema.prisma:91-100) แต่ registration ยังสร้าง password-bearing account และออก session ได้
+
+## Vulnerability Details
+
+AuthService.register สร้าง User พร้อม password hash โดยไม่พิสูจน์ mailbox (apps/api/src/modules/auth/auth.service.ts:80-92) จากนั้น loginWithGoogle ค้นหา user ด้วย profile.email แล้ว update เฉพาะ googleId (apps/api/src/modules/auth/auth.service.ts:129-140) ไม่มีการตรวจ emailVerified, current password หรือการยืนยันจาก session เดิม
+
+รหัสผ่านที่ Mallory ตั้งไว้จึงยังคงอยู่ และ verifyCredentials ยังค้นหาตาม email พร้อมเปรียบเทียบรหัสผ่านตามปกติ (apps/api/src/modules/auth/auth.service.ts:104-114)
+
+## Exploitability Analysis
+
+Mallory ต้องรู้/เดาอีเมลที่ Alice จะใช้กับ Google และสมัครก่อน Alice มี local account ที่ถูกต้อง Alice ต้องทำ Google login สำเร็จด้วยอีเมลนั้น ผลกระทบที่ยืนยันคือ Mallory ใช้ password เดิมเข้าถึง tenant account เดียวกับ Alice และอาจบังคับ logout Alice ได้จากนโยบาย one-session ของระบบ ผลกระทบ owner จะเกิดได้ต่อเมื่อบัญชีเดียวกันได้รับอนุมัติเป็น owner ในภายหลัง
+
+## Proof of Concept
+
+ไม่มี PoC หรือ HTTP request ที่รันจริง เพราะการสร้างบัญชีด้วยอีเมลผู้อื่นเป็นการเปลี่ยนสถานะที่ไม่ควรทำโดยไม่มี sandbox เฉพาะ ผลที่คาดจาก source ใน test database คือ pre-register -> Google login -> password login จะให้ทั้ง Alice และ Mallory ได้ User.id เดียวกัน
+
+## Remediation
+
+ห้าม auto-link Google identity จากอีเมลอย่างเดียว ให้ผู้ใช้ที่ล็อกอินบัญชีเดิมอยู่ยืนยันการเชื่อมอย่างชัดเจนและ re-authenticate ด้วยรหัสผ่านเมื่อมี password อยู่แล้ว ทางเลือกที่ปลอดภัยคือสร้างบัญชี Google แยกจนกว่าจะมี account-link flow ที่ยืนยันแล้ว
+
+เพิ่ม regression test: pre-register อีเมลที่ยังไม่ verify ต้องไม่ถูกผูก Google ID อัตโนมัติ; password เดิมต้องใช้เข้าบัญชี Google-linked ของ Alice ไม่ได้; และ Google identity เดิมต้อง login ได้ตามปกติ
+
+## Summary
+
+การใช้ email match เป็นสิทธิ์ในการรวม identity ทั้งที่ registration ไม่พิสูจน์เจ้าของอีเมล เปิดทาง pre-account takeover แก้ที่ policy การเชื่อมบัญชี ไม่ใช่เพิ่ม OAuth state เพราะ state ปัจจุบันป้องกัน login CSRF อยู่แล้ว

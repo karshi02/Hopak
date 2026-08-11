@@ -22,10 +22,11 @@
 ผลกระทบ: บัญชี FINANCE หรือ SUPPORT ที่เป็น ADMIN ผ่าน guard เดียวกับ SUPER_ADMIN และอาจเรียก payout หรือสร้าง SUPER_ADMIN ได้
 แนวทางแก้: สร้าง permission/admin-subrole guard ที่ตรวจ Admin.adminRole และจำกัด payout/การยกระดับสิทธิ์ไว้กับ role ที่ได้รับอนุญาตเท่านั้น
 
-4) [MEDIUM] Google OAuth ไม่มี state binding (login CSRF)
+4) [MEDIUM — FIXED 2026-08-09] Google OAuth ไม่มี state binding (login CSRF)
 ตำแหน่ง: apps/api/src/modules/auth/strategies/google.strategy.ts:8-13
 ผลกระทบ: ผู้ใช้สามารถถูกหลอกให้ล็อกอินเข้า account ของผู้โจมตีและกรอกข้อมูลลงใน account นั้น
 แนวทางแก้: ใช้ random OAuth state ผูกกับ Secure, HttpOnly, SameSite transaction cookie หรือ server-side session และตรวจทุก callback/exchange
+สถานะการแก้: เพิ่ม state แบบสุ่ม 256 บิตใน HttpOnly, SameSite=Lax cookie อายุ 10 นาทีที่ `GET /auth/google`; callback ต้องส่ง state เดียวกันก่อนแลก Google authorization code, เปรียบเทียบแบบ constant-time และล้าง cookie ทุกครั้ง. ทดสอบ unit แล้วผ่าน 5 กรณี
 
 5) [MEDIUM] WebSocket ไม่ตรวจ session revocation/idle/suspension
 ตำแหน่ง: apps/api/src/modules/realtime/realtime.gateway.ts:15-25

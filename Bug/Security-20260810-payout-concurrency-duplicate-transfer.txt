@@ -1,0 +1,22 @@
+รายงานช่องโหว่: การโอน payout พร้อมกันสามารถส่งเงินซ้ำ
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: HIGH (CVSS ประเมิน 8.0)
+หมวด: Race Condition (CWE-362)
+วันที่: 2026-08-10
+
+หลักฐาน
+- apps/api/src/modules/admin/finance/finance.service.ts:30-37 อ่าน payment สถานะ SETTLED และคำนวณยอดก่อนทำเครื่องหมายว่าโอนแล้ว
+- apps/api/src/modules/admin/finance/finance.service.ts:41-48 เรียก external payout ก่อนเปลี่ยนสถานะ payment
+- apps/api/src/modules/admin/finance/finance.service.ts:50-55 จึงค่อย update payment เป็น TRANSFERRED
+- apps/api/src/modules/payments/gateway/disbursement.gateway.ts:84-86 สร้าง reference แบบสุ่มทุกครั้ง จึงทำให้คำขอพร้อมกันใช้ idempotency key คนละค่า
+
+ผลกระทบ
+ผู้มีสิทธิ์ฝ่ายการเงินหรือคำขอซ้ำจากระบบสามารถให้สองคำขออ่านยอดค้างชุดเดียวกัน แล้วส่ง payout จริงสองครั้งก่อนคำขอใดเปลี่ยนสถานะ ส่งผลให้เงินออกเกินยอดที่ควรจ่าย
+
+การตรวจสอบอย่างปลอดภัย
+ใช้ test double ของ gateway แล้วส่งคำขอโอนสองคำขอพร้อมกันสำหรับ dorm ทดสอบเดียวกัน; test ต้องยืนยันว่ามีการเรียก gateway ได้ไม่เกินหนึ่งครั้งและสถานะบัญชีถูกเปลี่ยนอย่าง atomic
+
+คำแนะนำ
+ทำ reserve/claim payment ที่จะโอนด้วย transaction หรือ conditional update ก่อนเรียก gateway, เก็บ payout attempt ที่มี unique idempotency key ตามชุด payment, และคืนสถานะ/ทำ reconciliation หาก gateway ล้มเหลว
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

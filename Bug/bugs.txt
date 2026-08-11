@@ -1650,3 +1650,10 @@ tsc api+web ผ่าน
 - payments.service.createCharge: hold-taken เปลี่ยนจาก BadRequest → ConflictException (409) ข้อความ "เลือกห้องอื่น"
 - pay page: state roomTaken (จับ e.status===409) → เต็มหน้า: ไอคอนเตือน + takenTitle/takenDesc + ปุ่ม backToRooms → /dorms/:dormId (fallback /search)
 เทส: B charge ห้องที่ A ถืออยู่ → HTTP 409 ✓ ; tsc api+web ผ่าน
+
+[102] Google OAuth callback: โค้ดแลก token ค้างใน URL + error message ดิบโผล่ query (11/08/2026)
+- callback page: history.replaceState ลบ ?code= ทันทีที่อ่านค่า → ไม่ค้างใน address bar / browser history / Referer header ตอน navigate ต่อ
+- auth.controller google/callback catch: เลิกส่ง err.message ดิบเข้า URL → ส่งโค้ดคงที่ google_login_failed / account_suspended เท่านั้น
+- login + partner-login: map โค้ด → ข้อความ (ตาราง ERRORS) ; โค้ดที่ไม่รู้จัก → genericError ไม่เอาค่าดิบจาก URL มาแสดง
+- ที่ปลอดภัยอยู่แล้ว ไม่ต้องแก้: ไม่มี JWT ใน URL (ส่งแค่ one-time code TTL 2 นาที, exchange ผ่าน POST, rate limit 20/นาที)
+tsc api+web ผ่าน

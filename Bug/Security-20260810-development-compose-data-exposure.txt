@@ -1,0 +1,24 @@
+รายงานช่องโหว่: Docker Compose สำหรับ development เปิด PostgreSQL และ Redis ทุก interface
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: MEDIUM (CVSS ประเมิน 6.8, ขึ้นกับวิธีนำไฟล์ไปใช้)
+หมวด: Exposed Data Service / Insecure Default (CWE-668)
+วันที่: 2026-08-10
+
+หลักฐาน
+- docker/docker-compose.yml:5-10 ใช้ credentials development ที่คาดเดาได้และ publish PostgreSQL เป็น "5433:5432"
+- docker/docker-compose.yml:14-18 publish Redis เป็น "6380:6379" โดยไม่มี authentication
+- การ publish โดยไม่ระบุ 127.0.0.1 ทำให้ Docker bind ทุก network interface ตามค่าเริ่มต้น
+
+ผลกระทบ
+หาก compose นี้รันบนเครื่องที่เข้าถึงจาก LAN/Internet ได้ ผู้ใช้อื่นในเครือข่ายอาจเชื่อมต่อฐานข้อมูลด้วย credentials เริ่มต้น หรืออ่าน/เขียน Redis โดยตรง ส่งผลต่อความลับและความถูกต้องของข้อมูล
+
+ข้อจำกัด
+ไฟล์ production แยกต่างหากไม่ publish database/Redis; ความเสี่ยงเกิดเมื่อ development compose ถูกใช้นอกเครื่อง local ที่เชื่อถือได้
+
+การตรวจสอบอย่างปลอดภัย
+บนเครื่องทดสอบที่แยกเครือข่าย ตรวจเฉพาะ bind address ของ container หลัง start และยืนยันว่าไม่รับ connection จาก host อื่น; อย่าใช้ฐานข้อมูลที่มีข้อมูลจริง
+
+คำแนะนำ
+ลบ ports ของ data services ถ้า API เป็นผู้ใช้เพียงรายเดียว หรือ bind เป็น 127.0.0.1, กำหนด credentials ผ่าน secret เฉพาะ environment, เปิด Redis authentication/TLS ตามการใช้งาน, และใส่คำเตือนชัดเจนในเอกสาร dev
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

@@ -1,0 +1,21 @@
+รายงานช่องโหว่: การจองรายวันช่วงวันเดียวกันทำพร้อมกันได้
+สถานะ: VALIDATED (source review และเคยยืนยันใน local test ที่อยู่ในขอบเขต)
+ระดับ: MEDIUM (CVSS ประเมิน 6.5)
+หมวด: Race Condition (CWE-362)
+วันที่: 2026-08-10
+
+หลักฐาน
+- apps/api/src/modules/bookings/bookings.service.ts:117-126 ตรวจ booking ที่ช่วงวันทับซ้อนด้วย findFirst
+- apps/api/src/modules/bookings/bookings.service.ts:130-147 สร้าง booking ในคำสั่งแยกโดยไม่มี transaction, lock, หรือ database exclusion constraint
+- apps/api/prisma/schema.prisma:215-248 ไม่มีข้อจำกัดระดับฐานข้อมูลสำหรับช่วงวันที่ของ booking รายวัน
+
+ผลกระทบ
+สองคำขอที่เริ่มพร้อมกันอาจต่างคนต่างไม่พบ booking ของอีกฝ่าย แล้วสร้างรายการ PENDING สำหรับห้องและวันเดียวกันได้ ทำให้เกิด overbooking และความขัดแย้งกับผู้เช่า
+
+การตรวจสอบอย่างปลอดภัย
+ใช้ห้องทดสอบที่เปิดเช่ารายวัน ส่งคำขอสร้าง booking สองคำขอพร้อมกันด้วยช่วงวันเดียวกัน และยกเลิกรายการทดสอบทันทีหลังตรวจผล ห้ามใช้ข้อมูลลูกค้าจริง
+
+คำแนะนำ
+บังคับ atomicity ที่ฐานข้อมูล: ใช้ transaction พร้อม lock ที่เหมาะสมหรือ schema ที่รองรับ exclusion constraint/range overlap; ให้ API คืน 409 เมื่อช่วงวันถูก claim ไปแล้ว และเพิ่ม concurrency integration test
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

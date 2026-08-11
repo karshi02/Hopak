@@ -1,0 +1,42 @@
+รายงานช่องโหว่: code แลก JWT ของ Google login อยู่ใน URL และไม่ผูกกับ browser เดิม
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: MEDIUM
+หมวด: Information Exposure Through Query Strings in GET Request (CWE-598)
+วันที่: 2026-08-11
+
+## Executive Summary
+
+หลัง Google login สำเร็จ API redirect ไปหน้า callback พร้อม ?code= โดย code นี้แลกเป็น accessToken ได้ด้วยตัวมันเอง Mallory ที่ได้ code ก่อน Alice แลก สามารถรับ JWT ได้โดยไม่ต้องผ่าน Google อีกครั้ง นี่เป็น application handoff code ไม่ใช่ Google OAuth authorization code และไม่พบหลักฐาน third-party asset หรือผู้เข้าถึง log ที่ทำให้ code รั่วใน deployment จริง
+
+Code สุ่ม 192 บิต ใช้ครั้งเดียวและหมดอายุ 2 นาที จึงเดาไม่ได้และจำกัดหน้าต่างโจมตี การตรวจเป็น source review เท่านั้น ไม่มี release tag/PoC/runtime run ให้ระบุ affected หรือ fixed version
+
+## Background
+
+Google callback สร้าง JWT ฝั่ง API แล้วสร้าง temporary code เพื่อส่งข้าม origin ไปหน้าเว็บ โดยคาดว่า browser เดิมของ Alice จะแลก code ผ่าน POST ความปลอดภัยที่ควรมีคือ code ไม่ควรเป็น bearer credential ใน URL หรืออย่างน้อยต้องผูกกับ browser/session เดิม
+
+## Vulnerability Details
+
+AuthController สร้าง code และต่อเข้ากับ query string (apps/api/src/modules/auth/auth.controller.ts:77-81):
+
+const code = this.authService.createGoogleExchangeCode(accessToken);
+res.redirect(`${FRONTEND_URL}/auth/google/callback?code=${code}`);
+
+AuthService.exchangeGoogleCode lookup และคืน JWT โดยตรวจเฉพาะ code (apps/api/src/modules/auth/auth.service.ts:35-49) ไม่มี cookie, session identifier หรือ proof ของ browser เดิม หน้าเว็บจึงลบ URL ได้เฉพาะหลัง JavaScript เริ่มทำงาน (apps/web/src/app/(auth)/auth/google/callback/page.tsx:23-38)
+
+## Exploitability Analysis
+
+Mallory ต้องเห็น code จริงจาก browser, proxy/access log, telemetry หรือช่องทางเปิดเผย URL อื่นก่อน redemption; source ไม่ได้พิสูจน์ว่าช่องทางเหล่านี้เปิดให้ผู้โจมตีจริง CORS ไม่ได้ผูก direct client ที่ไม่มี Origin กับ browser ของ Alice หลัง Mallory แลกสำเร็จ Alice จะแลก code เดิมไม่ได้จาก single-use semantics
+
+## Proof of Concept
+
+ไม่มี PoC หรือการส่ง code ไปยังระบบจริง ลำดับที่คาดจาก source คือ callback -> URL มี code -> Mallory ได้ code -> POST /auth/google/exchange -> ได้ accessToken หากยังอยู่ใน 2 นาทีและ Alice ยังไม่แลก
+
+## Remediation
+
+ให้ API callback สร้าง server-side session และ redirect ไป URL สะอาด หรือผูก handoff code กับ nonce/session secret ใน Secure; HttpOnly cookie แล้วบังคับตรวจแบบ atomic ที่ exchange endpoint เพิ่ม Cache-Control: no-store, Referrer-Policy: no-referrer และ redact code ใน access log/APM/telemetry
+
+เพิ่ม test: code ที่ไม่มี browser-bound proof ต้อง 401, code ที่มี proof ถูกต้องแลกได้ครั้งเดียว, callback URL ไม่มี credential และ fixture ของ log/telemetry ไม่บันทึกค่า code เต็ม
+
+## Summary
+
+entropy, TTL และ single-use ลดผลกระทบ แต่ไม่ป้องกันผู้ที่ได้ URL code จริงก่อน redemption การตัด credential ออกจาก URL หรือ bind code กับ browser proof คือการแก้ตรงจุด

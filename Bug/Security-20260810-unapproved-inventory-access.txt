@@ -1,0 +1,22 @@
+รายงานช่องโหว่: หอหรือห้องที่ยังไม่อนุมัติยังเปิดดูและรับการจองได้เมื่อมี ID
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: MEDIUM (CVSS ประเมิน 6.4)
+หมวด: Improper Authorization / Business-logic bypass (CWE-862)
+วันที่: 2026-08-10
+
+หลักฐาน
+- apps/api/src/modules/dorms/dorms.controller.ts:29-32 เปิด GET /dorms/:id โดยไม่มี guard
+- apps/api/src/modules/dorms/dorms.service.ts:42-50 ใช้ findUnique ด้วย id โดยไม่บังคับ dorm.status = APPROVED; คืนเฉพาะ rooms ที่ approved แต่ยังคืนหอที่ pending/rejected ได้
+- apps/api/src/modules/bookings/bookings.controller.ts:14-19 เปิด POST /bookings ให้ผู้เช่าที่ล็อกอิน
+- apps/api/src/modules/bookings/bookings.service.ts:40-55 ตรวจเพียง room.status = AVAILABLE แล้วสร้าง booking โดยไม่ตรวจ dorm.status = APPROVED หรือ room.approved = true
+
+ผลกระทบ
+ผู้ที่มี dormId/roomId ของ inventory ที่ยังรออนุมัติหรือถูกปฏิเสธ สามารถดูรายละเอียดและสร้าง booking ได้ ข้าม lifecycle การตรวจสอบของแอดมิน และอาจนำไปสู่การชำระเงินหรือข้อผูกพันสำหรับหอที่ไม่ควรเปิดขาย
+
+การตรวจสอบอย่างปลอดภัย
+สร้าง dorm และ room ทดสอบที่สถานะ PENDING_APPROVAL หรือ room.approved=false แล้วใช้ tenant test account ตรวจว่า public detail ไม่คืนข้อมูล และ POST /bookings ต้องตอบ 404/403; ห้ามใช้รายการจริงหรือชำระเงินจริง
+
+คำแนะนำ
+ให้ public detail query บังคับ dorm.status = APPROVED เสมอ และให้ booking query ตรวจทั้ง dorm.status = APPROVED กับ room.approved = true ในเงื่อนไขเดียวกับการอ่าน room; เพิ่ม regression tests สำหรับ pending/rejected/suspended inventory
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

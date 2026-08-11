@@ -1,0 +1,21 @@
+รายงานช่องโหว่: WebSocket ไม่ตรวจสถานะ session ที่ถูก revoke
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: MEDIUM (CVSS ประเมิน 6.4)
+หมวด: Insufficient Session Expiration (CWE-613)
+วันที่: 2026-08-10
+
+หลักฐาน
+- apps/api/src/modules/realtime/realtime.gateway.ts:15-25 ตรวจเพียงลายเซ็นและอายุ JWT ด้วย jwt.verify แล้ว join ห้อง user โดยไม่ตรวจ jti/session
+- apps/api/src/modules/auth/strategies/jwt.strategy.ts:25-39 ตรวจ revokedAt และ idle timeout เฉพาะ HTTP requests ที่ผ่าน JwtStrategy
+- apps/api/src/modules/users/users.service.ts:86-93 ระบุเจตนาว่า revoke session ต้องมีผลทันที แต่ไม่มีการตัด socket ที่เชื่อมอยู่
+
+ผลกระทบ
+ผู้ที่ยังถือ JWT ที่ถูก revoke สามารถคง WebSocket connection ที่สร้างไว้ก่อน revoke และยังรับ event สำหรับบัญชีนั้นต่อได้จน token หมดอายุหรือ socket ถูกตัด โดย event บางชนิดมีข้อมูลการจอง
+
+การตรวจสอบอย่างปลอดภัย
+ใน test environment สร้าง socket ด้วย session ทดสอบ, revoke session ผ่าน API, emit event สำหรับผู้ใช้เดิม แล้วตรวจว่า socket ไม่ได้รับ event และถูก disconnect
+
+คำแนะนำ
+ตรวจ session jti และ revokedAt ตอน handshake เหมือน JwtStrategy, เก็บ mapping session-to-socket แล้ว disconnect เมื่อ revoke, และกำหนด revalidation/connection TTL สำหรับ socket ที่เปิดนาน
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

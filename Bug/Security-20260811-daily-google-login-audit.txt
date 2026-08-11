@@ -1,0 +1,27 @@
+รายงานความปลอดภัยประจำวัน: Google Login / OAuth
+วันที่: 2026-08-11
+สถานะ: ตรวจ source แบบอ่านอย่างเดียว — ไม่มีการแก้โค้ดหรือทดสอบ production
+
+สรุป: พบ 3 ช่องโหว่ที่ต้องติดตาม
+
+1. HIGH — Pre-account takeover จากการ auto-link Google identity ด้วยอีเมลที่ local account ยังไม่ยืนยัน
+   รายละเอียด: Security-20260811-google-oauth-pre-account-takeover.txt
+   ลำดับแก้: สูงสุด
+
+2. HIGH (ขึ้นกับ deployment) — JWT cookie ไม่มี Secure และ config มี HTTP vhost สำหรับ app.hoprak.com
+   รายละเอียด: Security-20260811-google-login-insecure-jwt-cookie.txt
+   ลำดับแก้: สูงสุดหลังยืนยัน public edge
+
+3. MEDIUM — temporary code สำหรับแลก JWT อยู่ใน URL และไม่ผูกกับ browser เดิม
+   รายละเอียด: Security-20260811-google-oauth-handoff-code-url-exposure.txt
+   ลำดับแก้: หลังแก้ account linking/transport หรือรวมใน redesign session
+
+สิ่งที่ตรวจแล้วไม่พบช่องโหว่เพิ่ม
+- OAuth state ใช้ random 256-bit, HttpOnly, อายุสั้น, single-use และเทียบแบบ timing-safe
+- ไม่พบ open redirect จาก request input ใน Google flow
+- ไม่พบ role escalation จาก googleIntent; ค่านี้มีผลเฉพาะ navigation ฝั่งเว็บ
+
+คำแนะนำสำหรับรอบถัดไป
+- ทำ regression tests สำหรับทั้งสามกรณีใน test database/staging
+- ยืนยันว่า docker/nginx-hopak.conf เป็น config ที่ public edge ใช้จริง
+- ออกแบบ account-link และ server-side session flow ใหม่ก่อนแก้แบบจุดเดียว

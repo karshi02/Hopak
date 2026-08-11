@@ -1,0 +1,24 @@
+รายงานช่องโหว่: Webhook ชำระเงินยอมรับคำขอเมื่อไม่ได้ตั้งค่า secret
+สถานะ: VALIDATED (ตรวจ source แบบอ่านอย่างเดียว)
+ระดับ: HIGH (CVSS ประเมิน 8.1, ขึ้นกับการตั้งค่า deployment)
+หมวด: Improper Authentication (CWE-306)
+วันที่: 2026-08-10
+
+หลักฐาน
+- apps/api/src/modules/payments/webhooks.controller.ts:20-21 อ่าน XENDIT_WEBHOOK_TOKEN แต่ปฏิเสธคำขอเฉพาะกรณีที่ตัวแปรนี้มีค่า
+- apps/api/src/modules/payments/webhooks.controller.ts:23-32 นำ charge id จาก body ไปยืนยันการชำระเงิน
+- apps/api/src/modules/payments/payments.service.ts:166-177 เปลี่ยน Payment ที่ยัง PENDING เป็น SETTLED และเรียก finalizePaid
+
+ผลกระทบ
+หาก deploy โดยไม่ได้ตั้ง XENDIT_WEBHOOK_TOKEN ผู้โจมตีที่เข้าถึง endpoint จะปลอม callback ให้ booking ที่มี gateway charge id ถูกทำเครื่องหมายว่าชำระแล้วได้ ซึ่งอาจทำให้มีสิทธิ์เข้าพักหรือเกิดภาระจ่ายเงินโดยไม่มีการชำระจริง
+
+เงื่อนไขและขอบเขต
+เกิดเฉพาะ environment ที่ไม่ได้กำหนด secret; การตรวจ source ไม่ยืนยันค่าจริงของ production
+
+การตรวจสอบอย่างปลอดภัย
+เพิ่ม integration test ที่บูตแอปโดยไม่มี XENDIT_WEBHOOK_TOKEN แล้วตรวจว่า POST webhook ถูกปฏิเสธ (5xx ตอนเริ่มระบบหรือ 401/403) โดยไม่ใช้ข้อมูลชำระเงินจริง
+
+คำแนะนำ
+บังคับให้ secret ต้องมีตั้งแต่ startup ในทุก environment ที่เปิด endpoint, เปรียบเทียบ token แบบ constant-time, และปิด/แยก webhook ใน development ที่ไม่ต้องใช้ gateway จริง
+
+สถานะการแก้ไข: Open — ไม่มีการแก้โค้ดในรายงานนี้

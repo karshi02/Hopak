@@ -1,0 +1,50 @@
+Hopak — AI Read & Understanding Log
+====================================
+วันที่อ่าน: 2026-08-10
+ขอบเขต: อ่านเอกสารเท่านั้น ไม่มีการแก้โค้ด, config, database หรือ process
+
+เอกสาร Markdown ที่อ่านครบ
+----------------------------
+1. README.md
+   - ภาพรวมระบบ, บทบาทผู้ใช้, business rules, monorepo และ roadmap
+2. HANDOFF.md
+   - สถานะล่าสุดจาก session ก่อนหน้า, ข้อควรระวังตอนพัฒนา และงานค้าง
+3. DEPLOY.md
+   - ขั้นตอน deploy VPS, DNS, TLS, Google OAuth และการรักษา secret
+4. Hopak-Web-Build-Guide.md
+   - design system, route structure, ฟีเจอร์เว็บ และ API-first workflow
+5. Hopak-File-Structure.md
+   - โครงสร้าง apps/api, apps/web, apps/mobile และ packages/shared
+6. Hopak-Project-Brief.md
+   - ขอบเขตผลิตภัณฑ์, บทบาท, flow การจอง, payment และ data model
+7. Hopak-Session-Log.md
+   - ฟีเจอร์/บั๊ก/ข้อจำกัดที่เคยทำและทดสอบใน session ก่อนหน้า
+
+ความเข้าใจระบบปัจจุบัน
+------------------------
+- Hopak เป็น pnpm/Turborepo monorepo แบบ API-first:
+  apps/web = Next.js, apps/api = NestJS + Prisma/PostgreSQL, packages/shared = logic/type ใช้ร่วมกัน
+- มี 3 บทบาท: tenant, owner, admin; frontend ทุกฝั่งต้องใช้ API และฐานข้อมูลกลางเดียวกัน
+- Booking และ payment เป็น state machine; ห้ามสร้าง UI หรือ endpoint ที่ข้ามลำดับสถานะ
+- ระบบ payment ปัจจุบันตาม log ล่าสุดใช้ Xendit PromptPay QR + webhook, reservation hold 10 นาที
+  และ Slip Verify เป็นโค้ดเก่าที่ยัง dormant
+- ค่าคอมมิชชันปัจจุบันคือ 20% ของค่าห้องเท่านั้น; เงินมัดจำคืนเจ้าของหอเต็มจำนวน
+- Owner / dorm / room ที่ยังไม่ผ่านเงื่อนไขอนุมัติต้องไม่เปิดใช้งานเกินสิทธิ์
+- เอกสารส่วนตัวและสลิปต้อง private + signed URL; รูปหอพัก/ห้องเป็น public ได้
+- Realtime ใช้ Socket.IO และต้องส่ง payload booking ที่ครบเมื่อมีการอัปเดต
+
+กติกาที่ต้องระวังก่อนแก้ระบบครั้งต่อไป
+----------------------------------------
+1. ตรวจ role casing เสมอ: JWT ใช้ lowercase แต่ Prisma enum ใช้ uppercase
+2. เปลี่ยน type ใน packages/shared แล้วต้อง build shared ก่อนให้ web/api เห็นผล
+3. apiClient ใช้ JSON เสมอ; การ upload ต้องใช้ raw fetch + FormData
+4. ทุก apiClient promise ต้อง handle error เพื่อกันหน้า crash
+5. Prisma migration บน Windows ต้องปิด API process ก่อน เพื่อกัน Prisma engine ถูกล็อก
+6. Backend feature ต้องทดสอบจริงด้วย request ที่ปลอดภัย และลบข้อมูลทดสอบหลังเสร็จ
+7. บันทึกบั๊กจริงลง Bug/bugs.txt ตาม format เดิม; บันทึกการอ่าน/ความเข้าใจเก็บไฟล์นี้
+
+หมายเหตุเรื่องเอกสาร
+---------------------
+- เอกสารบางฉบับเป็นแผนเดิมและระบุค่าคอมมิชชัน 10%; เมื่อต้องตัดสินใจเรื่องปัจจุบัน
+  ให้ยึด source code, migration และ HANDOFF/bugs log ล่าสุดก่อน
+- ไม่เปิดเผยหรือคัดลอก secret, password หรือค่า environment ลงในบันทึกนี้
