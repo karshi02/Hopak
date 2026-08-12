@@ -19,7 +19,7 @@ async function main() {
   // สำคัญ: upsert ไม่รีเซ็ต password ของบัญชีที่มีอยู่แล้ว (update ไม่แตะ password)
   // ป้องกัน re-seed แล้วรหัสที่ admin เปลี่ยนไว้เองถูกดีดกลับเป็นรหัส seed
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@hopak.com' },
+    where: { email_role: { email: 'admin@hopak.com', role: 'ADMIN' } },
     update: {},
     create: {
       role: 'ADMIN',
@@ -31,7 +31,7 @@ async function main() {
   });
 
   const owner = await prisma.user.upsert({
-    where: { email: 'owner@hopak.com' },
+    where: { email_role: { email: 'owner@hopak.com', role: 'OWNER' } },
     update: {},
     create: {
       role: 'OWNER',

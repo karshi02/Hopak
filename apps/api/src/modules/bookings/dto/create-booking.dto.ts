@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateBookingDto {
   @IsString()
@@ -26,6 +26,13 @@ export class CreateBookingDto {
   @IsOptional()
   @IsIn(['MONTHLY', 'DAILY'])
   rentalType?: 'MONTHLY' | 'DAILY';
+
+  // จำนวนผู้เข้าพัก (เฉพาะรายวัน) — เจ้าของหอใช้เตรียมห้อง
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  guests?: number;
 
   // ระยะเวลาเช่า (เดือน) — 1/3/6 เท่านั้น (เฉพาะรายเดือน)
   @IsOptional()

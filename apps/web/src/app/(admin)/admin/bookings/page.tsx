@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { downloadCsv } from '@/lib/csv';
 import { apiClient } from '@/lib/api-client';
+import { getSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
 import { Badge, bookingStatusBadge } from '@/components/dashboard/Badge';
@@ -75,12 +77,14 @@ const TEXT = {
   },
 };
 
-function toCsv(bookings: Booking[], header: string): string {
-  const rows = bookings.map((b) =>
-    [b.id, b.contactName, b.contactPhone, b.checkInDate, b.amount, normalizeStatus(b.status)].join(','),
-  );
-  return [header, ...rows].join('\n');
-}
+// ปุ่ม action — สีตามความหมาย: ตัด/คืนห้อง=น้ำเงิน · ยกเลิก(คืนเงิน)=แดง · กู้คืน=เขียว
+const ACT = 'rounded-[8px] px-2.5 py-1 text-[12px] font-semibold transition hover:brightness-95 disabled:opacity-50';
+const ACT_MOBILE = 'rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition hover:brightness-95 disabled:opacity-50';
+const ACT_STYLE: Record<string, React.CSSProperties> = {
+  room: { background: '#EAF1FD', color: '#2456B8' },
+  cancel: { background: '#FDECEC', color: '#C0392B' },
+  restore: { background: '#E9F7EF', color: '#12813F' },
+};
 
 export default function AdminBookingsPage() {
   const { lang } = useLang();
@@ -133,6 +137,18 @@ export default function AdminBookingsPage() {
     }
   }
 
+  // อัปเดตสดเมื่อมีการจองใหม่/สถานะเปลี่ยน — ไม่ต้องกดรีเฟรช
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on('booking:new', reload);
+    socket.on('booking:updated', reload);
+    return () => {
+      socket.off('booking:new', reload);
+      socket.off('booking:updated', reload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filtered = statusFilter
     ? bookings.filter((b) => normalizeStatus(b.status) === statusFilter)
     : bookings;
@@ -144,13 +160,11 @@ export default function AdminBookingsPage() {
   const FILTERS = t.filters.map((f, i) => ({ ...f, count: count(f.value), tone: tones[i] }));
 
   function handleExport() {
-    const blob = new Blob([toCsv(filtered, t.csvHeader)], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'bookings.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(
+      'bookings',
+      t.csvHeader.split(','),
+      filtered.map((b) => [b.id, b.contactName, b.contactPhone, b.checkInDate, b.amount, normalizeStatus(b.status)]),
+    );
   }
 
   return (
@@ -165,18 +179,29 @@ export default function AdminBookingsPage() {
         </button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-        <table className="w-full min-w-[720px] text-left text-sm">
+      {/* จอ md ขึ้นไป: ตารางพอดีความกว้าง ไม่ต้องเลื่อนแนวนอน */}
+      <div className="mt-4 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card md:block">
+        <table className="w-full table-fixed text-left text-[13px]">
+          <colgroup>
+            <col className="w-[11%]" />
+            <col className="w-[14%]" />
+            <col className="w-[15%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[11%]" />
+            <col className="w-[16%]" />
+            <col className="w-[13%]" />
+          </colgroup>
           <thead>
-            <tr className="border-b border-hairline text-xs text-ink-faint">
-              <th className="p-3 font-normal">{t.bookingId}</th>
-              <th className="p-3 font-normal">{t.booker}</th>
-              <th className="p-3 font-normal">{t.dorm}</th>
-              <th className="p-3 font-normal">{t.checkIn}</th>
-              <th className="p-3 font-normal">{t.amount}</th>
-              <th className="p-3 font-normal">{t.status}</th>
-              <th className="p-3 font-normal">{t.room}</th>
-              <th className="p-3 font-normal"></th>
+            <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+              <th className="p-2.5 font-normal">{t.bookingId}</th>
+              <th className="p-2.5 font-normal">{t.booker}</th>
+              <th className="p-2.5 font-normal">{t.dorm}</th>
+              <th className="p-2.5 font-normal">{t.checkIn}</th>
+              <th className="p-2.5 text-right font-normal">{t.amount}</th>
+              <th className="p-2.5 font-normal">{t.status}</th>
+              <th className="p-2.5 font-normal">{t.room}</th>
+              <th className="p-2.5 font-normal"></th>
             </tr>
           </thead>
           <tbody>
@@ -189,16 +214,24 @@ export default function AdminBookingsPage() {
               const roomOccupied = (b.room?.status ?? '').toUpperCase() === 'OCCUPIED';
               return (
                 <tr key={b.id} className="border-b border-hairline last:border-0">
-                  <td className="p-3 font-sans text-ink-subtitle">#{b.id.slice(0, 8).toUpperCase()}</td>
-                  <td className="p-3 font-medium text-ink-strong">{b.contactName}</td>
-                  <td className="p-3 text-ink-subtitle">{b.room?.dorm?.name ?? '—'}</td>
-                  <td className="p-3 text-ink-subtitle">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</td>
-                  <td className="p-3 font-sans font-semibold tabular-nums">฿{b.amount.toLocaleString()}</td>
-                  <td className="p-3">
+                  <td className="truncate p-2.5 font-sans font-bold text-admin">#{b.id.slice(0, 8).toUpperCase()}</td>
+                  <td className="truncate p-2.5 font-medium text-ink-strong" title={b.contactName}>
+                    {b.contactName}
+                  </td>
+                  <td className="truncate p-2.5 text-ink-subtitle" title={b.room?.dorm?.name ?? ''}>
+                    {b.room?.dorm?.name ?? '—'}
+                  </td>
+                  <td className="truncate p-2.5 text-ink-subtitle">
+                    {new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}
+                  </td>
+                  <td className="p-2.5 text-right font-sans font-semibold tabular-nums">
+                    ฿{b.amount.toLocaleString()}
+                  </td>
+                  <td className="p-2.5">
                     <Badge label={badge.label} variant={badge.variant} />
                   </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
+                  <td className="p-2.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Badge
                         label={roomOccupied ? t.roomOccupied : t.roomFree}
                         variant={roomOccupied ? 'critical' : 'good'}
@@ -206,18 +239,20 @@ export default function AdminBookingsPage() {
                       <button
                         onClick={() => handleRoomStatus(b.roomId, roomOccupied ? 'AVAILABLE' : 'OCCUPIED')}
                         disabled={busyId === b.roomId}
-                        className="text-xs font-semibold text-tenant hover:underline disabled:opacity-50"
+                        className={ACT}
+                        style={ACT_STYLE.room}
                       >
                         {roomOccupied ? t.returnRoom : t.cutRoom}
                       </button>
                     </div>
                   </td>
-                  <td className="p-3">
+                  <td className="p-2.5">
                     {canCancel && (
                       <button
                         onClick={() => handleCancel(b.id, isPaid)}
                         disabled={busyId === b.id}
-                        className="text-sm font-semibold text-danger hover:underline disabled:opacity-50"
+                        className={ACT}
+                        style={ACT_STYLE.cancel}
                       >
                         {busyId === b.id ? t.cancelling : isPaid ? t.refundCancel : t.cancel}
                       </button>
@@ -226,7 +261,8 @@ export default function AdminBookingsPage() {
                       <button
                         onClick={() => handleRestore(b.id)}
                         disabled={busyId === b.id}
-                        className="text-sm font-semibold text-success hover:underline disabled:opacity-50"
+                        className={ACT}
+                        style={ACT_STYLE.restore}
                       >
                         {busyId === b.id ? t.restoring : t.restore}
                       </button>
@@ -238,6 +274,70 @@ export default function AdminBookingsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && <p className="p-4 text-ink-faint">{t.noData}</p>}
+      </div>
+
+      {/* มือถือ: การ์ดต่อการจอง */}
+      <div className="mt-4 flex flex-col gap-2.5 md:hidden">
+        {filtered.map((b) => {
+          const status = normalizeStatus(b.status);
+          const badge = bookingStatusBadge(status, lang);
+          const isPaid = status === 'paid';
+          const canCancel = status === 'pending' || status === 'confirmed' || isPaid;
+          const canRestore = status === 'cancelled';
+          const roomOccupied = (b.room?.status ?? '').toUpperCase() === 'OCCUPIED';
+          return (
+            <div key={b.id} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-sans text-[12.5px] font-bold text-admin">#{b.id.slice(0, 8).toUpperCase()}</span>
+                <Badge label={badge.label} variant={badge.variant} />
+              </div>
+
+              <div className="mt-1.5 truncate text-[14px] font-semibold text-ink-strong">{b.contactName}</div>
+              <div className="truncate text-[12.5px] text-ink-muted">{b.room?.dorm?.name ?? '—'}</div>
+
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-[10px] bg-surface-canvas px-3 py-2 text-[12.5px]">
+                <span className="text-ink-body">{new Date(b.checkInDate).toLocaleDateString(t.dateLocale)}</span>
+                <span className="font-sans font-bold tabular-nums text-ink-strong">฿{b.amount.toLocaleString()}</span>
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <Badge
+                  label={roomOccupied ? t.roomOccupied : t.roomFree}
+                  variant={roomOccupied ? 'critical' : 'good'}
+                />
+                <button
+                  onClick={() => handleRoomStatus(b.roomId, roomOccupied ? 'AVAILABLE' : 'OCCUPIED')}
+                  disabled={busyId === b.roomId}
+                  className={ACT_MOBILE}
+                  style={ACT_STYLE.room}
+                >
+                  {roomOccupied ? t.returnRoom : t.cutRoom}
+                </button>
+                {canCancel && (
+                  <button
+                    onClick={() => handleCancel(b.id, isPaid)}
+                    disabled={busyId === b.id}
+                    className={ACT_MOBILE}
+                    style={ACT_STYLE.cancel}
+                  >
+                    {busyId === b.id ? t.cancelling : isPaid ? t.refundCancel : t.cancel}
+                  </button>
+                )}
+                {canRestore && (
+                  <button
+                    onClick={() => handleRestore(b.id)}
+                    disabled={busyId === b.id}
+                    className={ACT_MOBILE}
+                    style={ACT_STYLE.restore}
+                  >
+                    {busyId === b.id ? t.restoring : t.restore}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <p className="text-ink-faint">{t.noData}</p>}
       </div>
     </div>
   );

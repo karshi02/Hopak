@@ -41,6 +41,11 @@ export class BookingsService {
     const room = await this.prisma.room.findUnique({ where: { id: dto.roomId }, include: { dorm: true } });
     if (!room) throw new NotFoundException('Room not found');
     if (room.status !== 'AVAILABLE') throw new BadRequestException('Room not available');
+    // ห้องที่ยังไม่ผ่านตรวจ หรืออยู่ในหอที่ยังไม่อนุมัติ/ถูกระงับ จองไม่ได้
+    // (UI ไม่โชว์อยู่แล้ว แต่ต้องกันที่ API ด้วย ไม่งั้นรู้ roomId ก็ยิงจองตรงได้ = มีธุรกรรมก่อนแอดมินตรวจ)
+    if (!room.approved || room.dorm.status !== 'APPROVED') {
+      throw new BadRequestException('ห้องนี้ยังไม่เปิดให้จอง (รอการตรวจสอบจากแอดมิน)');
+    }
     // เจ้าของหอจองห้องของตัวเองไม่ได้ (นอกจาก RolesGuard ที่กัน role owner อยู่แล้ว
     // ยังกันเคสขอบ เช่น บัญชีที่เปลี่ยน role ภายหลัง หรือถูกเรียกจากที่อื่น)
     if (room.dorm.ownerId === tenantId) {
@@ -77,6 +82,8 @@ export class BookingsService {
       },
     });
     this.realtime.emitToUser(room.dorm.ownerId, 'booking:new', booking);
+    // แอดมินเห็นการจองใหม่สดๆ ไม่ต้องรีเฟรช
+    this.realtime.emitToRole('admin', 'booking:new', booking);
 
     // แจ้งเตือนถาวรให้เจ้าของหอ (โผล่ในกระดิ่ง + หน้าแจ้งเตือน หมวด "การจอง") — เดิมมีแค่ socket ชั่วคราว
     const roomLabel = room.type === 'AIR' ? 'ห้องแอร์' : 'ห้องพัดลม';
@@ -138,6 +145,7 @@ export class BookingsService {
         deposit,
         rentalType: 'DAILY',
         nights,
+        guests: dto.guests ?? 1,
         status: 'PENDING',
         contactName: dto.contactName,
         contactPhone: dto.contactPhone,
@@ -146,6 +154,8 @@ export class BookingsService {
       },
     });
     this.realtime.emitToUser(room.dorm.ownerId, 'booking:new', booking);
+    // แอดมินเห็นการจองใหม่สดๆ ไม่ต้องรีเฟรช
+    this.realtime.emitToRole('admin', 'booking:new', booking);
 
     const roomLabel = room.type === 'AIR' ? 'ห้องแอร์' : 'ห้องพัดลม';
     const fmt = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -231,6 +241,7 @@ export class BookingsService {
       this.prisma.room.update({ where: { id: booking.roomId }, data: { status: 'AVAILABLE' } }),
     ]);
     this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    this.realtime.emitToRole('admin', 'booking:updated', updated);
     this.realtime.emitToUser(booking.room.dorm.ownerId, 'booking:updated', updated);
     await this.notifications.create(
       booking.tenantId,
@@ -250,6 +261,7 @@ export class BookingsService {
     }
     const updated = await this.prisma.booking.update({ where: { id }, data: { status: 'PENDING' } });
     this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    this.realtime.emitToRole('admin', 'booking:updated', updated);
     this.realtime.emitToUser(booking.room.dorm.ownerId, 'booking:updated', updated);
     return updated;
   }
@@ -292,6 +304,7 @@ export class BookingsService {
       data: { status: 'COMPLETED', checkedInAt: new Date() },
     });
     this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    this.realtime.emitToRole('admin', 'booking:updated', updated);
 
     return {
       bookingId: booking.id,

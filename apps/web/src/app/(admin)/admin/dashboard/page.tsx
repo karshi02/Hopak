@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { useLang } from '@/hooks/useLang';
-import { RevenueChart } from '@/components/admin/RevenueChart';
+import { YearlyRevenueChart } from '@/components/admin/YearlyRevenueChart';
 
 interface Summary {
   totalUsers: number;
@@ -14,6 +14,7 @@ interface Summary {
 interface MonthlyRevenue {
   year: number;
   months: number[];
+  breakdown?: { month: number; gross: number; commission: number; ownerPayout: number; bookings: number }[];
 }
 interface FinanceSummary {
   totalCommission: number;
@@ -55,6 +56,9 @@ const TEXT = {
     vsLast: 'จากเดือนก่อน',
     pendingApprove: (n: number) => `${n} รออนุมัติ`,
     chartTitle: 'รายได้แพลตฟอร์มรายเดือน',
+    chartGross: 'ยอดรับรวม',
+    chartComm: 'ค่าคอม 20%',
+    chartPayout: 'ยอดเจ้าของหอ',
     chartSub: (y: number) => `ค่าคอมมิชชั่น · ปี ${y}`,
     thisMonth: 'เดือนนี้',
     sourcesTitle: 'รายได้แยกตามแหล่ง',
@@ -93,6 +97,9 @@ const TEXT = {
     vsLast: 'vs last month',
     pendingApprove: (n: number) => `${n} pending`,
     chartTitle: 'Monthly platform revenue',
+    chartGross: 'Gross',
+    chartComm: 'Commission 20%',
+    chartPayout: 'Owner payout',
     chartSub: (y: number) => `Commission · ${y}`,
     thisMonth: 'This month',
     sourcesTitle: 'Revenue by source',
@@ -267,7 +274,21 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <RevenueChart months={monthsData.length ? monthsData : Array(12).fill(0)} lang={lang} />
+            <YearlyRevenueChart
+              months={
+                monthly?.breakdown ??
+                Array.from({ length: 12 }, (_, i) => ({
+                  month: i + 1,
+                  gross: monthsData[i] ?? 0,
+                  commission: monthsData[i] ?? 0,
+                  ownerPayout: 0,
+                  bookings: 0,
+                }))
+              }
+              monthLabels={lang === 'th' ? MONTH_TH : MONTH_EN}
+              lang={lang}
+              labels={{ gross: t.chartGross, payout: t.chartPayout, commission: t.chartComm }}
+            />
           </div>
         </div>
 

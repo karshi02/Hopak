@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
+import { getSocket } from '@/lib/ws';
 import { getToken } from '@/lib/auth';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang, type Lang } from '@/hooks/useLang';
@@ -166,6 +167,18 @@ export default function PartnerRoomsPage() {
   }
 
   useEffect(reload, []);
+
+  // ห้องว่าง/ไม่ว่างเปลี่ยนทันทีเมื่อมีคนจองหรือจ่ายเงิน — ไม่ต้องกดรีเฟรช
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on('booking:new', reload);
+    socket.on('booking:updated', reload);
+    return () => {
+      socket.off('booking:new', reload);
+      socket.off('booking:updated', reload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ลบทั้งกลุ่ม — ลบได้เฉพาะห้องที่ไม่มีการจอง (backend กัน) ห้องที่มีคนจองจะข้ามไป
   async function deleteGroup(ids: string[]) {

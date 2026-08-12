@@ -527,7 +527,7 @@ export default function SearchPage() {
                   return (
                     <Link
                       key={c.id}
-                      href={`/dorms/${dorm.id}`}
+                      href={`/dorms/${dorm.id}${dailyMode ? '?rental=daily' : ''}`}
                       className="relative block overflow-hidden rounded-[22px] border border-[#EAEDF2] bg-white shadow-[0_2px_8px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1.5 hover:shadow-[0_24px_48px_rgba(16,24,40,0.16)]"
                     >
                       <div className="relative flex h-[180px] items-center justify-center bg-surface-canvas font-mono text-xs text-ink-faint">
@@ -580,7 +580,7 @@ export default function SearchPage() {
               return (
                 <Link
                   key={dorm.id}
-                  href={`/dorms/${dorm.id}`}
+                  href={`/dorms/${dorm.id}${dailyMode ? '?rental=daily' : ''}`}
                   className="group relative block overflow-hidden rounded-[22px] border border-[#EAEDF2] bg-white shadow-[0_2px_8px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1.5 hover:shadow-[0_24px_48px_rgba(16,24,40,0.16)]"
                 >
                   <div className="relative h-[210px] bg-surface-canvas">

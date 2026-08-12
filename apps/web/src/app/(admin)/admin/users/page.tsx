@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { downloadCsv } from '@/lib/csv';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang, type Lang } from '@/hooks/useLang';
@@ -17,6 +18,8 @@ const ROLE_LABEL: Record<Lang, Record<string, string>> = {
 
 const TEXT = {
   th: {
+    exportCsv: 'Export CSV',
+    csvHeader: 'ชื่อ,ติดต่อ,บทบาท,จอง,เข้าร่วม,สถานะ',
     title: 'ผู้ใช้',
     searchPlaceholder: 'ค้นหาชื่อ / เบอร์…',
     addUserTooltip: 'ยังไม่เปิดใช้งาน — เพิ่มผู้ใช้ผ่านหน้าสมัครสมาชิกแทน',
@@ -84,6 +87,8 @@ const TEXT = {
     ownerFollowupNote: 'หมายเหตุ: ถ้าเลือก "เจ้าของหอ" ระบบจะสร้างบัญชีให้เข้าใช้งานได้ทันที เจ้าของหอต้องไปยื่นข้อมูลหอพักผ่านหน้า Owner Console เองต่อ',
   },
   en: {
+    exportCsv: 'Export CSV',
+    csvHeader: 'Name,Contact,Role,Bookings,Joined,Status',
     title: 'Users',
     searchPlaceholder: 'Search name / phone…',
     addUserTooltip: 'Not enabled yet — add users via the sign-up page instead',
@@ -150,6 +155,20 @@ const TEXT = {
     createError: 'Failed to create',
     ownerFollowupNote: 'Note: choosing "Owner" only creates the login account — the owner still needs to submit their dorm via the Owner Console.',
   },
+};
+
+// ปุ่ม action ในตาราง/การ์ดผู้ใช้ — สีตามความหมาย อ่านออกทันทีว่ากดแล้วเกิดอะไร
+const ACTION_BTN =
+  'rounded-[8px] px-2.5 py-1 text-[12px] font-semibold transition hover:brightness-95 disabled:opacity-50';
+const ACTION_BTN_MOBILE =
+  'rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition hover:brightness-95 disabled:opacity-50';
+
+const BTN_STYLE: Record<string, React.CSSProperties> = {
+  docs: { background: '#EAF1FD', color: '#2456B8' },       // ดูเอกสาร — น้ำเงิน
+  warn: { background: '#FEF3E2', color: '#B4791A' },       // แจ้งเตือน — ส้ม
+  suspend: { background: '#FDECEC', color: '#C0392B' },    // ระงับ — แดงอ่อน
+  unsuspend: { background: '#E9F7EF', color: '#12813F' },  // ยกเลิกระงับ — เขียว
+  delete: { background: '#C0392B', color: '#fff' },        // ลบ — แดงทึบ (ทำลายถาวร)
 };
 
 export default function AdminUsersPage() { // eslint-disable-line react-refresh/only-export-components
@@ -347,6 +366,21 @@ export default function AdminUsersPage() { // eslint-disable-line react-refresh/
 
   const count = (role: string) => (role ? users.filter((u) => u.role.toLowerCase() === role).length : users.length);
 
+  function handleExport() {
+    downloadCsv(
+      'users',
+      t.csvHeader.split(','),
+      filtered.map((u) => [
+        u.name,
+        u.phone ?? u.email ?? '',
+        ROLE_LABEL[lang][u.role.toLowerCase()] ?? u.role,
+        u.role.toLowerCase() === 'tenant' ? (u.bookingCount ?? 0) : '',
+        u.createdAt ? new Date(u.createdAt).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-GB') : '',
+        u.suspended ? (lang === 'th' ? 'ระงับ' : 'Suspended') : lang === 'th' ? 'ใช้งาน' : 'Active',
+      ]),
+    );
+  }
+
   const tones = ['total', 'neutral', 'neutral', 'neutral'] as const;
   const FILTERS = t.filters.map((f, i) => ({ ...f, count: count(f.value), tone: tones[i] }));
 
@@ -362,6 +396,12 @@ export default function AdminUsersPage() { // eslint-disable-line react-refresh/
             className="h-9 min-w-0 flex-1 rounded-btn border border-card-border bg-white px-3.5 text-sm text-ink placeholder:text-ink-faint focus:border-tenant focus:outline-none lg:w-56 lg:flex-none"
           />
           <button
+            onClick={handleExport}
+            className="shrink-0 whitespace-nowrap rounded-btn border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink-body hover:bg-surface-canvas"
+          >
+            {t.exportCsv}
+          </button>
+          <button
             onClick={openAdd}
             className="shrink-0 whitespace-nowrap rounded-btn bg-tenant px-4 py-2 text-sm font-semibold text-white hover:bg-tenant-dark"
           >
@@ -370,17 +410,27 @@ export default function AdminUsersPage() { // eslint-disable-line react-refresh/
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-        <table className="w-full min-w-[720px] text-left text-sm">
+      {/* จอ md ขึ้นไป: ตารางพอดีความกว้าง ไม่ต้องเลื่อนแนวนอน */}
+      <div className="mt-4 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card md:block">
+        <table className="w-full table-fixed text-left text-[13px]">
+          <colgroup>
+            <col className="w-[17%]" />
+            <col className="w-[19%]" />
+            <col className="w-[10%]" />
+            <col className="w-[7%]" />
+            <col className="w-[11%]" />
+            <col className="w-[11%]" />
+            <col className="w-[25%]" />
+          </colgroup>
           <thead>
-            <tr className="border-b border-hairline text-xs text-ink-faint">
-              <th className="p-3 font-normal">{t.name}</th>
-              <th className="p-3 font-normal">{t.contact}</th>
-              <th className="p-3 font-normal">{t.role}</th>
-              <th className="p-3 font-normal">{t.bookings}</th>
-              <th className="p-3 font-normal">{t.joined}</th>
-              <th className="p-3 font-normal">{t.status}</th>
-              <th className="p-3 font-normal"></th>
+            <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+              <th className="p-2.5 font-normal">{t.name}</th>
+              <th className="p-2.5 font-normal">{t.contact}</th>
+              <th className="p-2.5 font-normal">{t.role}</th>
+              <th className="p-2.5 text-right font-normal">{t.bookings}</th>
+              <th className="p-2.5 font-normal">{t.joined}</th>
+              <th className="p-2.5 font-normal">{t.status}</th>
+              <th className="p-2.5 font-normal"></th>
             </tr>
           </thead>
           <tbody>
@@ -390,54 +440,49 @@ export default function AdminUsersPage() { // eslint-disable-line react-refresh/
               const isAdmin = role === 'admin';
               return (
                 <tr key={u.id} className="border-b border-hairline last:border-0">
-                  <td className="p-3 font-medium text-ink-strong">{u.name}</td>
-                  <td className="p-3 font-sans text-ink-subtitle">{u.phone ?? u.email ?? '—'}</td>
-                  <td className="p-3">
+                  <td className="truncate p-2.5 font-medium text-ink-strong" title={u.name}>
+                    {u.name}
+                  </td>
+                  <td className="truncate p-2.5 font-sans text-ink-subtitle" title={u.phone ?? u.email ?? ''}>
+                    {u.phone ?? u.email ?? '—'}
+                  </td>
+                  <td className="p-2.5">
                     <Badge label={ROLE_LABEL[lang][role] ?? u.role} variant={role === 'owner' ? 'purple' : 'neutral'} />
                   </td>
-                  <td className="p-3 font-sans tabular-nums text-ink-subtitle">
+                  <td className="p-2.5 text-right font-sans tabular-nums text-ink-subtitle">
                     {isTenant ? (u.bookingCount ?? 0) : '—'}
                   </td>
-                  <td className="p-3 text-ink-subtitle">{formatJoined(u.createdAt)}</td>
-                  <td className="p-3">
+                  <td className="truncate p-2.5 text-ink-subtitle">{formatJoined(u.createdAt)}</td>
+                  <td className="p-2.5">
                     {u.suspended ? (
                       <Badge label={t.suspended} variant="critical" />
                     ) : (
                       <Badge label={role === 'owner' ? t.verified : t.active} variant="good" />
                     )}
                   </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-3">
+                  <td className="p-2.5">
+                    {/* ปุ่มมีสีประจำการกระทำ — ดูเอกสาร=น้ำเงิน · แจ้งเตือน=ส้ม · ระงับ=แดง (ยกเลิกระงับ=เขียว) · ลบ=แดงทึบ */}
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {role === 'owner' && (
-                        <button
-                          onClick={() => openDocs(u)}
-                          className="text-sm font-semibold text-tenant hover:underline"
-                        >
+                        <button onClick={() => openDocs(u)} className={ACTION_BTN} style={BTN_STYLE.docs}>
                           {t.viewDocs}
                         </button>
                       )}
-                      <button
-                        onClick={() => openWarning(u)}
-                        className="text-sm font-semibold text-warning-dark hover:underline"
-                      >
+                      <button onClick={() => openWarning(u)} className={ACTION_BTN} style={BTN_STYLE.warn}>
                         {t.warn}
                       </button>
                       {!isAdmin && (
                         <button
                           onClick={() => toggleSuspend(u)}
                           disabled={busyId === u.id}
-                          className={`text-sm font-semibold hover:underline disabled:opacity-50 ${
-                            u.suspended ? 'text-success' : 'text-danger'
-                          }`}
+                          className={ACTION_BTN}
+                          style={u.suspended ? BTN_STYLE.unsuspend : BTN_STYLE.suspend}
                         >
                           {u.suspended ? t.unsuspend : t.suspend}
                         </button>
                       )}
                       {!isAdmin && (
-                        <button
-                          onClick={() => openDelete(u)}
-                          className="text-sm font-semibold text-danger hover:underline"
-                        >
+                        <button onClick={() => openDelete(u)} className={ACTION_BTN} style={BTN_STYLE.delete}>
                           {t.delete}
                         </button>
                       )}
@@ -449,6 +494,79 @@ export default function AdminUsersPage() { // eslint-disable-line react-refresh/
           </tbody>
         </table>
         {filtered.length === 0 && <p className="p-4 text-ink-faint">{t.none}</p>}
+      </div>
+
+      {/* มือถือ: การ์ดต่อผู้ใช้ */}
+      <div className="mt-4 flex flex-col gap-2.5 md:hidden">
+        {filtered.map((u) => {
+          const role = u.role.toLowerCase();
+          const isTenant = role === 'tenant';
+          const isAdmin = role === 'admin';
+          const initials = (u.name ?? '').trim().slice(0, 2) || '?';
+          return (
+            <div key={u.id} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
+              <div className="flex items-start gap-2.5">
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill text-[13px] font-bold"
+                  style={
+                    role === 'owner'
+                      ? { background: '#FEF3E2', color: '#B4791A' }
+                      : { background: '#EDE9FE', color: '#6D5AE0' }
+                  }
+                >
+                  {initials}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate font-semibold text-ink-strong">{u.name}</span>
+                    <Badge label={ROLE_LABEL[lang][role] ?? u.role} variant={role === 'owner' ? 'purple' : 'neutral'} />
+                  </div>
+                  <div className="truncate font-sans text-[12.5px] text-ink-muted">{u.phone ?? u.email ?? '—'}</div>
+                </div>
+              </div>
+
+              <div className="mt-2.5 flex items-center gap-3 rounded-[10px] bg-surface-canvas px-3 py-2 text-[12px] text-ink-body">
+                <span>
+                  {t.bookings}: <b className="font-sans tabular-nums">{isTenant ? (u.bookingCount ?? 0) : '—'}</b>
+                </span>
+                <span className="text-ink-faint">·</span>
+                <span className="min-w-0 flex-1 truncate">{formatJoined(u.createdAt)}</span>
+                {u.suspended ? (
+                  <Badge label={t.suspended} variant="critical" />
+                ) : (
+                  <Badge label={role === 'owner' ? t.verified : t.active} variant="good" />
+                )}
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {role === 'owner' && (
+                  <button onClick={() => openDocs(u)} className={ACTION_BTN_MOBILE} style={BTN_STYLE.docs}>
+                    {t.viewDocs}
+                  </button>
+                )}
+                <button onClick={() => openWarning(u)} className={ACTION_BTN_MOBILE} style={BTN_STYLE.warn}>
+                  {t.warn}
+                </button>
+                {!isAdmin && (
+                  <button
+                    onClick={() => toggleSuspend(u)}
+                    disabled={busyId === u.id}
+                    className={ACTION_BTN_MOBILE}
+                    style={u.suspended ? BTN_STYLE.unsuspend : BTN_STYLE.suspend}
+                  >
+                    {u.suspended ? t.unsuspend : t.suspend}
+                  </button>
+                )}
+                {!isAdmin && (
+                  <button onClick={() => openDelete(u)} className={ACTION_BTN_MOBILE} style={BTN_STYLE.delete}>
+                    {t.delete}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <p className="text-ink-faint">{t.none}</p>}
       </div>
 
       {warningTarget && (

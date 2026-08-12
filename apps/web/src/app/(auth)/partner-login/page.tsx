@@ -170,7 +170,8 @@ export default function PartnerLoginPage() {
     }
     setLoading(true);
     try {
-      const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/login', { email, password });
+      // endpoint แยกฝั่ง — เห็นเฉพาะบัญชีเจ้าของหอ (อีเมลเดียวกันอาจมีบัญชีผู้เช่าอยู่ด้วย คนละบัญชีกัน)
+      const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/partner-login', { email, password });
       setToken(accessToken);
       if (remember) rememberLogin(email);
       else forgetLogin();
@@ -194,7 +195,7 @@ export default function PartnerLoginPage() {
   const form = (
     <form onSubmit={handleSubmit} className="w-full">
       <a
-        href={`${API_URL}/auth/google`}
+        href={`${API_URL}/auth/google?intent=owner`}
         onClick={() => sessionStorage.setItem('googleIntent', 'owner')}
         className="flex h-[56px] items-center justify-center gap-3 rounded-[14px] border border-[#E4E7EC] bg-white text-[16px] font-bold text-[#12151C] hover:bg-[#F7FBF8]"
       >
@@ -234,7 +235,7 @@ export default function PartnerLoginPage() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="text-[13.5px] font-medium text-[#5B655F]">{t.passwordLabel}</label>
-            <Link href="/forgot-password" className="text-[13px] font-semibold underline" style={{ color: SELLER }}>
+            <Link href="/forgot-password?role=owner" className="text-[13px] font-semibold underline" style={{ color: SELLER }}>
               {t.forgotPassword}
             </Link>
           </div>

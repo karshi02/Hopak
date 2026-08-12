@@ -32,7 +32,7 @@ export class ApprovalsService {
   }
 
   private logAction(params: {
-    entityType: 'DORM' | 'ROOM';
+    entityType: 'DORM' | 'ROOM' | 'USER';
     entityId: string;
     action: string;
     adminId: string;
@@ -254,6 +254,97 @@ export class ApprovalsService {
     const updated = await this.prisma.room.update({ where: { id: roomId }, data: { images } });
     await this.logAction({ entityType: 'ROOM', entityId: roomId, action: 'EDITED', adminId, snapshot: updated });
     return updated;
+  }
+
+  /**
+   * ลบหอพักถาวร — อนุญาตเฉพาะหอที่ "ถูกปฏิเสธ" เท่านั้น (กันลบหอที่ใช้งานจริงพลาด)
+   * ถ้ามีการจองผูกอยู่จะไม่ลบ เพราะการจอง/ใบเสร็จ/รายได้ต้องตามรอยได้
+   * บันทึก snapshot ทั้งก้อนลง ApprovalLog ก่อนลบ เพื่อให้ยังตรวจย้อนหลังได้
+   */
+  /**
+   * ลบบัญชีเจ้าของหอถาวร — ใช้กับกรณีที่ระงับหอไปแล้วและตัดสินใจตัดออกจากระบบ
+   * เงื่อนไข (เข้มเพราะย้อนกลับไม่ได้):
+   *  - ต้องเป็นบัญชี role OWNER เท่านั้น
+   *  - หอทุกแห่งของคนนี้ต้องถูกระงับหรือถูกปฏิเสธแล้ว (ห้ามลบตอนยังมีหอเปิดขายอยู่)
+   *  - ต้องไม่มีการจองผูกอยู่เลย เพราะการจอง/ใบเสร็จ/รายได้ต้องตามรอยย้อนหลังได้
+   * บันทึก snapshot ลง ApprovalLog ก่อนลบเสมอ
+   */
+  async removeOwnerAccount(ownerId: string, adminId: string) {
+    const owner = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+      include: { dorms: { select: { id: true, name: true, status: true } } },
+    });
+    if (!owner) throw new NotFoundException('ไม่พบบัญชีผู้ใช้');
+    if (owner.role !== 'OWNER') throw new BadRequestException('ลบได้เฉพาะบัญชีเจ้าของหอ');
+
+    const active = owner.dorms.filter((d) => d.status !== 'SUSPENDED' && d.status !== 'REJECTED');
+    if (active.length > 0) {
+      throw new BadRequestException(
+        `ต้องระงับหอทุกแห่งก่อน — ยังมีหอที่ใช้งานอยู่ ${active.length} แห่ง (${active.map((d) => d.name).join(', ')})`,
+      );
+    }
+
+    const bookingCount = await this.prisma.booking.count({
+      where: { OR: [{ tenantId: ownerId }, { room: { dorm: { ownerId } } }] },
+    });
+    if (bookingCount > 0) {
+      throw new BadRequestException(
+        `ลบไม่ได้ — มีการจอง ${bookingCount} รายการผูกอยู่ (ต้องเก็บไว้ตรวจสอบย้อนหลัง) ให้ใช้การระงับบัญชีแทน`,
+      );
+    }
+
+    await this.logAction({
+      entityType: 'USER',
+      entityId: ownerId,
+      action: 'DELETED',
+      adminId,
+      snapshot: { ...owner, password: undefined },
+      note: `ลบบัญชีเจ้าของหอ (หอที่ถูกลบด้วย: ${owner.dorms.map((d) => d.name).join(', ') || '-'})`,
+    });
+
+    const dormIds = owner.dorms.map((d) => d.id);
+    await this.prisma.$transaction([
+      this.prisma.room.deleteMany({ where: { dormId: { in: dormIds } } }),
+      this.prisma.review.deleteMany({ where: { OR: [{ dormId: { in: dormIds } }, { tenantId: ownerId }] } }),
+      this.prisma.favorite.deleteMany({ where: { OR: [{ dormId: { in: dormIds } }, { userId: ownerId }] } }),
+      this.prisma.campaign.deleteMany({ where: { dormId: { in: dormIds } } }),
+      this.prisma.dorm.deleteMany({ where: { id: { in: dormIds } } }),
+      this.prisma.notification.deleteMany({ where: { userId: ownerId } }),
+      this.prisma.ownerRequest.deleteMany({ where: { userId: ownerId } }),
+      this.prisma.session.deleteMany({ where: { userId: ownerId } }),
+      this.prisma.user.delete({ where: { id: ownerId } }),
+    ]);
+
+    return { ok: true, deletedOwnerId: ownerId, deletedDorms: dormIds.length };
+  }
+
+  async removeDorm(dormId: string, adminId: string) {
+    const dorm = await this.prisma.dorm.findUnique({
+      where: { id: dormId },
+      include: { owner: { select: { id: true, name: true, email: true } }, rooms: true },
+    });
+    if (!dorm) throw new NotFoundException('ไม่พบหอพัก');
+    if (dorm.status !== 'REJECTED') {
+      throw new BadRequestException('ลบได้เฉพาะหอพักที่ถูกปฏิเสธเท่านั้น');
+    }
+
+    const bookingCount = await this.prisma.booking.count({ where: { room: { dormId } } });
+    if (bookingCount > 0) {
+      throw new BadRequestException(`ลบไม่ได้ — หอนี้มีการจอง ${bookingCount} รายการผูกอยู่ (ต้องเก็บไว้ตรวจสอบย้อนหลัง)`);
+    }
+
+    await this.logAction({ entityType: 'DORM', entityId: dormId, action: 'DELETED', adminId, snapshot: dorm });
+
+    // ลบของที่อ้างถึงหอก่อน แล้วค่อยลบตัวหอ (ไม่มี cascade ใน schema)
+    await this.prisma.$transaction([
+      this.prisma.room.deleteMany({ where: { dormId } }),
+      this.prisma.review.deleteMany({ where: { dormId } }),
+      this.prisma.favorite.deleteMany({ where: { dormId } }),
+      this.prisma.campaign.deleteMany({ where: { dormId } }),
+      this.prisma.dorm.delete({ where: { id: dormId } }),
+    ]);
+
+    return { ok: true, deletedId: dormId };
   }
 
   async approveRoom(roomId: string, adminId: string) {

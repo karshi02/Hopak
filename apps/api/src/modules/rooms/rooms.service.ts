@@ -27,6 +27,17 @@ export class RoomsService {
     private reviews: ReviewsService,
   ) {}
 
+  /**
+   * หอต้องผ่านการอนุมัติก่อนถึงจะแก้ห้อง/รูป/ลบห้องได้
+   * ระหว่าง PENDING_APPROVAL / REJECTED / SUSPENDED ให้แก้ได้แค่ข้อมูลหอ (เพื่อส่งอนุมัติใหม่) เท่านั้น
+   * นี่คือ security boundary จริง — UI ฝั่งเจ้าของหอที่ล็อกเมนูไว้เป็นแค่ความสะดวก
+   */
+  private assertDormApproved(dorm: { status: string }) {
+    if (dorm.status !== 'APPROVED') {
+      throw new ForbiddenException('หอพักนี้ยังไม่ได้รับอนุมัติ — จัดการห้องพักได้เมื่อแอดมินอนุมัติแล้ว');
+    }
+  }
+
   private async assertOwnsDorm(ownerId: string, dormId: string) {
     const dorm = await this.prisma.dorm.findUnique({ where: { id: dormId } });
     if (!dorm) throw new NotFoundException('Dorm not found');
@@ -38,6 +49,7 @@ export class RoomsService {
   // approved ตามค่า dorm.autoApproveRooms ตอนสร้าง — ถ้าหอนี้ยังไม่ถูกตั้งให้อนุมัติอัตโนมัติ ห้องใหม่จะรอแอดมินตรวจก่อนโชว์ผู้เช่า
   async create(ownerId: string, dormId: string, data: CreateRoomData, photoFiles: Express.Multer.File[]) {
     const dorm = await this.assertOwnsDorm(ownerId, dormId);
+    this.assertDormApproved(dorm);
 
     const images: string[] = [];
     for (const file of photoFiles) {
@@ -102,10 +114,12 @@ export class RoomsService {
     return this.prisma.room.update({ where: { id: roomId }, data: { status } });
   }
 
+  // ทุก mutation ของห้อง (แก้/ลบ/รูป) ต้องเป็นเจ้าของ + หอต้องอนุมัติแล้ว
   private async assertOwnsRoom(ownerId: string, roomId: string) {
     const room = await this.prisma.room.findUnique({ where: { id: roomId }, include: { dorm: true } });
     if (!room) throw new NotFoundException('Room not found');
     if (room.dorm.ownerId !== ownerId) throw new ForbiddenException('Not your room');
+    this.assertDormApproved(room.dorm);
     return room;
   }
 

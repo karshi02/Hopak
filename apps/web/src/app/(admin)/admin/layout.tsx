@@ -11,6 +11,7 @@ import { clearToken } from '@/lib/auth';
 import { LangSwitch } from '@/components/LangSwitch';
 import { PageLoader } from '@/components/PageLoader';
 import { AdminIcon } from '@/components/admin/AdminIcon';
+import { RealtimeToasts } from '@/components/RealtimeToasts';
 
 interface SearchResults {
   dorms: { id: string; name: string; owner: { name: string } }[];
@@ -29,11 +30,39 @@ interface NavItem {
   icon: IconKey;
   label: string;
   badgeKey?: 'approvals';
+  /** เมนูย่อย — กดสามเหลี่ยมแล้วกางลงมา (เช่น แดชบอร์ด → แดชบอร์ดรายปี) */
+  children?: { href: string; label: string }[];
 }
+
+// แท็บล่างบนมือถือ 5 แท็บ (สเปค admin console mobile) — เมนูเต็มอยู่ใน drawer
+const BOTTOM_NAV: Record<'th' | 'en', { href: string; icon: IconKey; label: string; badge?: boolean }[]> = {
+  th: [
+    { href: '/admin/bookings', icon: 'book', label: 'จอง' },
+    { href: '/admin/approvals', icon: 'home', label: 'หอพัก', badge: true },
+    { href: '/admin/owner-requests', icon: 'shield', label: 'คำขอ' },
+    { href: '/admin/users', icon: 'user', label: 'ผู้ใช้' },
+    { href: '/admin/sessions', icon: 'gear', label: 'Session' },
+  ],
+  en: [
+    { href: '/admin/bookings', icon: 'book', label: 'Bookings' },
+    { href: '/admin/approvals', icon: 'home', label: 'Dorms', badge: true },
+    { href: '/admin/owner-requests', icon: 'shield', label: 'Requests' },
+    { href: '/admin/users', icon: 'user', label: 'Users' },
+    { href: '/admin/sessions', icon: 'gear', label: 'Session' },
+  ],
+};
 
 const NAV: Record<'th' | 'en', NavItem[]> = {
   th: [
-    { href: '/admin/dashboard', icon: 'dash', label: 'แดชบอร์ด' },
+    {
+      href: '/admin/dashboard',
+      icon: 'dash',
+      label: 'แดชบอร์ด',
+      children: [
+        { href: '/admin/yearly', label: 'แดชบอร์ดรายปี' },
+        { href: '/admin/revenue', label: 'รายได้ รายเดือน/รายวัน' },
+      ],
+    },
     { href: '/admin/bookings', icon: 'book', label: 'การจอง & สถานะ' },
     { href: '/admin/approvals', icon: 'home', label: 'หอพัก (อนุมัติ)', badgeKey: 'approvals' },
     { href: '/admin/owner-requests', icon: 'shield', label: 'คำขอเป็นเจ้าของหอ' },
@@ -46,7 +75,15 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/admin/website', icon: 'gear', label: 'ธีม & โปสเตอร์' },
   ],
   en: [
-    { href: '/admin/dashboard', icon: 'dash', label: 'Dashboard' },
+    {
+      href: '/admin/dashboard',
+      icon: 'dash',
+      label: 'Dashboard',
+      children: [
+        { href: '/admin/yearly', label: 'Yearly dashboard' },
+        { href: '/admin/revenue', label: 'Monthly / daily revenue' },
+      ],
+    },
     { href: '/admin/bookings', icon: 'book', label: 'Bookings & Status' },
     { href: '/admin/approvals', icon: 'home', label: 'Dorms (Approvals)', badgeKey: 'approvals' },
     { href: '/admin/owner-requests', icon: 'shield', label: 'Owner Requests' },
@@ -89,6 +126,14 @@ const PAGE_HEADER: Record<string, Record<'th' | 'en', { title: string; subtitle:
     th: { title: 'การเงิน & รวมบิล', subtitle: 'ค่าคอมมิชชันและยอดโอนเจ้าของหอ' },
     en: { title: 'Finance & Payouts', subtitle: 'Commission and owner payout totals' },
   },
+  '/admin/yearly': {
+    th: { title: 'สรุปรายปี', subtitle: 'ยอดรวม ค่าคอม เงินโอนออก ยอดคงเหลือ และสมาชิกทั้งปี' },
+    en: { title: 'Yearly Summary', subtitle: 'Gross, commission, payouts, balance and members for the year' },
+  },
+  '/admin/revenue': {
+    th: { title: 'รายได้แพลตฟอร์ม', subtitle: 'แยกรายได้ที่มาจากหอรายเดือนและหอรายวัน' },
+    en: { title: 'Platform revenue', subtitle: 'Revenue split between monthly and daily dorms' },
+  },
   '/admin/campaigns': {
     th: { title: 'โฆษณา & แคมเปญ', subtitle: 'ดัน/ลดฟีดและแคมเปญร่วมกับหอพัก' },
     en: { title: 'Ads & Campaigns', subtitle: 'Feed boosts and joint dorm campaigns' },
@@ -116,6 +161,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  // กลุ่มเมนูที่กางอยู่ (เก็บเป็น href ของหัวข้อ)
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
   const bellRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -141,6 +188,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       socket.off('room:new', reloadPending);
     };
   }, [isAdmin]);
+
+  // อยู่หน้าลูกไหน ให้กลุ่มนั้นกางไว้เสมอ (เข้าหน้าตรงๆ ก็เห็นว่าอยู่ตรงไหน)
+  useEffect(() => {
+    for (const item of NAV.th.concat(NAV.en)) {
+      if (item.children?.some((c) => pathname === c.href) && !openGroups.includes(item.href)) {
+        setOpenGroups((prev) => [...prev, item.href]);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   // เปลี่ยนหน้าแล้วปิดลิ้นชักเมนูเสมอ ไม่งั้นบนมือถือเมนูจะค้างทับหน้าใหม่
   useEffect(() => {
@@ -228,8 +285,73 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {NAV[lang].map((item) => {
-            const active = pathname === item.href || pathname?.startsWith(item.href + '/');
             const badge = item.badgeKey === 'approvals' && pendingApprovals > 0 ? pendingApprovals : null;
+
+            // หัวข้อที่มีเมนูย่อย — กดแล้วกาง/พับ (สามเหลี่ยมหมุน) ไม่พาไปหน้าอื่นทันที
+            if (item.children) {
+              const expanded = openGroups.includes(item.href);
+              const childActive = item.children.some((c) => pathname === c.href);
+              const selfActive = pathname === item.href;
+              return (
+                <div key={item.href}>
+                  {/* กดชื่อ = ไปหน้าแดชบอร์ด · กดสามเหลี่ยม = กาง/พับเมนูย่อย */}
+                  <div
+                    className={`flex items-center rounded-[11px] pr-1 transition-colors ${
+                      selfActive || childActive
+                        ? 'bg-admin font-semibold text-white'
+                        : 'text-admin-sidebarmuted hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <Link href={item.href} className="flex flex-1 items-center gap-3 px-3 py-2.5 text-[14.5px]">
+                      <AdminIcon name={item.icon} size={19} />
+                      <span className="flex-1">{item.label}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenGroups((prev) =>
+                          prev.includes(item.href) ? prev.filter((h) => h !== item.href) : [...prev, item.href],
+                        )
+                      }
+                      aria-expanded={expanded}
+                      aria-label={item.label}
+                      className="flex h-8 w-7 shrink-0 items-center justify-center rounded-[8px] hover:bg-white/10"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+                      >
+                        <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {expanded && (
+                    <div className="mt-0.5 flex flex-col gap-0.5 border-l border-admin-sidebarborder pl-3 ml-5">
+                      {item.children.map((c) => {
+                        const sub = pathname === c.href;
+                        return (
+                          <Link
+                            key={c.href}
+                            href={c.href}
+                            className={`rounded-[9px] px-3 py-2 text-[13.5px] transition-colors ${
+                              sub ? 'bg-white/10 font-semibold text-white' : 'text-admin-sidebarmuted hover:bg-white/5 hover:text-white'
+                            }`}
+                          >
+                            {c.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            const active = pathname === item.href || pathname?.startsWith(item.href + '/');
             return (
               <Link
                 key={item.href}
@@ -391,8 +513,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
 
-        <main className="flex-1 overflow-auto px-4 py-5 sm:px-7 sm:py-6">{children}</main>
+        {/* pb ล่างเผื่อที่ให้ bottom nav บนมือถือ */}
+        <main className="flex-1 overflow-auto px-4 py-5 pb-24 sm:px-7 sm:py-6 lg:pb-6">{children}</main>
       </div>
+
+      {/* แจ้งเตือนเรียลไทม์ — เด้งทันทีทุกหน้า ไม่ต้องรีเฟรช */}
+      <RealtimeToasts accent="#6D5AE0" />
+
+      {/* ===== BOTTOM NAV (มือถือ) — 5 แท็บ ===== */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-[62px] items-stretch border-t border-card-border bg-white lg:hidden">
+        {BOTTOM_NAV[lang].map((item) => {
+          const active = pathname === item.href || pathname?.startsWith(item.href + '/');
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`relative flex flex-1 flex-col items-center justify-center gap-1 ${
+                active ? 'text-admin' : 'text-ink-faint'
+              }`}
+            >
+              <span className="relative">
+                <AdminIcon name={item.icon} size={20} />
+                {item.badge && pendingApprovals > 0 && (
+                  <span className="absolute -right-2 -top-1.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-pill bg-accent px-1 text-[9.5px] font-bold text-white">
+                    {pendingApprovals}
+                  </span>
+                )}
+              </span>
+              <span className="text-[10.5px] font-semibold">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

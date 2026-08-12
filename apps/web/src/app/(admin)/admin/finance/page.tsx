@@ -27,9 +27,66 @@ interface PaymentRow {
   ownerPayout: number;
   status: string; // PENDING | SETTLED | TRANSFERRED
 }
+// ยอดค้างโอนแยกตามประเภทการเช่า (รายเดือนหักคอม 20% · รายวันหัก 10%)
+interface PayoutBucket {
+  gross: number;
+  commission: number;
+  ownerPayout: number;
+  pending: number;
+  transferred: number;
+  count: number;
+}
+interface PayoutSplitRow {
+  dormId: string;
+  dormName: string;
+  ownerId: string;
+  ownerName: string;
+  monthly: PayoutBucket;
+  daily: PayoutBucket;
+}
+interface PayoutSplit {
+  rows: PayoutSplitRow[];
+  totals: { monthly: PayoutBucket; daily: PayoutBucket };
+}
+
 interface Period {
   year: number;
   month: number;
+}
+
+// ข้อมูลเจ้าของหอ + บัญชีรับเงิน — เช็คก่อนกดโอน
+interface OwnerDetail {
+  owner: {
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    bankName?: string | null;
+    bankAccountName?: string | null;
+    bankAccountNumber?: string | null;
+    promptpayId?: string | null;
+  };
+  payments: { id: string; dormName: string; ownerPayout: number; status: string; createdAt: string }[];
+}
+
+// รายได้หอพัก "รายวัน" — แยกจากรายเดือนคนละส่วน
+interface DailyRow {
+  dormId: string;
+  dormName: string;
+  ownerId: string;
+  ownerName: string;
+  bookings: number;
+  nights: number;
+  gross: number;
+  commission: number;
+  ownerPayout: number;
+  transferred: number;
+  pending: number;
+}
+interface DailySummary {
+  rows: DailyRow[];
+  totals: Omit<DailyRow, 'dormId' | 'dormName' | 'ownerId' | 'ownerName'>;
+  adr: number;
 }
 
 const MONTH_TH = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
@@ -40,6 +97,30 @@ const METHOD_COLOR = ['#2F6FE0', '#12A150', '#6D5AE0', '#E0902F'];
 const TEXT = {
   th: {
     title: 'การเงิน & รวมบิล',
+    splitTitle: 'โอนเงินแยกประเภท (รายเดือน / รายวัน)',
+    splitHint: 'คนละรอบ คนละยอด',
+    monthlyLabel: 'หอรายเดือน (คอม 20%)',
+    dailyLabel: 'หอรายวัน (คอม 10%)',
+    splitGross: 'ยอดรับรวม',
+    splitPlatform: 'ส่วนแบ่งแพลตฟอร์ม',
+    splitPending: 'รอโอน',
+    splitTransferred: 'โอนแล้ว',
+    splitItems: 'รายการ',
+    dailyTitle: 'รายได้หอพักรายวัน',
+    dailySub: 'เฉพาะการจองแบบรายคืน — แยกจากรายเดือน',
+    dailyBookings: 'จำนวนการจอง',
+    dailyNights: 'คืนที่ขายได้',
+    dailyAdr: 'ราคาเฉลี่ย/คืน',
+    dailyGross: 'ยอดรับรวม',
+    dailyComm: 'ค่าคอม 20%',
+    dailyPayout: 'ยอดเจ้าของหอ',
+    dailyTransferred: 'โอนแล้ว',
+    dailyPending: 'รอโอน',
+    dailyDorm: 'หอพัก',
+    dailyOwner: 'เจ้าของ',
+    dailyNone: 'ยังไม่มีรายได้จากหอพักรายวันในรอบนี้',
+    unitBooking: 'ครั้ง',
+    unitNight: 'คืน',
     sub: (m: string) => `รอบการโอน ${m}`,
     exportCsv: 'Export CSV',
     billPdf: 'รวมบิล (PDF)',
@@ -71,6 +152,19 @@ const TEXT = {
     colPayout: 'ยอดโอน',
     colStatus: 'สถานะ',
     actTransfer: 'โอน',
+    actInfo: 'ดูข้อมูล',
+    ownerTitle: 'ข้อมูลเจ้าของหอ (ตรวจก่อนโอน)',
+    ownerName: 'ชื่อเจ้าของ',
+    ownerEmail: 'อีเมล',
+    ownerPhone: 'เบอร์โทร',
+    ownerBank: 'ธนาคาร',
+    ownerAccName: 'ชื่อบัญชี',
+    ownerAccNo: 'เลขที่บัญชี',
+    ownerPromptpay: 'พร้อมเพย์',
+    ownerNoBank: 'ยังไม่ได้ตั้งบัญชีรับเงิน — โอนอัตโนมัติไม่ได้',
+    ownerPending: 'ยอดรอโอนของเจ้าของรายนี้',
+    ownerLoading: 'กำลังโหลด...',
+    close: 'ปิด',
     actView: 'ดู',
     totalAll: 'รวมทั้งหมด',
     none: 'ไม่มีรายการในรอบนี้',
@@ -82,6 +176,30 @@ const TEXT = {
   },
   en: {
     title: 'Finance & Payouts',
+    splitTitle: 'Payouts by rental type (monthly / daily)',
+    splitHint: 'separate rounds',
+    monthlyLabel: 'Monthly dorms (20% comm)',
+    dailyLabel: 'Daily dorms (10% comm)',
+    splitGross: 'Gross received',
+    splitPlatform: 'Platform share',
+    splitPending: 'Pending',
+    splitTransferred: 'Transferred',
+    splitItems: 'items',
+    dailyTitle: 'Daily rental revenue',
+    dailySub: 'Per-night bookings only — separate from monthly',
+    dailyBookings: 'Bookings',
+    dailyNights: 'Nights sold',
+    dailyAdr: 'Avg / night',
+    dailyGross: 'Gross received',
+    dailyComm: 'Commission 20%',
+    dailyPayout: 'Owner payout',
+    dailyTransferred: 'Transferred',
+    dailyPending: 'Awaiting transfer',
+    dailyDorm: 'Dorm',
+    dailyOwner: 'Owner',
+    dailyNone: 'No daily rental revenue in this period',
+    unitBooking: 'bookings',
+    unitNight: 'nights',
     sub: (m: string) => `Payout cycle ${m}`,
     exportCsv: 'Export CSV',
     billPdf: 'Bill (PDF)',
@@ -113,6 +231,19 @@ const TEXT = {
     colPayout: 'Payout',
     colStatus: 'Status',
     actTransfer: 'Pay',
+    actInfo: 'Details',
+    ownerTitle: 'Owner details (check before paying)',
+    ownerName: 'Owner',
+    ownerEmail: 'Email',
+    ownerPhone: 'Phone',
+    ownerBank: 'Bank',
+    ownerAccName: 'Account name',
+    ownerAccNo: 'Account number',
+    ownerPromptpay: 'PromptPay',
+    ownerNoBank: 'No payout account set — automatic transfer unavailable',
+    ownerPending: 'Pending payout for this owner',
+    ownerLoading: 'Loading...',
+    close: 'Close',
     actView: 'View',
     totalAll: 'Total',
     none: 'No items this cycle',
@@ -135,12 +266,25 @@ export default function AdminFinancePage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [tab, setTab] = useState<Tab>('all');
+  const [daily, setDaily] = useState<DailySummary | null>(null);
+  const [split, setSplit] = useState<PayoutSplit | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // โมดัลดูข้อมูลเจ้าของหอก่อนโอน
+  const [ownerModal, setOwnerModal] = useState<{ dormId: string; dorm: string; payout: number } | null>(null);
+  const [ownerDetail, setOwnerDetail] = useState<OwnerDetail | null>(null);
 
   function loadPeriod() {
     const qs = `?year=${sel.year}&month=${sel.month}`;
     apiClient.get<FinanceSummary>(`/admin/finance/summary${qs}`).then(setFin).catch(() => setFin(null));
     apiClient.get<PaymentRow[]>(`/admin/finance/payments${qs}`).then(setPayments).catch(() => setPayments([]));
+    apiClient
+      .get<DailySummary>(`/admin/finance/daily-summary${qs}`)
+      .then(setDaily)
+      .catch(() => setDaily(null));
+    apiClient
+      .get<PayoutSplit>('/admin/finance/payout-breakdown')
+      .then(setSplit)
+      .catch(() => setSplit(null));
   }
   useEffect(() => {
     apiClient.get<Period[]>('/admin/finance/periods').then(setPeriods).catch(() => setPeriods([]));
@@ -155,11 +299,20 @@ export default function AdminFinancePage() {
   const dormRows = useMemo(() => {
     const map = new Map<
       string,
-      { dormId: string; owner: string; dorm: string; gross: number; commission: number; payout: number; transferred: boolean }
+      { dormId: string; ownerId: string; owner: string; dorm: string; gross: number; commission: number; payout: number; transferred: boolean }
     >();
     for (const p of payments) {
       const g =
-        map.get(p.dormId) ?? { dormId: p.dormId, owner: p.ownerName, dorm: p.dormName, gross: 0, commission: 0, payout: 0, transferred: true };
+        map.get(p.dormId) ?? {
+          dormId: p.dormId,
+          ownerId: p.ownerId,
+          owner: p.ownerName,
+          dorm: p.dormName,
+          gross: 0,
+          commission: 0,
+          payout: 0,
+          transferred: true,
+        };
       g.gross += p.amount;
       g.commission += p.commission;
       g.payout += p.ownerPayout;
@@ -194,11 +347,24 @@ export default function AdminFinancePage() {
 
   const filtered = dormRows.filter((r) => (tab === 'all' ? true : tab === 'pending' ? !r.transferred : r.transferred));
 
-  async function transfer(dormId: string, name: string, amount: number) {
+  // เปิดดูข้อมูลเจ้าของหอ (บัญชี/เบอร์/อีเมล) ก่อนตัดสินใจโอน
+  function openOwner(row: { dormId: string; ownerId: string; dorm: string; payout: number }) {
+    setOwnerModal({ dormId: row.dormId, dorm: row.dorm, payout: row.payout });
+    setOwnerDetail(null);
+    apiClient
+      .get<OwnerDetail>(`/admin/finance/owners/${row.ownerId}`)
+      .then(setOwnerDetail)
+      .catch(() => setOwnerDetail(null));
+  }
+
+  async function transfer(dormId: string, name: string, amount: number, rentalType?: 'MONTHLY' | 'DAILY') {
     if (!window.confirm(t.transferConfirm(name, baht(amount)))) return;
-    setBusy(dormId);
+    setBusy(`${dormId}-${rentalType ?? 'ALL'}`);
     try {
-      await apiClient.post(`/admin/finance/payouts/dorm/${dormId}/transfer-xendit`, {});
+      // ระบุ rentalType = โอนเฉพาะยอดของประเภทนั้น (รายเดือน/รายวัน แยกรอบกัน)
+      await apiClient.post(`/admin/finance/payouts/dorm/${dormId}/transfer-xendit`, {
+        ...(rentalType ? { rentalType } : {}),
+      });
       loadPeriod();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'error');
@@ -221,7 +387,7 @@ export default function AdminFinancePage() {
   }
 
   const s = fin;
-  const gridCols = 'grid-cols-[1.7fr_1fr_1fr_1fr_110px_84px]';
+  const gridCols = 'grid-cols-[1.5fr_1fr_1fr_1fr_96px_74px]';
 
   return (
     <div>
@@ -275,7 +441,7 @@ export default function AdminFinancePage() {
 
       {/* progress + methods */}
       <div className="mt-[18px] grid grid-cols-1 gap-4 lg:grid-cols-[1.7fr_1fr]">
-        <div className="rounded-[18px] border border-card-border bg-white p-6 shadow-card">
+        <div className="rounded-[18px] border border-card-border bg-white p-4 shadow-card sm:p-6">
           <div className="mb-4 flex items-center justify-between">
             <div className="text-[17px] font-bold text-ink-strong">{t.progressTitle}</div>
             <span className="text-[14px] text-ink-muted">{t.progressCount(paidCount, dormRows.length)}</span>
@@ -304,7 +470,7 @@ export default function AdminFinancePage() {
           </div>
         </div>
 
-        <div className="rounded-[18px] border border-card-border bg-white p-6 shadow-card">
+        <div className="rounded-[18px] border border-card-border bg-white p-4 shadow-card sm:p-6">
           <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.methodsTitle}</div>
           <div className="mb-5 flex h-[14px] overflow-hidden rounded-pill bg-surface-canvas">
             {methods.map((m) => (
@@ -329,10 +495,10 @@ export default function AdminFinancePage() {
       </div>
 
       {/* payout table */}
-      <div className="mt-[18px] rounded-[18px] border border-card-border bg-white p-6 shadow-card">
+      <div className="mt-[18px] rounded-[18px] border border-card-border bg-white p-4 shadow-card sm:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="text-[18px] font-bold text-ink-strong">{t.tableTitle(monthLabel)}</div>
-          <div className="ml-auto flex gap-2 print:hidden">
+          <div className="ml-auto flex flex-wrap gap-2 print:hidden">
             {(
               [
                 ['all', `${t.tabAll} ${dormRows.length}`],
@@ -360,9 +526,10 @@ export default function AdminFinancePage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[14px] border border-[#EEF1F4]">
-          <div className="overflow-x-auto">
-            <div className="min-w-[760px]">
+        {/* จอ md ขึ้นไป: ตารางพอดีความกว้าง ไม่ต้องเลื่อนแนวนอน */}
+        <div className="hidden overflow-hidden rounded-[14px] border border-[#EEF1F4] md:block">
+          <div>
+            <div>
               <div className={`grid ${gridCols} gap-3 bg-[#F8F9FB] px-5 py-3 text-[12.5px] font-semibold text-ink-muted`}>
                 <div>{t.colOwner}</div>
                 <div className="text-right">{t.colGross}</div>
@@ -387,11 +554,19 @@ export default function AdminFinancePage() {
                       {r.transferred ? t.transferred : t.waiting}
                     </span>
                   </div>
-                  <div className="text-right">
-                    {r.transferred ? (
-                      <span className="text-[13px] font-bold text-ink-faint">{t.actView}</span>
-                    ) : (
-                      <button onClick={() => transfer(r.dormId, r.dorm, r.payout)} disabled={busy === r.dormId} className="text-[13px] font-bold text-tenant disabled:opacity-50">
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <button
+                      onClick={() => openOwner(r)}
+                      className="rounded-[8px] bg-[#EAF1FD] px-2 py-1 text-[11.5px] font-semibold text-[#2456B8]"
+                    >
+                      {t.actInfo}
+                    </button>
+                    {!r.transferred && (
+                      <button
+                        onClick={() => transfer(r.dormId, r.dorm, r.payout)}
+                        disabled={busy === r.dormId}
+                        className="rounded-[8px] bg-admin px-2 py-1 text-[11.5px] font-semibold text-white disabled:opacity-50"
+                      >
                         {t.actTransfer}
                       </button>
                     )}
@@ -412,6 +587,378 @@ export default function AdminFinancePage() {
           </div>
           {dormRows.length === 0 && <p className="p-5 text-ink-faint">{t.none}</p>}
         </div>
+
+        {/* มือถือ: การ์ดต่อหอ */}
+        <div className="flex flex-col gap-2.5 md:hidden">
+          {filtered.map((r, idx) => (
+            <div key={r.dormId} className="rounded-[14px] border border-[#EEF1F4] bg-white p-3.5">
+              <div className="flex items-start gap-2.5">
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] font-sans text-[14px] font-bold text-white"
+                  style={{ background: AVATAR_BG[idx % AVATAR_BG.length] }}
+                >
+                  {(r.owner.trim()[0] ?? '?').toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-ink-strong">{r.dorm}</div>
+                  <div className="truncate text-[12.5px] text-ink-muted">{r.owner}</div>
+                </div>
+                <span
+                  className="shrink-0 rounded-pill px-2.5 py-1 text-[11.5px] font-semibold"
+                  style={r.transferred ? { color: '#12813F', background: '#E9F7EF' } : { color: '#B4791A', background: '#FEF6E7' }}
+                >
+                  {r.transferred ? t.transferred : t.waiting}
+                </span>
+              </div>
+
+              <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 rounded-[10px] bg-surface-canvas px-3 py-2 text-[12.5px]">
+                <dt className="text-ink-muted">{t.colGross}</dt>
+                <dd className="text-right tabular-nums text-ink-body">{baht(r.gross)}</dd>
+                <dt className="text-ink-muted">{t.colComm}</dt>
+                <dd className="text-right tabular-nums text-[#C0392B]">−{baht(r.commission)}</dd>
+                <dt className="font-semibold text-ink-body">{t.colPayout}</dt>
+                <dd className="text-right font-bold tabular-nums text-ink-strong">{baht(r.payout)}</dd>
+              </dl>
+
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  onClick={() => openOwner(r)}
+                  className="flex-1 rounded-[10px] bg-[#EAF1FD] py-2 text-[13px] font-bold text-[#2456B8]"
+                >
+                  {t.actInfo}
+                </button>
+                {!r.transferred && (
+                  <button
+                    onClick={() => transfer(r.dormId, r.dorm, r.payout)}
+                    disabled={busy === r.dormId}
+                    className="flex-1 rounded-[10px] bg-admin py-2 text-[13px] font-bold text-white disabled:opacity-50"
+                  >
+                    {t.actTransfer}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {dormRows.length > 0 && (
+            <div className="flex items-center justify-between rounded-[12px] bg-[#FAFBFC] px-3.5 py-3 text-[13.5px] font-bold">
+              <span className="text-ink-strong">{t.totalAll}</span>
+              <span className="tabular-nums text-[#12A150]">{baht(totalPayout)}</span>
+            </div>
+          )}
+          {dormRows.length === 0 && <p className="text-ink-faint">{t.none}</p>}
+        </div>
+      </div>
+
+      {/* ===== โมดัลข้อมูลเจ้าของหอ (ตรวจก่อนโอน) ===== */}
+      {ownerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[16px] border border-card-border bg-white p-5 shadow-card">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[17px] font-bold text-ink-strong">{t.ownerTitle}</h2>
+                <p className="mt-0.5 text-[12.5px] text-ink-muted">{ownerModal.dorm}</p>
+              </div>
+              <button
+                onClick={() => setOwnerModal(null)}
+                aria-label={t.close}
+                className="shrink-0 text-ink-faint hover:text-ink-body"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {!ownerDetail ? (
+              <p className="mt-4 text-sm text-ink-faint">{t.ownerLoading}</p>
+            ) : (
+              <>
+                <dl className="mt-4 flex flex-col gap-2 text-[13px]">
+                  {(
+                    [
+                      [t.ownerName, ownerDetail.owner.name],
+                      [t.ownerEmail, ownerDetail.owner.email],
+                      [t.ownerPhone, ownerDetail.owner.phone],
+                      [t.ownerBank, ownerDetail.owner.bankName],
+                      [t.ownerAccName, ownerDetail.owner.bankAccountName],
+                      [t.ownerAccNo, ownerDetail.owner.bankAccountNumber],
+                      [t.ownerPromptpay, ownerDetail.owner.promptpayId],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-3 border-b border-hairline pb-2 last:border-0">
+                      <dt className="shrink-0 text-ink-muted">{label}</dt>
+                      <dd className="min-w-0 break-all text-right font-sans font-semibold text-ink-strong">
+                        {value || '—'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                {!ownerDetail.owner.bankAccountNumber && (
+                  <p className="mt-3 rounded-[10px] bg-[#FDECEC] px-3 py-2 text-[12.5px] font-semibold text-[#C0392B]">
+                    {t.ownerNoBank}
+                  </p>
+                )}
+
+                <div className="mt-3 flex items-center justify-between rounded-[10px] bg-surface-canvas px-3 py-2.5 text-[13px]">
+                  <span className="text-ink-body">{t.ownerPending}</span>
+                  <span className="font-sans font-bold tabular-nums text-[#12A150]">
+                    {baht(
+                      ownerDetail.payments
+                        .filter((x) => x.status !== 'TRANSFERRED')
+                        .reduce((sum, x) => sum + x.ownerPayout, 0),
+                    )}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => setOwnerModal(null)}
+                    className="flex-1 rounded-[11px] border border-card-border py-2.5 text-[13.5px] font-semibold text-ink-body"
+                  >
+                    {t.close}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const target = ownerModal;
+                      setOwnerModal(null);
+                      transfer(target.dormId, target.dorm, target.payout);
+                    }}
+                    disabled={busy === ownerModal.dormId || !ownerDetail.owner.bankAccountNumber}
+                    className="flex-1 rounded-[11px] bg-admin py-2.5 text-[13.5px] font-bold text-white disabled:opacity-50"
+                  >
+                    {t.actTransfer} {baht(ownerModal.payout)}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== โอนเงินแยกประเภท: รายเดือน vs รายวัน ===== */}
+      <div className="mt-[18px] rounded-[18px] border border-card-border bg-white p-4 shadow-card sm:p-6">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="text-[18px] font-bold text-ink-strong">{t.splitTitle}</div>
+          <span className="rounded-pill bg-[#EEECFB] px-2.5 py-1 text-[11.5px] font-semibold text-[#6D5AE0]">
+            {t.splitHint}
+          </span>
+        </div>
+
+        {/* ยอดรวมแต่ละประเภท */}
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {(
+            [
+              ['MONTHLY', t.monthlyLabel, '#2F6FE0', '#EAF1FD', split?.totals.monthly],
+              ['DAILY', t.dailyLabel, '#12A150', '#E7F7EF', split?.totals.daily],
+            ] as const
+          ).map(([kind, label, color, bg, bucket]) => (
+            <div key={kind} className="rounded-[14px] border border-card-border p-4" style={{ background: bg }}>
+              <div className="text-[13px] font-bold" style={{ color }}>
+                {label}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12.5px]">
+                <span className="text-ink-muted">{t.splitGross}</span>
+                <span className="text-right font-sans tabular-nums text-ink-strong">{baht(bucket?.gross ?? 0)}</span>
+                <span className="text-ink-muted">{t.splitPlatform}</span>
+                <span className="text-right font-sans tabular-nums" style={{ color }}>
+                  {baht(bucket?.commission ?? 0)}
+                </span>
+                <span className="text-ink-muted">{t.splitPending}</span>
+                <span className="text-right font-sans font-bold tabular-nums text-[#B4791A]">
+                  {baht(bucket?.pending ?? 0)}
+                </span>
+                <span className="text-ink-muted">{t.splitTransferred}</span>
+                <span className="text-right font-sans tabular-nums text-[#12813F]">
+                  {baht(bucket?.transferred ?? 0)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ต่อหอ — ปุ่มโอนแยกคนละปุ่ม */}
+        <div className="mt-4 flex flex-col gap-2.5">
+          {(split?.rows ?? []).map((r) => (
+            <div key={r.dormId} className="rounded-[14px] border border-card-border p-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-ink-strong">{r.dormName}</div>
+                  <div className="truncate text-[12.5px] text-ink-muted">{r.ownerName}</div>
+                </div>
+                <button
+                  onClick={() => openOwner({ dormId: r.dormId, ownerId: r.ownerId, dorm: r.dormName, payout: 0 })}
+                  className="rounded-[8px] bg-[#EAF1FD] px-2.5 py-1 text-[11.5px] font-semibold text-[#2456B8]"
+                >
+                  {t.actInfo}
+                </button>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {(
+                  [
+                    ['MONTHLY', t.monthlyLabel, '#2F6FE0', r.monthly],
+                    ['DAILY', t.dailyLabel, '#12A150', r.daily],
+                  ] as const
+                ).map(([kind, label, color, bucket]) => (
+                  <div key={kind} className="rounded-[11px] bg-surface-canvas p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12.5px] font-bold" style={{ color }}>
+                        {label}
+                      </span>
+                      <span className="text-[11.5px] text-ink-faint">{bucket.count} {t.splitItems}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-end justify-between gap-2">
+                      <div>
+                        <div className="font-sans text-[17px] font-bold tabular-nums text-ink-strong">
+                          {baht(bucket.pending)}
+                        </div>
+                        <div className="text-[11px] text-ink-muted">{t.splitPending}</div>
+                      </div>
+                      <button
+                        onClick={() => transfer(r.dormId, `${r.dormName} · ${label}`, bucket.pending, kind)}
+                        disabled={bucket.pending <= 0 || busy === `${r.dormId}-${kind}`}
+                        className="rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold text-white disabled:opacity-40"
+                        style={{ background: color }}
+                      >
+                        {t.actTransfer}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {(!split || split.rows.length === 0) && <p className="text-ink-faint">{t.none}</p>}
+        </div>
+      </div>
+
+      {/* ===== รายได้หอพักรายวัน (แยกจากรายเดือน) ===== */}
+      <div className="mt-[18px] rounded-[18px] border-[1.5px] border-[#CBEBD9] bg-white p-4 shadow-card sm:p-6">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#E7F7EF]">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M20 14.2A8.2 8.2 0 019.8 4a8.4 8.4 0 100 16.4 8.2 8.2 0 0010.2-6.2z"
+                stroke="#12A150"
+                strokeWidth="1.9"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <div>
+            <div className="text-[18px] font-bold text-ink-strong">
+              {t.dailyTitle} · {monthLabel}
+            </div>
+            <div className="text-[12.5px] text-ink-muted">{t.dailySub}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {(
+            [
+              [t.dailyBookings, `${daily?.totals.bookings ?? 0} ${t.unitBooking}`, '#161A22'],
+              [t.dailyNights, `${daily?.totals.nights ?? 0} ${t.unitNight}`, '#161A22'],
+              [t.dailyAdr, baht(daily?.adr ?? 0), '#2F6FE0'],
+              [t.dailyGross, baht(daily?.totals.gross ?? 0), '#12A150'],
+            ] as const
+          ).map(([label, value, color]) => (
+            <div key={label} className="rounded-[13px] border border-card-border bg-[#FBFDFC] p-4">
+              <div className="text-[12.5px] text-ink-muted">{label}</div>
+              <div className="mt-1 text-[22px] font-bold tabular-nums" style={{ color }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 hidden overflow-hidden rounded-[13px] border border-card-border md:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[26%]" />
+              <col className="w-[16%]" />
+              <col className="w-[10%]" />
+              <col className="w-[16%]" />
+              <col className="w-[16%]" />
+              <col className="w-[16%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-card-border bg-[#FAFBFC] text-[11.5px] font-semibold text-ink-faint">
+                <th className="px-4 py-2.5">{t.dailyDorm}</th>
+                <th className="px-4 py-2.5">{t.dailyOwner}</th>
+                <th className="px-4 py-2.5 text-right">{t.dailyNights}</th>
+                <th className="px-4 py-2.5 text-right">{t.dailyGross}</th>
+                <th className="px-4 py-2.5 text-right">{t.dailyComm}</th>
+                <th className="px-4 py-2.5 text-right">{t.dailyPayout}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(daily?.rows ?? []).map((r) => (
+                <tr key={r.dormId} className="border-b border-hairline last:border-0">
+                  <td className="truncate px-4 py-3 font-semibold text-ink-strong" title={r.dormName}>
+                    {r.dormName}
+                  </td>
+                  <td className="truncate px-4 py-3 text-ink-subtitle" title={r.ownerName}>
+                    {r.ownerName}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-subtitle">{r.nights}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-strong">{baht(r.gross)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-[#C0392B]">{baht(r.commission)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-[#12A150]">
+                    {baht(r.ownerPayout)}
+                    <div className="text-[11px] font-normal text-ink-faint">
+                      {t.dailyTransferred} {baht(r.transferred)} · {t.dailyPending} {baht(r.pending)}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {daily && daily.rows.length > 0 && (
+                <tr className="border-t-2 border-[#E7EAEF] bg-[#FAFBFC] text-[13.5px] font-bold">
+                  <td className="px-4 py-3 text-ink-strong" colSpan={2}>
+                    {t.totalAll}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-strong">{daily.totals.nights}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-strong">{baht(daily.totals.gross)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-[#C0392B]">{baht(daily.totals.commission)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-[#12A150]">{baht(daily.totals.ownerPayout)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {(!daily || daily.rows.length === 0) && <p className="p-5 text-ink-faint">{t.dailyNone}</p>}
+        </div>
+
+        {/* มือถือ: การ์ดรายได้รายวันต่อหอ */}
+        <div className="mt-4 flex flex-col gap-2.5 md:hidden">
+          {(daily?.rows ?? []).map((r) => (
+            <div key={r.dormId} className="rounded-[13px] border border-card-border bg-white p-3.5">
+              <div className="truncate font-semibold text-ink-strong">{r.dormName}</div>
+              <div className="truncate text-[12.5px] text-ink-muted">{r.ownerName}</div>
+
+              <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 rounded-[10px] bg-surface-canvas px-3 py-2 text-[12.5px]">
+                <dt className="text-ink-muted">{t.dailyNights}</dt>
+                <dd className="text-right tabular-nums text-ink-body">{r.nights}</dd>
+                <dt className="text-ink-muted">{t.dailyGross}</dt>
+                <dd className="text-right tabular-nums text-ink-strong">{baht(r.gross)}</dd>
+                <dt className="text-ink-muted">{t.dailyComm}</dt>
+                <dd className="text-right tabular-nums text-[#C0392B]">{baht(r.commission)}</dd>
+                <dt className="font-semibold text-ink-body">{t.dailyPayout}</dt>
+                <dd className="text-right font-bold tabular-nums text-[#12A150]">{baht(r.ownerPayout)}</dd>
+              </dl>
+
+              <div className="mt-1.5 text-[11.5px] text-ink-faint">
+                {t.dailyTransferred} {baht(r.transferred)} · {t.dailyPending} {baht(r.pending)}
+              </div>
+            </div>
+          ))}
+          {daily && daily.rows.length > 0 && (
+            <div className="flex items-center justify-between rounded-[12px] bg-[#FAFBFC] px-3.5 py-3 text-[13.5px] font-bold">
+              <span className="text-ink-strong">{t.totalAll}</span>
+              <span className="tabular-nums text-[#12A150]">{baht(daily.totals.ownerPayout)}</span>
+            </div>
+          )}
+          {(!daily || daily.rows.length === 0) && <p className="text-ink-faint">{t.dailyNone}</p>}
+        </div>
       </div>
     </div>
   );
@@ -419,7 +966,7 @@ export default function AdminFinancePage() {
 
 function Kpi({ bg, color, label, value, note, icon }: { bg: string; color: string; label: string; value: string; note: string; icon: React.ReactNode }) {
   return (
-    <div className="rounded-[18px] border border-card-border bg-white p-5 shadow-card">
+    <div className="rounded-[18px] border border-card-border bg-white p-4 shadow-card sm:p-5">
       <div className="flex items-center gap-2.5">
         <span className="flex h-10 w-10 items-center justify-center rounded-[12px]" style={{ background: bg }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">{icon}</svg>

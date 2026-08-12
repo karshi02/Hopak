@@ -1,0 +1,40 @@
+[HIGH] Owner application takeover ผ่าน email-only restart และ capability ID
+
+ไฟล์ที่เกี่ยวข้อง:
+- apps/api/src/modules/owner-applications/owner-applications.controller.ts:27-73
+- apps/api/src/modules/owner-applications/owner-applications.service.ts:26-46, 76-110, 232-282
+
+เงื่อนไข:
+มีใบสมัครเปิดหอที่ยังไม่ COMPLETED และผู้โจมตีรู้ email ของผู้สมัคร (เป็นข้อมูลที่เดาหรือรู้ได้ง่าย)
+
+ท่าโจมตี:
+1. ส่ง POST /owner-applications พร้อม email ของเหยื่อ และ name/phone ที่ผู้โจมตีเลือกเอง
+2. start() ค้นหา OwnerApplication เดิมจาก email เพียงอย่างเดียว แล้ว reset แถวเดิม
+   (ล้าง images/documents/OTP/verified state) และตอบ SAFE_SELECT กลับพร้อม id เดิม
+3. SAFE_SELECT ยังคงมี draft fields เช่น name, phone, address, province, lat/lng,
+   ค่าน้ำ-ไฟ, deposit, note และ rooms ที่ไม่ได้ล้าง จึงเปิดเผยข้อมูลใบสมัครแก่ผู้โจมตี
+4. id ที่ได้เป็น capability เพียงอย่างเดียวของ GET/PATCH/upload/send-otp/verify-otp/finish
+   ทุก route ที่เหลือ ผู้โจมตีจึงแก้ข้อมูลหรืออัปโหลดไฟล์เข้าใบสมัครนั้นได้
+5. เมื่อผู้สมัครตัวจริง verify OTP จนสถานะ EMAIL_VERIFIED ผู้โจมตีสามารถ poll GET :id
+   และแข่งเรียก POST :id/finish พร้อม password ของตนเอง ทำให้สร้าง OWNER account ด้วย
+   email ของเหยื่อก่อนผู้สมัครตัวจริง
+
+ผลกระทบ:
+- ยึด/ทำลายใบสมัครที่ยังไม่เสร็จ และเปิดเผย PII/draft location data
+- ยึดบัญชี OWNER ที่กำลังสมัครได้ใน race หลังผู้สมัครยืนยัน OTP
+- ใช้ upload endpoint เป็น storage abuse ได้เมื่อ capability ID หลุด
+- เอกสาร private เดิมไม่รั่วตรงๆ ใน chain นี้ เพราะ start() ล้าง documents ก่อน response
+
+สาเหตุ:
+email เป็น identifier สาธารณะ ไม่ใช่ proof of possession แต่ถูกใช้ reset/คืน capability ID
+ของ application เดิม ขณะที่ follow-on routes เชื่อแค่ id คงที่โดยไม่มี auth หรือ continuation secret
+
+วิธีแก้แนะนำ:
+- ห้าม resume/reset application เดิมจาก email ล้วนๆ
+- สร้าง continuation secret แบบสุ่มสูง แยกจาก id และส่งให้ผู้สมัครผ่านช่องทางที่ยืนยันได้;
+  ต้องใช้ secret นี้ในทุก read/write/finish ของ application ที่มีอยู่แล้ว
+- บังคับ fresh email verification ก่อน reset และก่อน finish, rotate secret ทุกครั้งที่ reset
+- อย่า return id ของใบสมัครเดิมให้ caller ที่พิสูจน์ได้เพียง email
+- เพิ่ม rate limit, upload count/total-size quota และ audit log ให้ทุก public application endpoint
+
+สถานะ: พบจาก static review; ยังไม่ได้แก้โค้ด

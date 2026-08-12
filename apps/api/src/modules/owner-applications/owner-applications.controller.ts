@@ -8,9 +8,13 @@ import {
   Post,
   UploadedFile,
   UseInterceptors,
+  Headers,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { imageFileFilter, documentFileFilter, IMAGE_LIMIT, DOC_LIMIT } from '../../common/upload-filters';
+import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { OwnerApplicationsService } from './owner-applications.service';
 import { StartApplicationDto } from './dto/start-application.dto';
 import { UpdateDormInfoDto } from './dto/update-dorm-info.dto';
@@ -19,57 +23,89 @@ import { FinishApplicationDto } from './dto/finish-application.dto';
 import { SetCoverPhotoDto } from './dto/set-cover-photo.dto';
 
 // ใบสมัครเปิดหอพัก — ไม่ต้องล็อกอิน (ยังไม่มีบัญชีจริงจนกว่าจะถึง finish)
-// id ของใบสมัคร (cuid สุ่มไม่คาดเดาได้) ทำหน้าที่เป็น token เข้าถึงแทน JWT ระหว่างขั้นตอนนี้
+// การเข้าถึงใช้ "continuation secret" ที่ออกให้ครั้งเดียวตอน POST /owner-applications
+// (id อย่างเดียวไม่พอ เพราะ start ด้วยอีเมลของคนอื่นก็ได้ id เดิมกลับไป)
+// ทุก route ที่แตะใบสมัครต้องส่ง header: x-application-secret
 @Controller('owner-applications')
+@UseGuards(RateLimitGuard)
 export class OwnerApplicationsController {
   constructor(private service: OwnerApplicationsService) {}
 
   @Post()
+  @RateLimit(5, 60_000) // เริ่มใบสมัคร: 5 ครั้ง/นาที/IP กันสแปม + กันไล่ยิงอีเมลคนอื่น
   start(@Body() dto: StartApplicationDto) {
     return this.service.start(dto);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const app = await this.service.findSafe(id);
+  @RateLimit(60, 60_000)
+  async findOne(@Param('id') id: string, @Headers('x-application-secret') secret?: string) {
+    const app = await this.service.findSafe(id, secret);
     if (!app) throw new NotFoundException('ไม่พบใบสมัคร');
     return app;
   }
 
   @Patch(':id/dorm')
-  updateDorm(@Param('id') id: string, @Body() dto: UpdateDormInfoDto) {
-    return this.service.updateDormInfo(id, dto);
+  @RateLimit(30, 60_000)
+  updateDorm(
+    @Param('id') id: string,
+    @Body() dto: UpdateDormInfoDto,
+    @Headers('x-application-secret') secret?: string,
+  ) {
+    return this.service.updateDormInfo(id, secret, dto);
   }
 
   @Post(':id/photos')
+  @RateLimit(30, 60_000)
   @UseInterceptors(FileInterceptor('file', { fileFilter: imageFileFilter, limits: IMAGE_LIMIT }))
-  addPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
-    return this.service.addPhoto(id, file);
+  addPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('x-application-secret') secret?: string,
+  ) {
+    return this.service.addPhoto(id, secret, file);
   }
 
   @Patch(':id/photos/cover')
-  setCoverPhoto(@Param('id') id: string, @Body() dto: SetCoverPhotoDto) {
-    return this.service.setCoverPhoto(id, dto.url);
+  @RateLimit(30, 60_000)
+  setCoverPhoto(
+    @Param('id') id: string,
+    @Body() dto: SetCoverPhotoDto,
+    @Headers('x-application-secret') secret?: string,
+  ) {
+    return this.service.setCoverPhoto(id, secret, dto.url);
   }
 
   @Post(':id/documents')
+  @RateLimit(20, 60_000) // จำกัดการอัปโหลด กัน storage abuse
   @UseInterceptors(FileInterceptor('file', { fileFilter: documentFileFilter, limits: DOC_LIMIT }))
-  addDocument(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
-    return this.service.addDocument(id, file);
+  addDocument(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('x-application-secret') secret?: string,
+  ) {
+    return this.service.addDocument(id, secret, file);
   }
 
   @Post(':id/send-otp')
-  sendOtp(@Param('id') id: string) {
-    return this.service.sendOtp(id);
+  @RateLimit(5, 60_000) // กันสแปมอีเมล
+  sendOtp(@Param('id') id: string, @Headers('x-application-secret') secret?: string) {
+    return this.service.sendOtp(id, secret);
   }
 
   @Post(':id/verify-otp')
-  verifyOtp(@Param('id') id: string, @Body() dto: VerifyOtpDto) {
-    return this.service.verifyOtp(id, dto.code);
+  @RateLimit(10, 60_000) // กัน brute force OTP (มี otpAttempts เป็นด่านสองอยู่แล้ว)
+  verifyOtp(@Param('id') id: string, @Body() dto: VerifyOtpDto, @Headers('x-application-secret') secret?: string) {
+    return this.service.verifyOtp(id, dto.code, secret);
   }
 
   @Post(':id/finish')
-  finish(@Param('id') id: string, @Body() dto: FinishApplicationDto) {
-    return this.service.finish(id, dto);
+  @RateLimit(10, 60_000)
+  finish(
+    @Param('id') id: string,
+    @Body() dto: FinishApplicationDto,
+    @Headers('x-application-secret') secret?: string,
+  ) {
+    return this.service.finish(id, dto, secret);
   }
 }

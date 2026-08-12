@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { calcCommission, calcOwnerPayout, calcChamberShare, calcPlatformShare } from '@hopak/shared';
+import { calcPayout } from '@hopak/shared';
 import { PrismaService } from '../../prisma.service';
 import { XenditGateway } from './gateway/xendit.gateway';
 import { UploadsService } from '../uploads/uploads.service';
@@ -141,16 +141,21 @@ export class PaymentsService {
     const charge = await this.xendit.createQrCharge(booking.amount, bookingId);
 
     // ค่าคอมคิดจาก "ค่าห้อง" (roomPrice) เท่านั้น — มัดจำคืนเจ้าของหอเต็ม ไม่โดนหัก
-    // ownerPayout = ยอดรวม - คอม(ค่าห้อง) = ค่าห้อง×0.8 + มัดจำเต็ม
+    // อัตราต่างกันตามประเภทการเช่า: รายเดือน 20% · รายวัน 10% (รายวันไม่มีมัดจำ ฐาน = ยอดเต็ม)
     const commissionBase = booking.roomPrice;
+    const split = calcPayout({
+      amount: booking.amount,
+      commissionBase,
+      rentalType: booking.rentalType,
+    });
     await this.prisma.payment.create({
       data: {
         bookingId,
         amount: booking.amount,
-        commission: calcCommission(commissionBase),
-        chamberShare: calcChamberShare(commissionBase),
-        platformShare: calcPlatformShare(commissionBase),
-        ownerPayout: calcOwnerPayout(booking.amount, commissionBase),
+        commission: split.commission,
+        chamberShare: split.chamberShare,
+        platformShare: split.platformShare,
+        ownerPayout: split.ownerPayout,
         method: 'xendit_promptpay',
         status: 'PENDING',
         gatewayChargeId: charge.chargeId,
@@ -211,6 +216,7 @@ export class PaymentsService {
 
     // แจ้งผู้เช่า: จ่ายสำเร็จ ใบเสร็จ+โทเค็นพร้อม
     this.realtime.emitToUser(booking.tenantId, 'booking:updated', updated);
+    this.realtime.emitToRole('admin', 'booking:updated', updated);
     await this.notifications.create(
       booking.tenantId,
       'payment',
@@ -251,6 +257,7 @@ export class PaymentsService {
             data: { status: 'CANCELLED', paymentDeadline: null },
           });
           this.realtime.emitToUser(booking.tenantId, 'booking:updated', cancelled);
+          this.realtime.emitToRole('admin', 'booking:updated', cancelled);
           await this.notifications.create(
             booking.tenantId,
             'booking',

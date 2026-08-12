@@ -42,33 +42,21 @@ export function LangSwitch({
     ? 'bg-white/10'
     : 'border border-card-border bg-surface-canvas dark:border-white/10 dark:bg-white/5';
 
+  // มือถือ: โชว์เฉพาะธง (ประหยัดที่) · จอ sm ขึ้นไป: ธง + ชื่อภาษา
+  const pill = (active: boolean) =>
+    `flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold transition sm:px-2.5 ${
+      active ? 'bg-white text-ink-strong shadow-sm' : dark ? 'text-[#C7CCD5]' : 'text-ink-subtitle dark:text-white/70'
+    }`;
+
   return (
-    <div className={`hidden items-center gap-0.5 rounded-full p-0.5 md:flex ${wrapClass}`}>
-      <button
-        type="button"
-        onClick={() => onChange('th')}
-        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-          lang === 'th'
-            ? 'bg-white text-ink-strong'
-            : dark
-              ? 'text-[#C7CCD5]'
-              : 'text-ink-subtitle dark:text-white/70'
-        }`}
-      >
-        <ThaiFlagIcon className="h-3 w-[18px] rounded-[2px]" /> ไทย
+    <div className={`flex shrink-0 items-center gap-0.5 rounded-full p-0.5 ${wrapClass}`}>
+      <button type="button" onClick={() => onChange('th')} aria-pressed={lang === 'th'} className={pill(lang === 'th')}>
+        <ThaiFlagIcon className="h-3 w-[18px] rounded-[2px]" />
+        <span className="hidden sm:inline">ไทย</span>
       </button>
-      <button
-        type="button"
-        onClick={() => onChange('en')}
-        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-          lang === 'en'
-            ? 'bg-white text-ink-strong'
-            : dark
-              ? 'text-[#C7CCD5]'
-              : 'text-ink-subtitle dark:text-white/70'
-        }`}
-      >
-        <UkFlagIcon className="h-3 w-[18px] rounded-[2px]" /> EN
+      <button type="button" onClick={() => onChange('en')} aria-pressed={lang === 'en'} className={pill(lang === 'en')}>
+        <UkFlagIcon className="h-3 w-[18px] rounded-[2px]" />
+        <span className="hidden sm:inline">EN</span>
       </button>
     </div>
   );

@@ -426,9 +426,10 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     <div className="overflow-x-hidden bg-[#F2F4F8] text-[#161A22]">
       {/* ===== TOP HEADER ===== */}
       <div className="bg-gradient-to-b from-[#0E1220] to-[#151C30]">
-        <div className="mx-auto flex h-auto min-h-[62px] max-w-[1240px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 sm:px-6">
+        <div className="mx-auto flex h-auto min-h-[58px] max-w-[1240px] items-center gap-x-2.5 px-3 py-2 sm:min-h-[62px] sm:gap-x-5 sm:px-6 sm:py-2.5">
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            <HopakIcon size={34} />
+            <HopakIcon size={30} className="sm:hidden" />
+            <HopakIcon size={34} className="hidden sm:block" />
             <span className="whitespace-nowrap text-[17px] font-bold tracking-tight text-white sm:text-[19px]">
               Hoprak<span className="text-[#6BA0F5]">.com</span>
             </span>
@@ -453,7 +454,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
             />
           </form>
 
-          <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-5">
+          <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-5">
             <LangSwitch lang={lang} onChange={setLang} dark />
 
             <Link
@@ -474,7 +475,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                     <Link
                       href="/notifications"
                       title={t.notifications}
-                      className="relative flex h-9 w-9 items-center justify-center rounded-[11px] bg-white/15 text-white hover:bg-white/25"
+                      className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-white/15 text-white hover:bg-white/25 sm:h-9 sm:w-9 sm:rounded-[11px]"
                     >
                       <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
                         <path
@@ -492,8 +493,12 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                       )}
                     </Link>
                   )}
-                  <Link href="/profile" className="flex items-center gap-2 text-[13.5px] font-semibold text-white hover:underline">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-xs font-bold text-white">
+                  <Link
+                    href="/profile"
+                    title={user.name}
+                    className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-white hover:underline"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-xs font-bold text-white sm:h-7 sm:w-7">
                       {user.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -501,23 +506,40 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                         user.name.charAt(0)
                       )}
                     </span>
-                    {user.name}
+                    {/* ชื่อยาวทำให้แถวหัวแตกบนมือถือ — โชว์เฉพาะจอ sm ขึ้นไป */}
+                    <span className="hidden max-w-[140px] truncate sm:inline">{user.name}</span>
                   </Link>
-                  <button onClick={handleLogout} className="text-[13.5px] font-semibold text-[#F08A7A] hover:underline">
-                    {t.logout}
+
+                  {/* ออกจากระบบ — มือถือเป็นปุ่มไอคอนกลม จอใหญ่มีข้อความกำกับ */}
+                  <button
+                    onClick={handleLogout}
+                    title={t.logout}
+                    aria-label={t.logout}
+                    className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-pill bg-[#F0604D]/15 px-2 text-[13px] font-semibold text-[#FF9382] transition hover:bg-[#F0604D]/25 hover:text-white sm:h-9 sm:px-3.5"
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                      <path
+                        d="M15 17l5-5-5-5M20 12H9M9 4H6a2 2 0 00-2 2v12a2 2 0 002 2h3"
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="hidden sm:inline">{t.logout}</span>
                   </button>
                 </>
               ) : (
                 <>
                   <Link
                     href="/register"
-                    className="flex h-9 items-center rounded-lg border border-white/28 px-4 text-[13.5px] font-semibold text-white"
+                    className="flex h-8 shrink-0 items-center rounded-lg border border-white/28 px-3 text-[12.5px] font-semibold text-white sm:h-9 sm:px-4 sm:text-[13.5px]"
                   >
                     {t.register}
                   </Link>
                   <Link
                     href="/login"
-                    className="flex h-9 items-center rounded-lg bg-tenant px-[17px] text-[13.5px] font-semibold text-white"
+                    className="flex h-8 shrink-0 items-center rounded-lg bg-tenant px-3.5 text-[12.5px] font-semibold text-white sm:h-9 sm:px-[17px] sm:text-[13.5px]"
                   >
                     {t.login}
                   </Link>
@@ -774,7 +796,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               return (
                 <Link
                   key={d.id}
-                  href={`/dorms/${d.id}`}
+                  href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
                   className="block overflow-hidden rounded-2xl border border-[#EAEDF2] bg-white shadow-[0_2px_6px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(16,24,40,0.14)]"
                 >
                   <div className="relative h-[150px] bg-surface-canvas">
@@ -888,7 +910,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               return (
                 <Link
                   key={d.id}
-                  href={`/dorms/${d.id}`}
+                  href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
                   className="block overflow-hidden rounded-card-lg border border-[#E7E9EC] bg-white shadow-card hover:shadow-card-hover"
                 >
                   <div className="relative h-[150px] bg-surface-canvas">

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { useLang } from '@/hooks/useLang';
 import { Badge } from '@/components/dashboard/Badge';
+import { downloadCsv } from '@/lib/csv';
 
 interface SessionRow {
   id: string;
@@ -21,6 +22,8 @@ interface SessionRow {
 
 const TEXT = {
   th: {
+    exportCsv: 'Export CSV',
+    csvHeader: 'ผู้ใช้,อีเมล,บทบาท,IP,บราวเซอร์/อุปกรณ์,เข้าเมื่อ,ใช้ล่าสุด,สถานะ',
     user: 'ผู้ใช้',
     role: 'บทบาท',
     ip: 'IP',
@@ -39,6 +42,8 @@ const TEXT = {
     unknown: 'ไม่ทราบ',
   },
   en: {
+    exportCsv: 'Export CSV',
+    csvHeader: 'User,Email,Role,IP,Browser/Device,Logged in,Last active,Status',
     user: 'User',
     role: 'Role',
     ip: 'IP',
@@ -130,6 +135,23 @@ export default function AdminSessionsPage() {
 
   const rows = onlyActive ? sessions.filter((s) => s.active) : sessions;
 
+  function handleExport() {
+    downloadCsv(
+      period ? `sessions-${period}` : 'sessions',
+      t.csvHeader.split(','),
+      rows.map((r) => [
+        r.userName,
+        r.userEmail ?? r.userPhone ?? '',
+        r.role,
+        r.ip ?? '',
+        r.userAgent ?? t.unknown,
+        fmt(r.loginAt),
+        fmt(r.lastSeenAt),
+        r.active ? t.active : t.ended,
+      ]),
+    );
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -148,6 +170,12 @@ export default function AdminSessionsPage() {
             ))}
           </select>
         </label>
+        <button
+          onClick={handleExport}
+          className="rounded-btn border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink-body hover:bg-surface-canvas"
+        >
+          {t.exportCsv}
+        </button>
         <button
           onClick={() => setOnlyActive((v) => !v)}
           className={`rounded-btn px-4 py-2 text-sm font-semibold ${

@@ -10,8 +10,11 @@ import { clearToken } from '@/lib/auth';
 import { LangSwitch } from '@/components/LangSwitch';
 import { PageLoader } from '@/components/PageLoader';
 import { AdminIcon } from '@/components/admin/AdminIcon';
+import { RealtimeToasts } from '@/components/RealtimeToasts';
 import { PartnerModeSwitch } from '@/components/partner/PartnerModeSwitch';
 import { usePartnerMode } from '@/hooks/usePartnerMode';
+import { usePartnerApproval } from '@/hooks/usePartnerApproval';
+import { PendingApprovalGate } from '@/components/partner/PendingApprovalGate';
 import type { Booking } from '@hopak/shared';
 
 type IconKey = 'dash' | 'bed' | 'book' | 'money' | 'bell' | 'gear' | 'shield' | 'menu';
@@ -32,7 +35,7 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/partner/slips', icon: 'money', label: 'ใบจอง' },
     { href: '/partner/notifications', icon: 'bell', label: 'แจ้งเตือน' },
     { href: '/partner/settings', icon: 'gear', label: 'ตั้งค่า' },
-    { href: '/forgot-password', icon: 'shield', label: 'ลืมรหัสผ่าน' },
+    { href: '/forgot-password?role=owner', icon: 'shield', label: 'ลืมรหัสผ่าน' },
   ],
   en: [
     { href: '/partner/dashboard', icon: 'dash', label: 'Dashboard' },
@@ -43,7 +46,7 @@ const NAV: Record<'th' | 'en', NavItem[]> = {
     { href: '/partner/slips', icon: 'money', label: 'Slips' },
     { href: '/partner/notifications', icon: 'bell', label: 'Notifications' },
     { href: '/partner/settings', icon: 'gear', label: 'Settings' },
-    { href: '/forgot-password', icon: 'shield', label: 'Forgot password' },
+    { href: '/forgot-password?role=owner', icon: 'shield', label: 'Forgot password' },
   ],
 };
 
@@ -67,6 +70,15 @@ const BOTTOM_NAV: Record<'th' | 'en', BottomItem[]> = {
     { icon: 'menu', label: 'Menu' },
   ],
 };
+
+// หน้าที่ยังเข้าได้ระหว่างรอแอดมินอนุมัติ — ที่เหลือถูกล็อกจนกว่าจะอนุมัติ
+const ALLOWED_WHILE_PENDING = [
+  '/partner/dashboard',
+  '/partner/notifications',
+  '/partner/profile',
+  '/partner/settings',
+  '/partner/dorms',
+];
 
 const PAGE_HEADER: Record<string, Record<'th' | 'en', { title: string; subtitle: string }>> = {
   '/partner/dashboard': {
@@ -117,6 +129,10 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
   const { user, loading } = useCurrentUser();
   const { lang, setLang } = useLang();
   const { isDaily } = usePartnerMode();
+  // คอนโซลถูกล็อกจนกว่าจะมีหอที่อนุมัติแล้วอย่างน้อย 1 แห่ง
+  const approval = usePartnerApproval();
+  const locked = !approval.loading && !approval.unlocked;
+  const pageAllowed = ALLOWED_WHILE_PENDING.some((href) => pathname === href || pathname?.startsWith(href + '/'));
   const isOwner = user?.role.toLowerCase() === 'owner';
   const [pendingCount, setPendingCount] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
@@ -184,6 +200,23 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           {NAV[lang].map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + '/');
             const badge = item.badgeKey === 'pending' && pendingCount > 0 ? pendingCount : null;
+            const itemLocked = locked && !ALLOWED_WHILE_PENDING.some((href) => item.href.startsWith(href));
+            if (itemLocked) {
+              return (
+                <span
+                  key={item.href}
+                  title={lang === 'th' ? 'ปลดล็อกเมื่อแอดมินอนุมัติหอพัก' : 'Unlocks once your dorm is approved'}
+                  className="flex cursor-not-allowed items-center gap-3 rounded-[11px] px-3 py-2.5 text-[14.5px] text-admin-sidebarmuted/45"
+                >
+                  <AdminIcon name={item.icon} size={19} />
+                  <span className="flex-1">{item.label}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.9" />
+                    <path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" strokeWidth="1.9" />
+                  </svg>
+                </span>
+              );
+            }
             return (
               <Link
                 key={item.href}
@@ -276,8 +309,32 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
         </div>
 
         {/* pb ล่างเผื่อที่ให้ bottom nav บนมือถือ ไม่ให้ทับเนื้อหาบรรทัดสุดท้าย */}
-        <main className="flex-1 overflow-auto px-4 py-5 pb-24 sm:px-7 sm:py-6 lg:pb-6">{children}</main>
+        <main className="flex-1 overflow-auto px-4 py-5 pb-24 sm:px-7 sm:py-6 lg:pb-6">
+          {locked && (
+            <div className="mb-4 flex items-start gap-3 rounded-[13px] border border-[#F5DFC0] bg-[#FFF7ED] px-4 py-3">
+              <span className="shrink-0 text-[#C77B14]">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              </span>
+              <p className="text-[13px] leading-relaxed text-[#72532A]">
+                {lang === 'th'
+                  ? 'บัญชีของคุณยังรอแอดมินอนุมัติหอพัก — ดูแดชบอร์ดได้ แต่ยังเพิ่มห้อง รับจอง และดูการเงินไม่ได้ ระบบจะปลดล็อกให้อัตโนมัติเมื่ออนุมัติ'
+                  : 'Your dorm is awaiting admin approval — you can view the dashboard, but adding rooms, taking bookings and finance stay locked until approved.'}
+              </p>
+            </div>
+          )}
+          {locked && !pageAllowed ? (
+            <PendingApprovalGate lang={lang} rejected={approval.rejected} suspended={approval.suspended} />
+          ) : (
+            children
+          )}
+        </main>
       </div>
+
+      {/* แจ้งเตือนเรียลไทม์ — เด้งทันทีทุกหน้า ไม่ต้องรีเฟรช */}
+      <RealtimeToasts accent="#12A150" />
 
       {/* ===== BOTTOM NAV (มือถือ) — 4 แท็บ + FAB เพิ่มห้องตรงกลาง ===== */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex h-[64px] items-stretch border-t border-card-border bg-white lg:hidden">
@@ -311,6 +368,8 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           );
         })}
       </nav>
+      {/* ปุ่มเพิ่มห้องซ่อนไว้ระหว่างรออนุมัติ (backend ก็บล็อกอีกชั้น) */}
+      {!locked && (
       <Link
         href={isDaily ? '/partner/rooms/new?mode=daily' : '/partner/rooms/new'}
         aria-label={lang === 'th' ? 'เพิ่มห้องพัก' : 'Add room'}
@@ -324,6 +383,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
       >
         <AdminIcon name="plus" size={24} />
       </Link>
+      )}
     </div>
   );
 }

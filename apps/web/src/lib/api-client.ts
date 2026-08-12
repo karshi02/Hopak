@@ -41,12 +41,12 @@ function withMinDelay<T>(promise: Promise<T>): Promise<T> {
 }
 
 export const apiClient = {
-  get: <T>(path: string) => withMinDelay(request<T>(path)),
-  post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  get: <T>(path: string, headers?: Record<string, string>) => withMinDelay(request<T>(path, { headers })),
+  post: <T>(path: string, data?: unknown, headers?: Record<string, string>) =>
+    request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined, headers }),
   postWithCredentials: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined, credentials: 'include' }),
-  patch: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
+  patch: <T>(path: string, data?: unknown, headers?: Record<string, string>) =>
+    request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined, headers }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };

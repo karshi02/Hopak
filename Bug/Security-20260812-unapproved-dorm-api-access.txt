@@ -1,0 +1,33 @@
+[HIGH] API ยังอนุญาต state changes/booking ของหอหรือห้องที่ยังไม่อนุมัติ
+
+ไฟล์ที่เกี่ยวข้อง:
+- apps/api/src/modules/rooms/rooms.service.ts:113-164, 171-203
+- apps/api/src/modules/dorms/dorms.service.ts:71-120
+- apps/api/src/modules/bookings/bookings.controller.ts:14-18
+- apps/api/src/modules/bookings/bookings.service.ts:31-82, 100-163
+
+ท่าโจมตี:
+1. OWNER ที่มี dorm สถานะ PENDING_APPROVAL หรือ REJECTED สร้าง/มี room อยู่แล้ว
+   (เช่น rooms ที่ถูกสร้างใน owner-application finish)
+2. แม้ rooms.service.create() จะปฏิเสธ dorm ที่ไม่ APPROVED แต่ update(), remove(),
+   addImages() และ removeImage() ตรวจเพียงว่า caller เป็นเจ้าของ room; ไม่ตรวจ dorm.status.
+   dorms.service.update()/image endpoints ก็ตรวจเพียง ownership เช่นกัน
+3. ฝั่ง tenant ที่รู้ roomId สามารถเรียก POST /bookings ได้โดยตรง: BookingsService.create()
+   ตรวจ room.status เท่านั้น แต่ไม่ตรวจ room.approved หรือ dorm.status === APPROVED
+4. สำหรับ DAILY path ก็ไม่มี guard เพิ่มเติม และ API ยอมสร้าง booking PENDING แล้วไปสู่
+   payment flow ได้ตามปกติ
+
+ผลกระทบ:
+UI gate ของ Partner Console ไม่ใช่ security boundary: หอที่ยังไม่ผ่านการอนุมัติสามารถถูกแก้ไข
+และสำคัญกว่านั้นสามารถรับ booking/payment ผ่าน API ได้หาก roomId รั่วหรือถูกส่งต่อ ทำให้มี
+ธุรกรรม/ความเสี่ยงทางการเงินก่อนผ่านกระบวนการตรวจสอบของแอดมิน
+
+วิธีแก้แนะนำ:
+- สร้าง helper/server-side policy กลาง assertDormApprovedForOwnerMutation() และใช้กับทุก
+  owner mutation ที่ต้องล็อกระหว่างรออนุมัติ
+- ใน BookingsService.create() และ createDaily() ต้อง require room.approved และ
+  room.dorm.status === 'APPROVED' ใน query/conditional transition ก่อนสร้าง booking
+- กำหนดให้ชัดว่าการแก้ draft ของหอที่ REJECTED/PENDING อนุญาต endpoints ใดบ้าง แล้วบังคับ
+  policy นั้นที่ API ไม่ใช่แค่ frontend
+
+สถานะ: พบจาก static review; ยังไม่ได้แก้โค้ด

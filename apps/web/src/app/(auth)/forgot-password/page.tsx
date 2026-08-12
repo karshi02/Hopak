@@ -63,7 +63,10 @@ export default function ForgotPasswordPage() {
     }
     setLoading(true);
     try {
-      await apiClient.post('/auth/forgot-password', { email: email.trim() });
+      // ถ้าเข้ามาจากคอนโซลเจ้าของหอ (?role=owner) ให้รีเซ็ตรหัสของบัญชีเจ้าของหอ
+      // อีเมลเดียวกันมีได้ทั้งบัญชีผู้เช่าและเจ้าของหอ ต้องบอกฝั่งให้ถูก
+      const role = new URLSearchParams(window.location.search).get('role') === 'owner' ? 'owner' : undefined;
+      await apiClient.post('/auth/forgot-password', { email: email.trim(), ...(role ? { role } : {}) });
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.genericError);

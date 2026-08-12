@@ -14,6 +14,7 @@ export interface Booking {
   rentalType?: 'MONTHLY' | 'DAILY'; // รูปแบบการเช่า
   leaseMonths?: number; // ระยะเวลาเช่า (เดือน) 1/3/6 (เฉพาะรายเดือน)
   nights?: number | null; // จำนวนคืน (เฉพาะรายวัน)
+  guests?: number | null; // จำนวนผู้เข้าพัก (เฉพาะรายวัน)
   status: BookingStatus;
   contactName: string;
   contactPhone: string;

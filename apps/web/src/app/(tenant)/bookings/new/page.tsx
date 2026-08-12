@@ -8,6 +8,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLang } from '@/hooks/useLang';
 import type { Booking, Dorm, Room } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
+import { DailyCalendar } from '@/components/booking/DailyCalendar';
 
 type RoomDetail = Room & { dorm: Dorm };
 
@@ -59,6 +60,8 @@ const TEXT = {
     daily: 'รายวัน',
     checkOutLabel: 'วันคืนห้อง',
     nightsUnit: (n: number) => `${n} คืน`,
+    guestsLabel: 'จำนวนผู้เข้าพัก',
+    guestsUnit: (n: number) => `${n} คน`,
     perNight: 'ค่าห้อง/คืน',
     totalNights: 'จำนวนคืน',
     unavailableTitle: 'ช่วงวันที่ไม่ว่าง (ถูกจองแล้ว)',
@@ -113,6 +116,8 @@ const TEXT = {
     daily: 'Daily',
     checkOutLabel: 'Check-out date',
     nightsUnit: (n: number) => `${n} night${n > 1 ? 's' : ''}`,
+    guestsLabel: 'Guests',
+    guestsUnit: (n: number) => `${n} guest${n > 1 ? 's' : ''}`,
     perNight: 'Room / night',
     totalNights: 'Nights',
     unavailableTitle: 'Unavailable dates (already booked)',
@@ -203,13 +208,15 @@ function NewBookingForm() {
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
   const [leaseMonths, setLeaseMonths] = useState(1);
-  const [mode, setMode] = useState<'MONTHLY' | 'DAILY'>('MONTHLY');
+  const [guests, setGuests] = useState(1);
   const [bookedRanges, setBookedRanges] = useState<{ from: string; to: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const dateOptions = useMemo(suggestedDates, []);
-  const isDaily = mode === 'DAILY';
+  // รูปแบบการเช่ายึดจาก "ห้อง" อย่างเดียว — ห้องรายวันจองรายวันเท่านั้น ห้องรายเดือนจองรายเดือนเท่านั้น
+  // (ผู้เช่าเลือกเองไม่ได้ เพราะสองโหมดแยกขาดจากกันแล้ว)
+  const isDaily = Boolean(room?.allowDaily);
 
   // จำนวนคืน = checkOut − checkIn (ปัดเป็นวัน) ใช้เฉพาะโหมดรายวัน
   const nights = useMemo(() => {
@@ -275,7 +282,7 @@ function NewBookingForm() {
     setSubmitting(true);
     try {
       const payload = isDaily
-        ? { roomId, contactName, contactPhone, checkInDate, checkOutDate, rentalType: 'DAILY' as const }
+        ? { roomId, contactName, contactPhone, checkInDate, checkOutDate, guests, rentalType: 'DAILY' as const }
         : { roomId, contactName, contactPhone, checkInDate, leaseMonths, rentalType: 'MONTHLY' as const };
       const booking = await apiClient.post<Booking>('/bookings', payload);
       router.push(`/bookings/${booking.id}`);
@@ -304,7 +311,6 @@ function NewBookingForm() {
   // ยอดจ่ายรวม: รายเดือน = ค่าเช่า/เดือน × จำนวนเดือน + มัดจำ · รายวัน = ค่าห้อง/คืน × จำนวนคืน
   const rentTotal = room.pricePerMonth * leaseMonths;
   const payTotal = isDaily ? pricePerDay * nights : rentTotal + deposit;
-  const allowDaily = room.allowDaily && pricePerDay > 0;
   const cover = room.images?.[0] ?? room.dorm.images?.[0] ?? null;
   const locale = t.dateLocale;
 
@@ -385,81 +391,33 @@ function NewBookingForm() {
             </div>
           </div>
 
-          {/* toggle รายเดือน/รายวัน — โชว์เฉพาะห้องที่เปิดรายวัน */}
-          {allowDaily && (
-            <div className="mt-5">
-              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.rentalMode}</label>
-              <div className="flex gap-2.5">
-                {(['MONTHLY', 'DAILY'] as const).map((m) => {
-                  const active = mode === m;
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMode(m)}
-                      className={`flex-1 rounded-xl border-[1.5px] py-2.5 text-sm font-semibold ${
-                        active ? 'border-tenant bg-tenant-tint text-tenant' : 'border-card-border bg-white text-ink-body'
-                      }`}
-                    >
-                      {m === 'MONTHLY' ? t.monthly : t.daily}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* check-in date — โชว์เฉพาะรายวัน (รายเดือนใช้วันนี้เป็นวันเข้าอยู่อัตโนมัติ) */}
-          {isDaily && (
+          {/* ป้ายบอกรูปแบบการเช่าของห้องนี้ (ยึดจากห้อง เลือกเองไม่ได้) */}
           <div className="mt-5">
-            <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.checkInLabel}</label>
-            <div className="grid grid-cols-3 gap-3">
-              {dateOptions.map((d) => {
-                const iso = toISODate(d);
-                const picked = checkInDate === iso;
-                return (
-                  <button
-                    key={iso}
-                    type="button"
-                    onClick={() => setCheckInDate(iso)}
-                    className={`flex h-[66px] flex-col items-center justify-center gap-0.5 rounded-[13px] border-2 ${
-                      picked ? 'border-tenant bg-tenant-tint' : 'border-card-border bg-white hover:border-ink-faint'
-                    }`}
-                  >
-                    <span className="text-xs text-ink-muted">
-                      {d.toLocaleDateString(locale, { month: 'short' })}
-                    </span>
-                    <span
-                      className={`font-sans text-lg font-bold ${picked ? 'text-tenant' : 'text-ink-strong'}`}
-                    >
-                      {d.getDate()}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-3">
-              <label className="mb-1.5 block text-[11.5px] font-medium text-ink-faint">{t.otherDate}</label>
-              <div
-                className={`${fieldBase} ${
-                  checkInDate && !dateOptions.some((d) => toISODate(d) === checkInDate) ? fieldActive : fieldIdle
-                }`}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                  <rect x="3" y="5" width="18" height="16" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
-                  <path d="M3 10h18M8 3v4M16 3v4" stroke="#9AA0AB" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                <input
-                  type="date"
-                  value={checkInDate}
-                  min={toISODate(new Date())}
-                  onChange={(e) => setCheckInDate(e.target.value)}
-                  className={`${inputBase} font-sans`}
-                  required
-                />
-              </div>
-            </div>
+            <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.rentalMode}</label>
+            <span
+              className="inline-flex items-center gap-2 rounded-pill px-3.5 py-1.5 text-[13px] font-bold text-white"
+              style={{ background: isDaily ? '#12A150' : '#2F6FE0' }}
+            >
+              {isDaily ? t.daily : t.monthly}
+            </span>
           </div>
+
+          {/* รายวัน: ปฏิทินเลือกช่วงวัน — วันที่เต็มถูกปิดไปเลย ไม่ต้องเดา */}
+          {isDaily && (
+            <div className="mt-5">
+              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.checkInLabel}</label>
+              <DailyCalendar
+                lang={lang}
+                checkIn={checkInDate}
+                checkOut={checkOutDate}
+                bookedRanges={bookedRanges}
+                pricePerDay={room.pricePerDay ?? 0}
+                onChange={(nextIn, nextOut) => {
+                  setCheckInDate(nextIn);
+                  setCheckOutDate(nextOut);
+                }}
+              />
+            </div>
           )}
 
           {/* รายเดือน: วันเข้าอยู่ — กรอกเอง/เลือกจากปฏิทิน (native date) */}
@@ -483,44 +441,32 @@ function NewBookingForm() {
             </div>
           )}
 
-          {/* รายวัน: วันคืนห้อง + จำนวนคืน + ช่วงที่ถูกจองแล้ว */}
-          {isDaily ? (
+          {/* จำนวนผู้เข้าพัก (เฉพาะรายวัน) — เจ้าของหอเอาไปเตรียมห้อง */}
+          {isDaily && (
             <div className="mt-5">
-              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.checkOutLabel}</label>
-              <div className={`${fieldBase} ${checkOutDate ? fieldActive : fieldIdle}`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                  <rect x="3" y="5" width="18" height="16" rx="2" stroke="#9AA0AB" strokeWidth="1.8" />
-                  <path d="M3 10h18M8 3v4M16 3v4" stroke="#9AA0AB" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                <input
-                  type="date"
-                  value={checkOutDate}
-                  min={checkInDate || toISODate(new Date())}
-                  onChange={(e) => setCheckOutDate(e.target.value)}
-                  className={`${inputBase} font-sans`}
-                />
-                {nights > 0 && (
-                  <span className="shrink-0 rounded-md bg-tenant-tint px-2 py-1 text-xs font-bold text-tenant">
-                    {t.nightsUnit(nights)}
-                  </span>
-                )}
+              <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.guestsLabel}</label>
+              <div className="flex gap-2.5">
+                {[1, 2, 3].map((n) => {
+                  const active = guests === n;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setGuests(n)}
+                      className={`flex-1 rounded-xl border-[1.5px] py-2.5 text-sm font-semibold ${
+                        active ? 'border-tenant bg-tenant-tint text-tenant' : 'border-card-border bg-white text-ink-body'
+                      }`}
+                    >
+                      {t.guestsUnit(n)}
+                    </button>
+                  );
+                })}
               </div>
-              {bookedRanges.length > 0 && (
-                <div className="mt-2 rounded-xl border border-card-border bg-surface-canvas px-3 py-2">
-                  <div className="mb-1 text-[11.5px] font-semibold text-ink-faint">{t.unavailableTitle}</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {bookedRanges.map((r, i) => (
-                      <span key={i} className="rounded-md bg-danger/10 px-2 py-0.5 text-[11.5px] font-medium text-danger">
-                        {new Date(r.from).toLocaleDateString(locale, { day: 'numeric', month: 'short' })} –{' '}
-                        {new Date(r.to).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          ) : (
-            /* ระยะเวลาเช่า (รายเดือน) */
+          )}
+
+          {/* ระยะเวลาเช่า (รายเดือน) — รายวันใช้ปฏิทินด้านบนแทน */}
+          {!isDaily && (
             <div className="mt-5">
               <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.leaseLabel}</label>
               <div className="flex gap-2.5">

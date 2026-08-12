@@ -37,13 +37,27 @@ export class AnalyticsService {
         status: { in: ['SETTLED', 'TRANSFERRED'] },
         createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) },
       },
-      select: { commission: true, createdAt: true },
+      select: { amount: true, commission: true, ownerPayout: true, createdAt: true },
     });
 
+    // months[] = ค่าคอมต่อเดือน (คงไว้ให้ของเดิมใช้ได้)
+    // breakdown[] = แจกแจงเต็มต่อเดือน สำหรับกราฟที่สลับรูปแบบได้ (ยอดรับ/คอม/ยอดเจ้าของหอ)
     const months = Array.from({ length: 12 }, () => 0);
+    const breakdown = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      gross: 0,
+      commission: 0,
+      ownerPayout: 0,
+      bookings: 0,
+    }));
     for (const p of payments) {
-      months[p.createdAt.getMonth()] += p.commission;
+      const index = p.createdAt.getMonth();
+      months[index] += p.commission;
+      breakdown[index].gross += p.amount;
+      breakdown[index].commission += p.commission;
+      breakdown[index].ownerPayout += p.ownerPayout;
+      breakdown[index].bookings += 1;
     }
-    return { year, months };
+    return { year, months, breakdown };
   }
 }

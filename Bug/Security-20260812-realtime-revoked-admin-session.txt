@@ -1,0 +1,27 @@
+[HIGH] JWT ที่ถูก revoke ยัง reconnect เข้า role:admin WebSocket room ได้
+
+ไฟล์ที่เกี่ยวข้อง:
+- apps/api/src/modules/realtime/realtime.gateway.ts:15-33
+- apps/api/src/modules/auth/strategies/jwt.strategy.ts:25-50
+- apps/api/src/modules/bookings/bookings.service.ts:79-81, 150-152, 237-238, 256-258, 300-301
+- apps/api/src/modules/payments/payments.service.ts:212-214, 252-255
+
+ท่าโจมตี:
+1. ผู้ถือ JWT ของ admin ที่ยังไม่หมดอายุถูก logout/revoke, ถูกลดสิทธิ์ หรือถูก suspend
+2. เปิด Socket.IO ใหม่และส่ง token เดิมผ่าน handshake.auth.token
+3. RealtimeGateway เรียก jwt.verify() เท่านั้น แล้ว join `role:${payload.role}`;
+   ไม่มี lookup Session.jti, revokedAt, idle timeout, user.suspended หรือ current role
+4. token admin เก่าจึงเข้าห้อง role:admin และรับ booking:new/booking:updated ได้ต่อไป
+
+ผลกระทบ:
+ข้อมูล realtime ที่ส่งเป็น booking object มีชื่อผู้ติดต่อ, เบอร์โทร, ยอดเงิน, วันเข้าพัก
+และสถานะการชำระเงิน ผู้ใช้ที่ควรถูกตัดสิทธิ์จึงยังรับ PII/financial events ได้จน JWT หมดอายุ
+แม้ HTTP JwtStrategy จะปฏิเสธ token เดียวกันแล้ว
+
+วิธีแก้แนะนำ:
+- ใช้ session-validation routine เดียวกับ JwtStrategy ระหว่าง socket handshake:
+  ตรวจ jti/session.revokedAt, idle timeout, suspended และ current role/admin record
+- disconnect sockets ที่มี session ถูก revoke และอย่าเชื่อ role claim ใน JWT เพียงอย่างเดียว
+- เพิ่ม regression test: revoke admin session แล้ว handshake ด้วย token เดิมต้องถูก disconnect
+
+สถานะ: พบจาก static review; ยังไม่ได้แก้โค้ด

@@ -17,7 +17,13 @@ export class FinanceService {
 
   // โอน payout ให้เจ้าของหอ "อัตโนมัติ" ผ่าน Xendit (แทนอัปสลิปมือ) — ยิงเงินออกไปบัญชีธนาคารเจ้าของหอจริง
   // ใช้บัญชีที่เจ้าของหอตั้งไว้ (bankName→channel, bankAccountNumber, bankAccountName)
-  async transferForDormViaXendit(dormId: string, adminId: string, confirmedAmount?: number, note?: string) {
+  async transferForDormViaXendit(
+    dormId: string,
+    adminId: string,
+    confirmedAmount?: number,
+    note?: string,
+    rentalType?: 'MONTHLY' | 'DAILY',
+  ) {
     const dorm = await this.prisma.dorm.findUnique({ where: { id: dormId }, include: { owner: true } });
     if (!dorm) throw new NotFoundException('ไม่พบหอพัก');
     const owner = dorm.owner;
@@ -27,8 +33,12 @@ export class FinanceService {
       throw new BadRequestException('เจ้าของหอยังไม่ได้ตั้งบัญชีธนาคารรับเงิน (หรือธนาคารไม่รองรับการโอนอัตโนมัติ)');
     }
 
+    // โอนแยกตามประเภทการเช่าได้ (รายเดือน/รายวัน คนละรอบ คนละยอด) — ไม่ระบุ = โอนรวมทั้งหมด
     const payments = await this.prisma.payment.findMany({
-      where: { status: 'SETTLED', booking: { room: { dormId } } },
+      where: {
+        status: 'SETTLED',
+        booking: { room: { dormId }, ...(rentalType ? { rentalType } : {}) },
+      },
     });
     const calculatedTotal = payments.reduce((sum, p) => sum + p.ownerPayout, 0);
     if (payments.length === 0 && !(confirmedAmount && confirmedAmount > 0)) {
@@ -44,7 +54,7 @@ export class FinanceService {
       accountHolderName: owner.bankAccountName,
       amount: transferAmount,
       referenceId: this.disbursement.freshReference(`dorm-${dormId}`),
-      description: `Hoprak payout - ${dorm.name}`,
+      description: `Hoprak payout - ${dorm.name}${rentalType ? ` (${rentalType === 'DAILY' ? 'รายวัน' : 'รายเดือน'})` : ''}`,
     });
 
     const now = new Date();
@@ -67,6 +77,7 @@ export class FinanceService {
           ownerId: dorm.ownerId,
           amount: transferAmount,
           baseAmount: calculatedTotal,
+          rentalType: rentalType ?? 'ALL',
           bonusAmount,
           note: note ?? null,
           linkedPaymentIds: payments.map((p) => p.id),
@@ -139,6 +150,205 @@ export class FinanceService {
     };
   }
 
+  /**
+   * รายได้จากหอพัก "รายวัน" เท่านั้น แยกตามหอ — คนละส่วนกับรายเดือน ไม่รวมกัน
+   * นับเฉพาะ booking.rentalType = DAILY ที่จ่ายเงินแล้ว (SETTLED/TRANSFERRED)
+   */
+  async dailySummary(year?: number, month?: number) {
+    const createdAt = this.periodRange(year, month);
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        status: { in: ['SETTLED', 'TRANSFERRED'] },
+        booking: { rentalType: 'DAILY' },
+        ...(createdAt ? { createdAt } : {}),
+      },
+      include: { booking: { include: { room: { include: { dorm: { include: { owner: true } } } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const byDorm = new Map<
+      string,
+      {
+        dormId: string;
+        dormName: string;
+        ownerId: string;
+        ownerName: string;
+        bookings: number;
+        nights: number;
+        gross: number;
+        commission: number;
+        ownerPayout: number;
+        transferred: number;
+        pending: number;
+      }
+    >();
+
+    for (const p of payments) {
+      const dorm = p.booking.room.dorm;
+      const row = byDorm.get(dorm.id) ?? {
+        dormId: dorm.id,
+        dormName: dorm.name,
+        ownerId: dorm.owner.id,
+        ownerName: dorm.owner.name,
+        bookings: 0,
+        nights: 0,
+        gross: 0,
+        commission: 0,
+        ownerPayout: 0,
+        transferred: 0,
+        pending: 0,
+      };
+      row.bookings += 1;
+      row.nights += p.booking.nights ?? 0;
+      row.gross += p.amount;
+      row.commission += p.commission;
+      row.ownerPayout += p.ownerPayout;
+      if (p.status === 'TRANSFERRED') row.transferred += p.ownerPayout;
+      else row.pending += p.ownerPayout;
+      byDorm.set(dorm.id, row);
+    }
+
+    const rows = Array.from(byDorm.values()).sort((a, b) => b.gross - a.gross);
+    const totals = rows.reduce(
+      (acc, r) => ({
+        bookings: acc.bookings + r.bookings,
+        nights: acc.nights + r.nights,
+        gross: acc.gross + r.gross,
+        commission: acc.commission + r.commission,
+        ownerPayout: acc.ownerPayout + r.ownerPayout,
+        transferred: acc.transferred + r.transferred,
+        pending: acc.pending + r.pending,
+      }),
+      { bookings: 0, nights: 0, gross: 0, commission: 0, ownerPayout: 0, transferred: 0, pending: 0 },
+    );
+    // ราคาเฉลี่ยต่อคืนทั้งระบบ (ADR) — ใช้ค่าห้องอย่างเดียว ไม่รวมมัดจำ (รายวันไม่เก็บมัดจำอยู่แล้ว)
+    const roomRentTotal = payments.reduce((sum, p) => sum + p.booking.roomPrice, 0);
+    const adr = totals.nights > 0 ? roomRentTotal / totals.nights : 0;
+
+    return { rows, totals, adr };
+  }
+
+  /**
+   * สรุปภาพรวมทั้งปี — ยอดรับรวม, ค่าคอม 20%, เงินโอนออก, ยอดคงเหลือ,
+   * สมาชิกที่สมัครเข้ามา, และรายชื่อเจ้าของหอ (ยอดโอนแล้ว/รอโอน/สถานะระงับ)
+   */
+  async yearlySummary(year?: number) {
+    const y = year ?? new Date().getFullYear();
+    const yearRange = { gte: new Date(y, 0, 1), lt: new Date(y + 1, 0, 1) };
+
+    const [payments, transferLogs, users, dorms, allPaymentYears] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: { status: { in: ['SETTLED', 'TRANSFERRED'] }, createdAt: yearRange },
+        include: { booking: { include: { room: { include: { dorm: { include: { owner: true } } } } } } },
+      }),
+      this.prisma.approvalLog.findMany({
+        where: { entityType: 'PAYOUT', createdAt: yearRange },
+        select: { snapshot: true },
+      }),
+      this.prisma.user.findMany({ select: { id: true, role: true, suspended: true, createdAt: true } }),
+      this.prisma.dorm.findMany({ select: { id: true, ownerId: true, status: true } }),
+      this.prisma.payment.findMany({
+        where: { status: { in: ['SETTLED', 'TRANSFERRED'] } },
+        select: { createdAt: true },
+      }),
+    ]);
+
+    // ยอดต่อเดือนของปีนี้
+    const months = Array.from({ length: 12 }, (_, m) => ({
+      month: m + 1,
+      gross: 0,
+      commission: 0,
+      ownerPayout: 0,
+      bookings: 0,
+    }));
+    for (const p of payments) {
+      const row = months[p.createdAt.getMonth()];
+      row.gross += p.amount;
+      row.commission += p.commission;
+      row.ownerPayout += p.ownerPayout;
+      row.bookings += 1;
+    }
+
+    const transferredOut = transferLogs.reduce((sum, log) => {
+      const snap = log.snapshot as { amount?: number } | null;
+      return sum + (snap?.amount ?? 0);
+    }, 0);
+
+    const totals = {
+      gross: payments.reduce((s, p) => s + p.amount, 0),
+      commission: payments.reduce((s, p) => s + p.commission, 0),
+      ownerPayout: payments.reduce((s, p) => s + p.ownerPayout, 0),
+      bookings: payments.length,
+      transferredOut,
+      // คงเหลือในบัญชีกลางของ "ปีนี้" = เงินเข้าปีนี้ − เงินโอนออกปีนี้
+      balance: payments.reduce((s, p) => s + p.amount, 0) - transferredOut,
+    };
+
+    // สมาชิก
+    const members = {
+      total: users.length,
+      newThisYear: users.filter((u) => u.createdAt >= yearRange.gte && u.createdAt < yearRange.lt).length,
+      tenants: users.filter((u) => u.role === 'TENANT').length,
+      owners: users.filter((u) => u.role === 'OWNER').length,
+      admins: users.filter((u) => u.role === 'ADMIN').length,
+      suspended: users.filter((u) => u.suspended).length,
+    };
+
+    // รายชื่อเจ้าของหอ + ยอดโอน/รอโอนของปีนี้
+    const ownerMap = new Map<
+      string,
+      {
+        ownerId: string;
+        name: string;
+        email: string | null;
+        phone: string | null;
+        suspended: boolean;
+        dormCount: number;
+        gross: number;
+        payout: number;
+        transferred: number;
+        pending: number;
+      }
+    >();
+    for (const p of payments) {
+      const owner = p.booking.room.dorm.owner;
+      const row = ownerMap.get(owner.id) ?? {
+        ownerId: owner.id,
+        name: owner.name,
+        email: owner.email ?? null,
+        phone: owner.phone ?? null,
+        suspended: owner.suspended,
+        dormCount: dorms.filter((d) => d.ownerId === owner.id).length,
+        gross: 0,
+        payout: 0,
+        transferred: 0,
+        pending: 0,
+      };
+      row.gross += p.amount;
+      row.payout += p.ownerPayout;
+      if (p.status === 'TRANSFERRED') row.transferred += p.ownerPayout;
+      else row.pending += p.ownerPayout;
+      ownerMap.set(owner.id, row);
+    }
+
+    const years = Array.from(new Set(allPaymentYears.map((p) => p.createdAt.getFullYear()))).sort((a, b) => b - a);
+
+    return {
+      year: y,
+      years: years.length > 0 ? years : [y],
+      months,
+      totals,
+      members,
+      owners: [...ownerMap.values()].sort((a, b) => b.gross - a.gross),
+      dorms: {
+        total: dorms.length,
+        approved: dorms.filter((d) => d.status === 'APPROVED').length,
+        suspended: dorms.filter((d) => d.status === 'SUSPENDED').length,
+        rejected: dorms.filter((d) => d.status === 'REJECTED').length,
+      },
+    };
+  }
+
   // ประวัติการโอนเงินทั้งหมด (ทุกครั้งที่แอดมินกดโอน ไม่ว่าจะผูกกับ payment หรือ ad-hoc) — ใครโอน โอนให้ใคร วันเวลา ยอดเท่าไหร่
   async transferHistory() {
     const logs = await this.prisma.approvalLog.findMany({
@@ -188,6 +398,7 @@ export class FinanceService {
       ownerName: p.booking.room.dorm.owner.name,
       dormName: p.booking.room.dorm.name,
       contactName: p.booking.contactName,
+      rentalType: p.booking.rentalType,
       method: p.method,
       amount: p.amount,
       roomPrice: p.booking.roomPrice,
@@ -221,6 +432,127 @@ export class FinanceService {
   // แสดงหอที่อนุมัติแล้วทั้งหมด (เลือกดูได้ทุกหอ ไม่ใช่แค่หอที่มียอดค้างโอน) พร้อมยอดค้างโอนจริง
   // (SETTLED เท่านั้น — ถ้าไม่มียอด totalPayout เป็น 0 ปุ่มโอนฝั่ง frontend ต้อง disable เพราะ
   // การโอนต้องผูกกับ payment จริงเสมอ ห้ามโอนแบบไม่มีที่มา)
+  /**
+   * ยอดค้างโอนแยกตามประเภทการเช่า + ส่วนแบ่งแพลตฟอร์มของแต่ละประเภท
+   * รายเดือนหักคอม 20% จากค่าห้อง · รายวันหัก 10% จากยอดเต็ม → ต้องดูแยกกัน ไม่ใช่ยอดรวมก้อนเดียว
+   */
+  async payoutBreakdown(dormId?: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        status: { in: ['SETTLED', 'TRANSFERRED'] },
+        ...(dormId ? { booking: { room: { dormId } } } : {}),
+      },
+      include: { booking: { include: { room: { include: { dorm: { include: { owner: true } } } } } } },
+    });
+
+    type Bucket = { gross: number; commission: number; ownerPayout: number; pending: number; transferred: number; count: number };
+    const empty = (): Bucket => ({ gross: 0, commission: 0, ownerPayout: 0, pending: 0, transferred: 0, count: 0 });
+
+    const byDorm = new Map<
+      string,
+      { dormId: string; dormName: string; ownerId: string; ownerName: string; monthly: Bucket; daily: Bucket }
+    >();
+
+    for (const p of payments) {
+      const dorm = p.booking.room.dorm;
+      const row =
+        byDorm.get(dorm.id) ?? {
+          dormId: dorm.id,
+          dormName: dorm.name,
+          ownerId: dorm.owner.id,
+          ownerName: dorm.owner.name,
+          monthly: empty(),
+          daily: empty(),
+        };
+      const bucket = p.booking.rentalType === 'DAILY' ? row.daily : row.monthly;
+      bucket.gross += p.amount;
+      bucket.commission += p.commission;
+      bucket.ownerPayout += p.ownerPayout;
+      bucket.count += 1;
+      if (p.status === 'TRANSFERRED') bucket.transferred += p.ownerPayout;
+      else bucket.pending += p.ownerPayout;
+      byDorm.set(dorm.id, row);
+    }
+
+    const rows = [...byDorm.values()].sort(
+      (a, b) => b.monthly.gross + b.daily.gross - (a.monthly.gross + a.daily.gross),
+    );
+    const sum = (pick: (r: (typeof rows)[number]) => Bucket) =>
+      rows.reduce(
+        (acc, r) => {
+          const b = pick(r);
+          return {
+            gross: acc.gross + b.gross,
+            commission: acc.commission + b.commission,
+            ownerPayout: acc.ownerPayout + b.ownerPayout,
+            pending: acc.pending + b.pending,
+            transferred: acc.transferred + b.transferred,
+            count: acc.count + b.count,
+          };
+        },
+        empty(),
+      );
+
+    return { rows, totals: { monthly: sum((r) => r.monthly), daily: sum((r) => r.daily) } };
+  }
+
+  /**
+   * รายได้แพลตฟอร์ม (ค่าคอม) แยกรายเดือน/รายวัน ตามช่วงเวลา
+   * period = 'day' (30 วันล่าสุด) · 'month' (12 เดือนของปี) · 'year' (ทุกปีที่มีข้อมูล)
+   */
+  async revenueBreakdown(period: 'day' | 'month' | 'year' = 'month', year?: number) {
+    const y = year ?? new Date().getFullYear();
+    const since = period === 'day' ? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000) : undefined;
+
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        status: { in: ['SETTLED', 'TRANSFERRED'] },
+        ...(period === 'month' ? { createdAt: { gte: new Date(y, 0, 1), lt: new Date(y + 1, 0, 1) } } : {}),
+        ...(since ? { createdAt: { gte: since } } : {}),
+      },
+      include: { booking: { select: { rentalType: true } } },
+    });
+
+    const keyOf = (d: Date) => {
+      if (period === 'day') return d.toISOString().slice(0, 10);
+      if (period === 'month') return String(d.getMonth() + 1);
+      return String(d.getFullYear());
+    };
+
+    const map = new Map<
+      string,
+      { key: string; monthlyCommission: number; dailyCommission: number; monthlyGross: number; dailyGross: number }
+    >();
+    for (const p of payments) {
+      const key = keyOf(p.createdAt);
+      const row =
+        map.get(key) ?? { key, monthlyCommission: 0, dailyCommission: 0, monthlyGross: 0, dailyGross: 0 };
+      if (p.booking.rentalType === 'DAILY') {
+        row.dailyCommission += p.commission;
+        row.dailyGross += p.amount;
+      } else {
+        row.monthlyCommission += p.commission;
+        row.monthlyGross += p.amount;
+      }
+      map.set(key, row);
+    }
+
+    const rows = [...map.values()].sort((a, b) =>
+      period === 'month' ? Number(a.key) - Number(b.key) : a.key.localeCompare(b.key),
+    );
+    const totals = rows.reduce(
+      (acc, r) => ({
+        monthlyCommission: acc.monthlyCommission + r.monthlyCommission,
+        dailyCommission: acc.dailyCommission + r.dailyCommission,
+        monthlyGross: acc.monthlyGross + r.monthlyGross,
+        dailyGross: acc.dailyGross + r.dailyGross,
+      }),
+      { monthlyCommission: 0, dailyCommission: 0, monthlyGross: 0, dailyGross: 0 },
+    );
+
+    return { period, year: y, rows, totals };
+  }
+
   async listPendingPayouts() {
     const [dorms, payments] = await Promise.all([
       this.prisma.dorm.findMany({

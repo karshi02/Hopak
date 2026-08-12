@@ -99,17 +99,22 @@ export class AuthService {
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const target = (err.meta?.target as string[] | undefined) ?? [];
-        if (target.includes('email')) throw new ConflictException('อีเมลนี้ถูกใช้งานแล้ว');
-        if (target.includes('phone')) throw new ConflictException('เบอร์โทรนี้ถูกใช้งานแล้ว');
+        // index ใหม่เป็นคู่ (email, role) — ชนแปลว่ามีบัญชี "ผู้เช่า" ด้วยอีเมลนี้แล้ว
+        // (บัญชีเจ้าของหออีเมลเดียวกันไม่ชน เพราะคนละ role)
+        if (target.includes('email')) throw new ConflictException('อีเมลนี้มีบัญชีผู้เช่าอยู่แล้ว');
+        if (target.includes('phone')) throw new ConflictException('เบอร์โทรนี้มีบัญชีผู้เช่าอยู่แล้ว');
         throw new ConflictException('ข้อมูลนี้ถูกใช้งานแล้ว');
       }
       throw err;
     }
   }
 
-  private async verifyCredentials(dto: LoginDto) {
+  // ค้นบัญชีตาม "บทบาท" ด้วยเสมอ — อีเมลเดียวกันมีได้ทั้งบัญชีผู้เช่าและบัญชีเจ้าของหอ
+  // ถ้าไม่ระบุ role จะหลุดไปเจอบัญชีผิดฝั่ง (login ฝั่งผู้เช่าแล้วได้บัญชีเจ้าของหอ)
+  private async verifyCredentials(dto: LoginDto, roles: ('TENANT' | 'OWNER' | 'ADMIN')[]) {
+    const identity = dto.email ? { email: dto.email } : { phone: dto.phone };
     const user = await this.prisma.user.findFirst({
-      where: dto.email ? { email: dto.email } : { phone: dto.phone },
+      where: { ...identity, role: { in: roles } },
     });
     if (!user || !user.password) throw new UnauthorizedException('Invalid credentials');
 
@@ -120,25 +125,39 @@ export class AuthService {
     return user;
   }
 
+  // เข้าสู่ระบบฝั่งผู้เช่า — เห็นเฉพาะบัญชี TENANT
   async login(dto: LoginDto, device?: DeviceInfo) {
-    const user = await this.verifyCredentials(dto);
-    if (user.role === 'ADMIN') throw new UnauthorizedException('Invalid credentials');
+    const user = await this.verifyCredentials(dto, ['TENANT']);
+    return { accessToken: await this.sign(user, device), user: this.omitPassword(user) };
+  }
+
+  // เข้าสู่ระบบฝั่งเจ้าของหอ — เห็นเฉพาะบัญชี OWNER (คนละบัญชีกับฝั่งผู้เช่าแม้อีเมลเดียวกัน)
+  async partnerLogin(dto: LoginDto, device?: DeviceInfo) {
+    const user = await this.verifyCredentials(dto, ['OWNER']);
     return { accessToken: await this.sign(user, device), user: this.omitPassword(user) };
   }
 
   async adminLogin(dto: LoginDto, device?: DeviceInfo) {
-    const user = await this.verifyCredentials(dto);
-    if (user.role !== 'ADMIN') throw new UnauthorizedException('Invalid credentials');
+    const user = await this.verifyCredentials(dto, ['ADMIN']);
     return { accessToken: await this.sign(user, device), user: this.omitPassword(user) };
   }
 
-  async loginWithGoogle(profile: { googleId: string; email?: string; name: string }, device?: DeviceInfo) {
-    let user = await this.prisma.user.findUnique({ where: { googleId: profile.googleId } });
+  /**
+   * เข้าสู่ระบบด้วย Google — ต้องรู้ว่าเข้ามาจากฝั่งไหน (ผู้เช่า/เจ้าของหอ)
+   * เพราะบัญชีสองฝั่งแยกขาดกันแม้ใช้ Google account เดียวกัน
+   * ฝั่งเจ้าของหอ: ไม่สร้างบัญชีใหม่ให้อัตโนมัติ ต้องสมัครผ่านหน้าเปิดหอพักก่อน (แอดมินอนุมัติ)
+   */
+  async loginWithGoogle(
+    profile: { googleId: string; email?: string; name: string },
+    device?: DeviceInfo,
+    role: 'TENANT' | 'OWNER' = 'TENANT',
+  ) {
+    let user = await this.prisma.user.findFirst({ where: { googleId: profile.googleId, role } });
 
     // ห้ามผูก Google identity กับบัญชีเดิมด้วย email เพียงอย่างเดียว เพราะผู้โจมตี
     // อาจสมัครจอง email ของเหยื่อไว้ก่อนแล้วคง password ของตัวเองไว้ได้
     if (!user && profile.email) {
-      const existingByEmail = await this.prisma.user.findUnique({ where: { email: profile.email } });
+      const existingByEmail = await this.prisma.user.findFirst({ where: { email: profile.email, role } });
       if (existingByEmail) {
         throw new ConflictException('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบด้วยวิธีเดิม');
       }
@@ -160,8 +179,9 @@ export class AuthService {
 
   // คืน { ok: true } เสมอไม่ว่าอีเมลจะมีในระบบหรือไม่ — กัน user enumeration
   // (ถ้าตอบต่างกันจะกลายเป็นเครื่องมือให้คนไล่เช็คว่าอีเมลไหนสมัครไว้แล้วบ้าง)
-  async forgotPassword(email: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+  async forgotPassword(email: string, role: 'TENANT' | 'OWNER' = 'TENANT') {
+    // อีเมลเดียวมีได้ทั้งบัญชีผู้เช่าและเจ้าของหอ — รีเซ็ตรหัสของฝั่งที่ผู้ใช้กดมาเท่านั้น
+    const user = await this.prisma.user.findFirst({ where: { email, role } });
 
     if (user && !user.suspended) {
       const recentlySent =

@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
 import { usePartnerMode } from '@/hooks/usePartnerMode';
-import { COMMISSION_RATE } from '@hopak/shared';
+import { DAILY_COMMISSION_RATE } from '@hopak/shared';
 import type { Dorm } from '@hopak/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -73,7 +73,7 @@ const TEXT = {
     pricingSub: 'กำหนดค่าเช่า เงินมัดจำ และเรตค่าน้ำค่าไฟต่อหน่วย',
     pricingDaily: 'ราคาต่อคืน',
     pricingDailySub: 'ห้องรายวันคิดเป็นรายคืน ไม่มีมัดจำและค่าน้ำค่าไฟ',
-    netPerNight: 'เจ้าของได้รับ / คืน (หลังหัก 20%)',
+    netPerNight: 'เจ้าของได้รับ / คืน (หลังหัก 10%)',
     titleMonthly: 'เพิ่มห้องพักรายเดือน',
     titleDaily: 'เพิ่มห้องพักรายวัน',
     submitDaily: 'เปิดจองรายวัน',
@@ -121,7 +121,7 @@ const TEXT = {
     pricingSub: 'Set rent, deposit, and per-unit water/electricity rates',
     pricingDaily: 'Nightly price',
     pricingDailySub: 'Daily rooms are charged per night — no deposit or utility rates',
-    netPerNight: 'You receive / night (after 20%)',
+    netPerNight: 'You receive / night (after 10%)',
     titleMonthly: 'Add monthly room',
     titleDaily: 'Add daily room',
     submitDaily: 'Open for daily booking',
@@ -393,10 +393,10 @@ export default function NewRoomPage() {
               <div className="rounded-[13px] border border-hairline bg-success-tint p-3.5">
                 <div className="mb-2 text-xs font-semibold text-success">{t.netPerNight}</div>
                 <div className="font-sans text-2xl font-bold text-success">
-                  ฿{Math.round(pricePerDay * (1 - COMMISSION_RATE)).toLocaleString()}
+                  ฿{Math.round(pricePerDay * (1 - DAILY_COMMISSION_RATE)).toLocaleString()}
                 </div>
                 <div className="mt-1 text-[11.5px] text-ink-muted">
-                  ฿{pricePerDay.toLocaleString()} − ฿{Math.round(pricePerDay * COMMISSION_RATE).toLocaleString()} (20%)
+                  ฿{pricePerDay.toLocaleString()} − ฿{Math.round(pricePerDay * DAILY_COMMISSION_RATE).toLocaleString()} (10%)
                 </div>
               </div>
             </div>

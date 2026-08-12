@@ -3,6 +3,8 @@ let loadPromise: Promise<typeof google> | null = null;
 declare global {
   interface Window {
     __hopakGmapsCallback?: () => void;
+    // Google เรียกเมื่อ key ผิด / ยังไม่เปิด API / ไม่ได้เปิด billing
+    gm_authFailure?: () => void;
   }
 }
 

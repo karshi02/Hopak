@@ -1,25 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { ALL_PROVINCES, normalizeProvince } from '@hopak/shared';
+import PlacesAutocompleteInput, { type PlacePick } from '@/components/map/PlacesAutocompleteInput';
+import { loadGoogleMaps } from '@/lib/googleMaps';
+import { apiClient } from '@/lib/api-client';
+import { setToken } from '@/lib/auth';
+
+// แผนที่โหลดฝั่ง client เท่านั้น (Google Maps ใช้ window)
+const MapPicker = dynamic(() => import('@/components/map/MapPicker'), { ssr: false });
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 type Step = 1 | 2 | 3 | 4;
-
-type Place = {
-  name: string;
-  area: string;
-  lat: number;
-  lng: number;
-};
-
-type Pin = { x: number; y: number; lat: number; lng: number };
-
-const PLACES: Place[] = [
-  { name: 'ม.มหาสารคาม (เขตขามเรียง)', area: 'ต.ขามเรียง อ.กันทรวิชัย', lat: 16.2468, lng: 103.2512 },
-  { name: 'ตลาดสดเทศบาลเมือง', area: 'ถ.นครสวรรค์ ต.ตลาด อ.เมือง', lat: 16.1812, lng: 103.3005 },
-  { name: 'โรงพยาบาลมหาสารคาม', area: 'ถ.ผดุงวิถี ต.ตลาด อ.เมือง', lat: 16.1774, lng: 103.2941 },
-  { name: 'เสริมไทย คอมเพล็กซ์', area: 'ถ.นครสวรรค์ ต.ตลาด อ.เมือง', lat: 16.1893, lng: 103.2998 },
-];
 
 const STEP_LABELS = ['บัญชี', 'ข้อมูลหอ', 'ส่งใบสมัคร', 'รออนุมัติ'];
 const MOBILE_STEP_LABELS = ['สร้างบัญชี', 'ยืนยันและข้อมูลหอ', 'ส่งใบสมัคร', 'รออนุมัติ'];
@@ -127,10 +122,6 @@ function BrandPanel() {
         </div>
       </div>
 
-      <div className="relative flex items-center gap-3 text-sm text-white/80">
-        <div className="flex -space-x-2"><span className="h-9 w-9 rounded-full border-2 border-[#0B5F55] bg-[#F0B28E]" /><span className="h-9 w-9 rounded-full border-2 border-[#0B5F55] bg-[#B7D9CC]" /><span className="h-9 w-9 rounded-full border-2 border-[#0B5F55] bg-[#C8B6E8]" /></div>
-        <span>เจ้าของหอกว่า <b className="font-sans text-white">300+</b> รายเข้าร่วมแล้ว</span>
-      </div>
     </aside>
   );
 }
@@ -142,34 +133,238 @@ export default function PartnerRegisterPage() {
   const [dorm, setDorm] = useState('');
   const [addr, setAddr] = useState('');
   const [query, setQuery] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '']);
+  // OTP 6 หลัก (backend ตรวจ @Length(6,6)) — เดิม UI มี 4 ช่องเลยยืนยันไม่ผ่านแน่นอน
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [appId, setAppId] = useState<string | null>(null);
+  // continuation secret จาก backend — ต้องแนบทุก request ของใบสมัคร (id อย่างเดียวไม่พอ)
+  const [appSecret, setAppSecret] = useState<string | null>(null);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(0); // คูลดาวน์ก่อนขอรหัสใหม่ได้ (60 วิ ตรงกับ backend)
+  const [otpExpiresIn, setOtpExpiresIn] = useState(0); // อายุรหัสที่ส่งไป (600 วิ ตรงกับ backend)
+  const [ownerExists, setOwnerExists] = useState(false);
+  const [docs, setDocs] = useState<{ name: string; size: number }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const docInputRef = useRef<HTMLInputElement>(null);
   const [showMap, setShowMap] = useState(false);
-  const [pin, setPin] = useState<Pin | null>(null);
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [province, setProvince] = useState('');
+  const [placeName, setPlaceName] = useState('');
+  const [outsideTh, setOutsideTh] = useState(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const next = () => setStep((current) => Math.min(4, current + 1) as Step);
   const back = () => setStep((current) => Math.max(1, current - 1) as Step);
-  const restart = () => {
-    setStep(1); setName(''); setEmail(''); setDorm(''); setAddr(''); setQuery(''); setOtp(['', '', '', '']); setPin(null); setShowMap(false);
+  // สมัครด้วย Google — ส่งไป OAuth จริง (ฝั่งเจ้าของหอ) ไม่ใช่ข้อมูลปลอมแบบเดิม
+  const goGmail = () => {
+    sessionStorage.setItem('googleIntent', 'owner');
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}/auth/google?intent=owner`;
   };
-  const goGmail = () => { setName('Kali Test'); setEmail('kali.test@gmail.com'); setStep(2); };
 
-  const dropPin = (event: React.MouseEvent<HTMLDivElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = Math.max(3, Math.min(97, ((event.clientX - bounds.left) / bounds.width) * 100));
-    const y = Math.max(4, Math.min(96, ((event.clientY - bounds.top) / bounds.height) * 100));
-    setPin({ x, y, lat: 16.18 + (50 - y) * 0.0014, lng: 103.3 + (x - 50) * 0.0017 });
+  // ขั้น 1 → สร้างใบสมัคร แล้วให้ backend ส่ง OTP เข้าอีเมล
+  async function startApplication() {
+    setError(null);
+    if (!name.trim() || !email.trim()) {
+      setError('กรอกชื่อและอีเมลก่อน');
+      return;
+    }
+    setBusy(true);
+    try {
+      let id = appId;
+      let secret = appSecret;
+      if (!id || !secret) {
+        const app = await apiClient.post<{ id: string; secret: string }>('/owner-applications', {
+          name: name.trim(),
+          email: email.trim(),
+        });
+        id = app.id;
+        secret = app.secret;
+        setAppId(id);
+        setAppSecret(secret);
+      }
+      await apiClient.post(`/owner-applications/${id}/send-otp`, {}, { 'x-application-secret': secret });
+      setResendIn(60);
+      setOtpExpiresIn(600);
+      setStep(2);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'ส่งรหัสยืนยันไม่สำเร็จ';
+      // มีบัญชี "เจ้าของหอ" ด้วยอีเมลนี้แล้ว (คนละเรื่องกับบัญชีผู้เช่า ซึ่งสมัครซ้ำได้)
+      setOwnerExists(message.includes('เจ้าของหอ'));
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendOtp() {
+    if (!appId || resendIn > 0) return;
+    setError(null);
+    try {
+      await apiClient.post(`/owner-applications/${appId}/send-otp`, {}, secretHeader());
+      setResendIn(60);
+      setOtpExpiresIn(600);
+      setOtp(['', '', '', '', '', '']);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ส่งรหัสใหม่ไม่สำเร็จ');
+    }
+  }
+
+  async function verifyOtp() {
+    const code = otp.join('');
+    setError(null);
+    if (!appId || code.length !== 6) {
+      setError('กรอกรหัส 6 หลักให้ครบ');
+      return;
+    }
+    if (otpExpiresIn <= 0) {
+      setError('รหัสหมดอายุแล้ว กดขอรหัสใหม่');
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiClient.post(`/owner-applications/${appId}/verify-otp`, { code }, secretHeader());
+      setOtpVerified(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'รหัสไม่ถูกต้องหรือหมดอายุ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const secretHeader = () => (appSecret ? { 'x-application-secret': appSecret } : undefined);
+
+  // เอกสารยืนยัน (บัตรประชาชน/โฉนด/ทะเบียนบ้าน) — เก็บแบบ private แอดมินเท่านั้นที่เปิดดูได้
+  async function uploadDocs(files: FileList | null) {
+    if (!files?.length || !appId) return;
+    setError(null);
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > 10 * 1024 * 1024) {
+          setError(`${file.name} ใหญ่เกิน 10MB`);
+          continue;
+        }
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`${API_URL}/owner-applications/${appId}/documents`, {
+          method: 'POST',
+          body: form,
+          headers: appSecret ? { 'x-application-secret': appSecret } : undefined,
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => null);
+          throw new Error(detail?.message ?? 'อัปโหลดเอกสารไม่สำเร็จ');
+        }
+        setDocs((prev) => [...prev, { name: file.name, size: file.size }]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'อัปโหลดเอกสารไม่สำเร็จ');
+    } finally {
+      setUploading(false);
+      if (docInputRef.current) docInputRef.current.value = '';
+    }
+  }
+
+  // ขั้น 2 → บันทึกข้อมูลหอ + ตั้งรหัสผ่าน = ส่งใบสมัครจริง
+  async function submitApplication() {
+    setError(null);
+    if (!appId) return setError('ยังไม่ได้เริ่มใบสมัคร');
+    if (!otpVerified) return setError('ยืนยันรหัส OTP ก่อน');
+    if (!dorm.trim()) return setError('กรอกชื่อหอพัก');
+    if (!province) return setError('เลือกจังหวัด');
+    if (!pin) return setError('ปักหมุดตำแหน่งหอบนแผนที่ก่อน');
+    if (password.length < 6) return setError('รหัสผ่านอย่างน้อย 6 ตัวอักษร');
+    if (password !== password2) return setError('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+    if (docs.length === 0) return setError('แนบเอกสารยืนยันอย่างน้อย 1 ไฟล์');
+
+    setBusy(true);
+    try {
+      await apiClient.patch(
+        `/owner-applications/${appId}/dorm`,
+        {
+          dormName: dorm.trim(),
+          address: addr.trim() || undefined,
+          province,
+          lat: pin.lat,
+          lng: pin.lng,
+        },
+        secretHeader(),
+      );
+      const done = await apiClient.post<{ accessToken?: string }>(
+        `/owner-applications/${appId}/finish`,
+        { password },
+        secretHeader(),
+      );
+      // finish คืน JWT ของบัญชีเจ้าของหอมาให้ — เก็บไว้เลย ผู้ใช้เข้าคอนโซลได้ทันทีโดยไม่ต้องล็อกอินซ้ำ
+      if (done?.accessToken) setToken(done.accessToken);
+      setStep(3);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ส่งใบสมัครไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // เลือกจากช่องค้นหา (เฉพาะที่พัก: โรงแรม/หอพัก/คอนโป/เกสต์เฮาส์) → เติมทุกช่องอัตโนมัติ
+  const pickPlace = (place: PlacePick) => {
+    setPin({ lat: place.lat, lng: place.lng });
+    // เขียนทับทุกครั้งที่เลือกใหม่ — ไม่ใช่เฉพาะครั้งแรก ไม่งั้นค่าเก่าค้างข้ามสถานที่
+    setAddr(place.address);
+    setPlaceName(place.name);
+    if (place.name) setDorm(place.name);
+    // แปลงจังหวัดไม่ได้ (เช่นอยู่ต่างประเทศ) = ล้างค่าให้ว่าง ให้ผู้ใช้เลือกเอง ดีกว่าค้างจังหวัดเดิมผิดๆ
+    setProvince(place.province ?? '');
+    setOutsideTh(place.country != null && place.country !== 'TH');
+    setShowMap(true);
   };
-  const pick = (place: Place) => {
-    setPin({ x: 50 + (place.lng - 103.3) / 0.0017, y: 50 - (place.lat - 16.18) / 0.0014, lat: place.lat, lng: place.lng });
-    setAddr(`${place.name} · ${place.area}`); setQuery(place.name); setShowMap(true);
+
+  // ลากหมุด/แตะแผนที่ → หาที่อยู่+จังหวัดย้อนกลับ (reverse geocode) ให้ตรงกับตำแหน่งใหม่
+  const movePin = async (lat: number, lng: number) => {
+    setPin({ lat, lng });
+    try {
+      const g = await loadGoogleMaps();
+      const geocoder = new g.maps.Geocoder();
+      const res = await geocoder.geocode({ location: { lat, lng } });
+      const best = res.results?.[0];
+      if (!best) return;
+      setAddr(best.formatted_address ?? '');
+      const comps = best.address_components ?? [];
+      // ไม่มี administrative_area_level_1 ก็แกะจากที่อยู่เต็มแทน
+      const prov =
+        normalizeProvince(comps.find((c) => c.types.includes('administrative_area_level_1'))?.long_name) ??
+        normalizeProvince(best.formatted_address);
+      // ลากหมุดไปจังหวัดอื่น = เปลี่ยนตาม ; หาไม่เจอ = ล้างให้เลือกเอง
+      setProvince(prov ?? '');
+      const country = comps.find((c) => c.types.includes('country'))?.short_name ?? null;
+      setOutsideTh(country != null && country !== 'TH');
+    } catch {
+      // หา address ไม่ได้ก็ปล่อย — พิกัดยังใช้ได้
+    }
   };
   const setOtpDigit = (index: number, value: string) => {
     const digit = value.replace(/\D/g, '').slice(-1);
     setOtp((current) => current.map((item, itemIndex) => itemIndex === index ? digit : item));
-    if (digit && index < 3) otpRefs.current[index + 1]?.focus();
+    if (digit && index < 5) otpRefs.current[index + 1]?.focus();
   };
-  const results = query.trim() ? PLACES.filter((place) => `${place.name} ${place.area}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 4) : [];
+  // นับถอยหลังก่อนกดส่งรหัสใหม่ได้ (คนละตัวกับอายุรหัส)
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
+
+  // นับถอยหลังอายุรหัส OTP — หมดแล้วต้องขอใหม่ (ยืนยันไม่ได้)
+  useEffect(() => {
+    if (otpExpiresIn <= 0 || otpVerified) return;
+    const timer = setTimeout(() => setOtpExpiresIn((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [otpExpiresIn, otpVerified]);
+
+  const mmss = (total: number) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+
   const coordinate = pin ? `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}` : null;
 
   return (
@@ -209,7 +404,20 @@ export default function PartnerRegisterPage() {
                 <Field label="อีเมล" hint="เราจะส่งรหัส OTP ไปยืนยัน"><input value={email} type="email" onChange={(event) => setEmail(event.target.value)} placeholder="your@email.com" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 font-sans text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field>
               </div>
               <div className="flex-1" />
-              <button onClick={next} className="mt-8 flex h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] transition hover:bg-[#0B7A6C]">ส่งรหัสยืนยัน <ArrowIcon /></button>
+              {error && (
+                <p className="mt-4 text-[13px] font-semibold text-danger">
+                  {error}
+                  {ownerExists && (
+                    <>
+                      {' '}
+                      <Link href="/partner-login" className="underline">
+                        เข้าสู่ระบบเจ้าของหอ
+                      </Link>
+                    </>
+                  )}
+                </p>
+              )}
+              <button onClick={startApplication} disabled={busy} className="mt-8 flex h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] transition hover:bg-[#0B7A6C] disabled:opacity-60">{busy ? 'กำลังส่ง...' : 'ส่งรหัสยืนยัน'} <ArrowIcon /></button>
               <p className="mt-5 text-center text-sm text-[#5B655F] min-[821px]:hidden">มีบัญชีแล้ว? <Link href="/partner-login" className="font-bold text-[#0E9F8E]">เข้าสู่ระบบ</Link></p>
             </div>
           )}
@@ -219,25 +427,135 @@ export default function PartnerRegisterPage() {
               <h1 className="text-[25px] font-bold tracking-[-.45px] min-[821px]:text-[32px]">ยืนยันอีเมลและข้อมูลหอ</h1>
               <p className="mt-2 text-[15px] text-[#5B655F]">ส่งรหัส OTP ไปที่ <b className="font-sans text-[#33413B]">{email || 'your@email.com'}</b></p>
               <div className="mt-5 flex gap-2.5 min-[821px]:max-w-[280px]">{otp.map((value, index) => <input key={index} ref={(element) => { otpRefs.current[index] = element; }} value={value} onChange={(event) => setOtpDigit(index, event.target.value)} onKeyDown={(event) => { if (event.key === 'Backspace' && !value && index > 0) otpRefs.current[index - 1]?.focus(); }} inputMode="numeric" maxLength={1} aria-label={`OTP หลักที่ ${index + 1}`} className={`h-[52px] min-w-0 flex-1 rounded-[13px] border text-center font-sans text-[24px] font-bold outline-none transition ${value ? 'border-[#0E9F8E] bg-[#F2FAF8] text-[#0B7A6C]' : 'border-[#E1E8E5] bg-white focus:border-[#0E9F8E] focus:ring-4 focus:ring-[#0E9F8E]/10'}`} />)}</div>
-              <button className="mt-3 text-[12.5px] font-semibold text-[#0E9F8E]">ส่งรหัสอีกครั้งใน 0:52</button>
+              {/* อายุรหัส (10 นาที) — คนละเรื่องกับคูลดาวน์ขอรหัสใหม่ (1 นาที) */}
+              {!otpVerified && otpExpiresIn > 0 && (
+                <p className={`mt-2.5 text-[12.5px] font-semibold ${otpExpiresIn <= 60 ? 'text-[#E34D4D]' : 'text-[#5B655F]'}`}>
+                  รหัสหมดอายุใน {mmss(otpExpiresIn)} นาที
+                </p>
+              )}
+              {!otpVerified && otpExpiresIn === 0 && appId && (
+                <p className="mt-2.5 text-[12.5px] font-semibold text-[#E34D4D]">รหัสหมดอายุแล้ว — กดขอรหัสใหม่ด้านล่าง</p>
+              )}
+
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={verifyOtp}
+                  disabled={busy || otpVerified || otpExpiresIn <= 0}
+                  className={`h-[40px] rounded-[11px] px-4 text-[13.5px] font-bold text-white disabled:opacity-60 ${otpVerified ? 'bg-[#12B58C]' : 'bg-[#0E9F8E]'}`}
+                >
+                  {otpVerified ? '✓ ยืนยันอีเมลแล้ว' : busy ? 'กำลังตรวจสอบ...' : 'ยืนยันรหัส'}
+                </button>
+                <button onClick={resendOtp} disabled={resendIn > 0 || otpVerified} className="text-[12.5px] font-semibold text-[#0E9F8E] disabled:text-[#9AA5A0]">
+                  {resendIn > 0 ? `ขอรหัสใหม่ได้ใน ${mmss(resendIn)}` : 'ขอรหัสใหม่'}
+                </button>
+              </div>
               <div className="my-7 h-px bg-[#E7ECEA]" />
               <h2 className="text-[19px] font-bold">ข้อมูลหอพักของคุณ</h2><p className="mt-1 text-[14px] text-[#5B655F]">กรอกเท่าที่มีตอนนี้ รายละเอียดอื่นเพิ่มทีหลังได้</p>
               <button onClick={() => setShowMap((visible) => !visible)} className="mt-5 flex w-full items-center gap-3 rounded-[14px] border border-[#D5EDE7] bg-[#F2FAF8] px-4 py-3.5 text-left transition hover:bg-[#E8F7F3]"><span className="text-[#0E9F8E]"><PinIcon /></span><span className="min-w-0 flex-1"><span className="block text-[14px] font-bold text-[#226C62]">{coordinate ? `✓ ปักหมุดแล้ว · ${coordinate}` : 'ปักหมุดที่อยู่บนแผนที่'}</span><span className="mt-0.5 block text-xs text-[#61857E]">ช่วยให้ผู้เช่าหาหอของคุณเจอได้ง่ายขึ้น</span></span><span className="text-[13px] font-bold text-[#0E9F8E]">{showMap ? 'ซ่อน' : 'ปักหมุด →'}</span></button>
               {showMap && <div className="mt-3">
-                <div className="relative"><span className="pointer-events-none absolute left-3.5 top-[15px] z-10 text-[#78928B]"><Icon className="h-5 w-5"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></Icon></span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาสถานที่ / ชื่อหอ / ถนน" className="h-[50px] w-full rounded-[13px] border border-[#DDE8E3] bg-white pl-11 pr-4 text-[14px] outline-none focus:border-[#0E9F8E] focus:ring-4 focus:ring-[#0E9F8E]/10" />
-                  {results.length > 0 && <div className="absolute z-20 mt-1.5 w-full overflow-hidden rounded-[13px] border border-[#DFEAE5] bg-white p-1.5 shadow-[0_12px_28px_rgba(16,40,30,.14)]">{results.map((place) => <button key={place.name} onClick={() => pick(place)} className="flex w-full items-start gap-2.5 rounded-[10px] px-3 py-2.5 text-left hover:bg-[#F2FAF8]"><span className="mt-0.5 text-[#0E9F8E]"><PinIcon className="h-4 w-4" /></span><span><span className="block text-[13px] font-semibold text-[#263B34]">{place.name}</span><span className="mt-0.5 block text-xs text-[#7A857F]">{place.area}</span></span></button>)}</div>}
+                {/* ป้ายบอกให้เริ่มกรอกที่ช่องนี้ — ต้องสะดุดตาก่อนอย่างอื่น เพราะกรอกที่นี่แล้วช่องล่างเติมเองหมด */}
+                <div className="rounded-[13px] border-[1.5px] border-[#0E9F8E] bg-[#F2FAF8] px-4 py-3">
+                  <p className="flex items-center gap-2 text-[14px] font-bold text-[#0B6F62]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0E9F8E] text-[11px] font-extrabold text-white">1</span>
+                    <span className="underline decoration-[#0E9F8E] decoration-2 underline-offset-4">เริ่มกรอกที่ช่องนี้</span>
+                  </p>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#3E6B63]">
+                    พิมพ์ชื่อที่พักแล้วเลือกจากรายการ ระบบจะเติม <b>ที่อยู่ · จังหวัด · ชื่อหอพัก</b> และปักหมุดให้อัตโนมัติ
+                    ไม่ต้องกรอกเองทีละช่อง · ลากหมุดปรับตำแหน่งได้
+                  </p>
                 </div>
-                <div onClick={dropPin} className="relative mt-3 h-[180px] cursor-crosshair overflow-hidden rounded-[16px] border border-[#D7E5DD] bg-[#E8F1EC]" style={{ backgroundImage: 'linear-gradient(#DDEAE2 1px,transparent 1px),linear-gradient(90deg,#DDEAE2 1px,transparent 1px),linear-gradient(35deg,transparent 46%,#C7DBCF 47%,#C7DBCF 51%,transparent 52%)', backgroundSize: '22px 22px,22px 22px,100% 100%' }}>
-                  <span className="absolute left-[10%] top-[27%] h-14 w-28 rounded-lg border border-white/60 bg-white/35" /><span className="absolute bottom-[16%] right-[12%] h-12 w-24 rounded-lg border border-white/60 bg-white/30" />
-                  <span className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold text-[#5B746B] shadow-sm">แตะบนแผนที่เพื่อปักหมุด</span>
-                  {pin && <span className="absolute -translate-x-1/2 -translate-y-full text-[#E34D4D] drop-shadow-[0_3px_2px_rgba(0,0,0,.2)]" style={{ left: `${pin.x}%`, top: `${pin.y}%` }}><svg viewBox="0 0 24 30" className="h-9 w-9" fill="currentColor"><path d="M12 0C5.9 0 1 4.9 1 11c0 8.2 11 19 11 19s11-10.8 11-19C23 4.9 18.1 0 12 0Z" /><circle cx="12" cy="11" r="4" fill="white" /></svg></span>}
+
+                {/* ค้นหาเฉพาะ "ที่พัก" (โรงแรม/หอพัก/คอนโด/เกสต์เฮาส์) — กันกรอกสถานที่มั่ว */}
+                <div className="relative mt-3">
+                  <span className="pointer-events-none absolute left-3.5 top-[15px] z-10 text-[#78928B]"><Icon className="h-5 w-5"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></Icon></span>
+                  <PlacesAutocompleteInput
+                    placeholder="ค้นหาชื่อหอพัก / โรงแรม / คอนโด"
+                    defaultValue={placeName}
+                    onSelect={pickPlace}
+                    className="h-[50px] w-full rounded-[13px] border border-[#DDE8E3] bg-white pl-11 pr-4 text-[14px] outline-none focus:border-[#0E9F8E] focus:ring-4 focus:ring-[#0E9F8E]/10"
+                  />
                 </div>
+
+                <div className="mt-3 overflow-hidden rounded-[16px] border border-[#D7E5DD]">
+                  <MapPicker lat={pin?.lat ?? 16.1812} lng={pin?.lng ?? 103.3005} onChange={movePin} />
+                </div>
+
+                {outsideTh && (
+                  <p className="mt-2 rounded-[10px] bg-[#FFF4E0] px-3 py-2 text-[12px] font-semibold text-[#B4791A]">
+                    ที่พักนี้อยู่นอกประเทศไทย — เลือกจังหวัดเองด้านล่างหรือค้นหาที่พักในไทยแทน
+                  </p>
+                )}
               </div>}
               <div className="mt-5"><Field label="ที่อยู่ / รายละเอียดเพิ่มเติม"><input value={addr} onChange={(event) => setAddr(event.target.value)} placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field></div>
               <div className="my-6 h-px bg-[#E7ECEA]" />
-              <div className="space-y-4"><Field label="ชื่อหอพัก"><input value={dorm} onChange={(event) => setDorm(event.target.value)} placeholder="เช่น หอพักบ้านอุ่นใจ" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field><div className="grid gap-4 min-[821px]:grid-cols-2"><Field label="จังหวัด"><select className="h-[52px] w-full appearance-none rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none focus:border-[#0E9F8E]"><option>มหาสารคาม</option></select></Field><Field label="จำนวนห้อง"><input inputMode="numeric" placeholder="เช่น 24" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none placeholder:text-[#A6AFAA] focus:border-[#0E9F8E]" /></Field></div></div>
-              <p className="mt-3 text-xs text-[#7A857F]">กรอกรายละเอียดเพิ่มทีหลังได้</p>
-              <div className="mt-7 flex gap-3"><button onClick={back} className="hidden h-[54px] rounded-[14px] border border-[#DDE5E1] px-6 text-[15px] font-bold text-[#52615B] hover:bg-[#F6F8F7] min-[821px]:block">ย้อนกลับ</button><button onClick={next} className="flex h-[54px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] transition hover:bg-[#0B7A6C]">ยืนยันและสร้างหอ <ArrowIcon /></button></div>
+              <div className="space-y-4"><Field label="ชื่อหอพัก"><input value={dorm} onChange={(event) => setDorm(event.target.value)} placeholder="เช่น หอพักบ้านอุ่นใจ" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field><div className="grid gap-4"><Field label="จังหวัด"><select value={province} onChange={(event) => setProvince(event.target.value)} className="h-[52px] w-full appearance-none rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none focus:border-[#0E9F8E]"><option value="">เลือกจังหวัด</option>{ALL_PROVINCES.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field></div></div>
+              {/* เอกสารยืนยันตัวตน — แอดมินใช้ตรวจก่อนอนุมัติหอ */}
+              <div className="mt-5 rounded-[14px] border border-[#E7ECEA] bg-[#FAFCFB] p-4">
+                <p className="text-[14px] font-bold text-[#33413B]">
+                  แนบเอกสารยืนยัน <span className="text-[#E34D4D]">*</span>
+                </p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-[#7A857F]">
+                  บัตรประชาชน · โฉนด/สัญญาเช่า · ทะเบียนบ้าน (รูปภาพหรือ PDF ไม่เกิน 10MB ต่อไฟล์)
+                  <br />
+                  <b className="text-[#33413B]">เอกสารต้องเป็นของเจ้าของหอเท่านั้น</b> — ชื่อในเอกสารต้องตรงกับชื่อผู้สมัคร
+                  <br />
+                  เก็บเป็นความลับ เห็นเฉพาะแอดมินตอนตรวจสอบ
+                </p>
+
+                <input
+                  ref={docInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  onChange={(event) => uploadDocs(event.target.files)}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => docInputRef.current?.click()}
+                  disabled={uploading || !appId}
+                  className="mt-3 flex h-[46px] w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-[#0E9F8E] bg-white text-[14px] font-bold text-[#0E9F8E] disabled:opacity-50"
+                >
+                  <Icon className="h-4 w-4"><path d="M12 5v14M5 12h14" /></Icon>
+                  {uploading ? 'กำลังอัปโหลด...' : 'เลือกไฟล์เอกสาร'}
+                </button>
+
+                {docs.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {docs.map((doc, index) => (
+                      <li key={`${doc.name}-${index}`} className="flex items-center gap-2.5 rounded-[10px] bg-white px-3 py-2">
+                        <span className="text-[#12B58C]"><Icon className="h-4 w-4"><path d="m5 12 4.5 4.5L19 7" /></Icon></span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-[#33413B]">{doc.name}</span>
+                        <span className="shrink-0 font-sans text-[11.5px] text-[#7A857F]">
+                          {(doc.size / 1024 / 1024).toFixed(1)} MB
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="mt-4 grid gap-4 min-[821px]:grid-cols-2">
+                <Field label="ตั้งรหัสผ่าน">
+                  <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="new-password" placeholder="••••••••" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" />
+                </Field>
+                <Field label="ยืนยันรหัสผ่าน">
+                  <input
+                    value={password2}
+                    onChange={(event) => setPassword2(event.target.value)}
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    className={`h-[52px] w-full rounded-[13px] border bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:bg-white focus:ring-4 ${
+                      password2 && password !== password2
+                        ? 'border-[#E34D4D] focus:border-[#E34D4D] focus:ring-[#E34D4D]/10'
+                        : 'border-[#E7ECEA] focus:border-[#0E9F8E] focus:ring-[#0E9F8E]/10'
+                    }`}
+                  />
+                </Field>
+              </div>
+              {error && <p className="mt-3 text-[13px] font-semibold text-danger">{error}</p>}
+              <div className="mt-7 flex gap-3"><button onClick={back} className="hidden h-[54px] rounded-[14px] border border-[#DDE5E1] px-6 text-[15px] font-bold text-[#52615B] hover:bg-[#F6F8F7] min-[821px]:block">ย้อนกลับ</button><button onClick={submitApplication} disabled={busy} className="flex h-[54px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] transition hover:bg-[#0B7A6C] disabled:opacity-60">{busy ? 'กำลังส่ง...' : 'ยืนยันและสร้างหอ'} <ArrowIcon /></button></div>
             </div>
           )}
 
@@ -246,7 +564,7 @@ export default function PartnerRegisterPage() {
           {step === 4 && <div className="py-10 text-center min-[821px]:py-8"><span className="mx-auto flex h-[78px] w-[78px] items-center justify-center rounded-full bg-[#FFF4E0] text-[#E0902F]"><Icon className="h-9 w-9"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3.5 2" /></Icon></span><h1 className="mt-6 text-[27px] font-bold tracking-[-.5px] min-[821px]:text-[32px]">รอแอดมินอนุมัติ</h1><p className="mt-2 text-[15px] leading-6 text-[#5B655F]">ปกติใช้เวลา 1–2 วันทำการ<br />เราจะแจ้งผลทางอีเมล</p>
             <div className="mt-7 rounded-[16px] border border-[#DCEEE9] bg-[#F6FBFA] p-5 text-left"><div className="relative space-y-6"><span className="absolute bottom-6 left-[9px] top-5 w-[2px] bg-[#CDE5DF]" /><div className="relative flex gap-3"><span className="z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[#12B58C] text-[11px] font-bold text-white">✓</span><div><p className="text-[14px] font-bold text-[#286057]">ส่งใบสมัครแล้ว</p><p className="mt-0.5 text-xs text-[#7A857F]">วันนี้ 10:24 น.</p></div></div><div className="relative flex gap-3"><span className="z-10 mt-1 h-5 w-5 rounded-full border-[5px] border-[#E0902F] bg-[#FFF4E0]" /><div><p className="text-[14px] font-bold text-[#5A4A31]">แอดมินกำลังตรวจสอบ <span className="ml-1 rounded-full bg-[#FFF4E0] px-2 py-0.5 text-[11px] font-semibold text-[#B4791A]">กำลังรอ</span></p><p className="mt-0.5 text-xs text-[#7A857F]">เราจะใช้เวลาไม่นาน</p></div></div><div className="relative flex gap-3 opacity-55"><span className="z-10 h-5 w-5 rounded-full border-2 border-[#96A49E] bg-[#F6FBFA]" /><div><p className="text-[14px] font-bold text-[#60716A]">อนุมัติ และเริ่มใช้งาน</p><p className="mt-0.5 text-xs text-[#7A857F]">เปิดหอให้ผู้เช่าจองได้</p></div></div></div></div>
             <div className="mt-4 flex gap-3 rounded-[14px] border border-[#F5DFC0] bg-[#FFF7ED] p-4 text-left"><span className="shrink-0 text-[#C77B14]"><Icon className="h-5 w-5"><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></Icon></span><p className="text-[13px] leading-5 text-[#72532A]">เข้าดูแดชบอร์ดได้เลย แต่<b>ยังลงประกาศหอพักไม่ได้</b>จนกว่าจะอนุมัติ</p></div>
-            <button onClick={restart} className="mt-6 flex h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] hover:bg-[#0B7A6C]">เข้าสู่แดชบอร์ด <ArrowIcon /></button><Link href="/" className="mt-3 flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] border border-[#DDE5E1] bg-white text-[14px] font-bold text-[#52615B] hover:bg-[#F6F8F7]"><Icon className="h-4 w-4"><path d="m3 11 9-7 9 7" /><path d="M5 10v9h14v-9M9 19v-5h6v5" /></Icon>กลับไปหน้าหอพัก</Link><p className="mt-4 hidden text-[12px] text-[#7A857F] min-[821px]:block">โพสต์หอพักจะปลดล็อกอัตโนมัติเมื่อได้รับอนุมัติ</p>
+            <Link href="/partner/dashboard" className="mt-6 flex h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] hover:bg-[#0B7A6C]">เข้าสู่แดชบอร์ด <ArrowIcon /></Link><Link href="/" className="mt-3 flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] border border-[#DDE5E1] bg-white text-[14px] font-bold text-[#52615B] hover:bg-[#F6F8F7]"><Icon className="h-4 w-4"><path d="m3 11 9-7 9 7" /><path d="M5 10v9h14v-9M9 19v-5h6v5" /></Icon>กลับไปหน้าหอพัก</Link><p className="mt-4 hidden text-[12px] text-[#7A857F] min-[821px]:block">โพสต์หอพักจะปลดล็อกอัตโนมัติเมื่อได้รับอนุมัติ</p>
           </div>}
         </div>
       </section>

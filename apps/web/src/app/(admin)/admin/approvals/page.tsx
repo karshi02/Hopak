@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { getSocket } from '@/lib/ws';
@@ -59,6 +59,12 @@ const TEXT = {
     allDormsTitle: 'หอพักทั้งหมด',
     status: 'สถานะ',
     autoApprove: 'อนุมัติห้องอัตโนมัติ',
+    deleteDorm: 'ลบถาวร',
+    deleteOwner: 'ลบบัญชีเจ้าของหอ',
+    deleteOwnerConfirm: (name: string, dorm: string) =>
+      `ลบบัญชีเจ้าของหอ "${name}" ถาวร?\n\nหอ "${dorm}" และห้อง/รีวิว/รายการโปรดทั้งหมดจะถูกลบไปด้วย กู้คืนไม่ได้\n(ทำได้เฉพาะเมื่อระงับหอทุกแห่งแล้วและไม่มีการจองผูกอยู่)`,
+    deleteConfirm: (name: string) => `ลบหอ "${name}" ถาวร? ข้อมูลหอ ห้อง รีวิว และรายการโปรดจะถูกลบทั้งหมด กู้คืนไม่ได้`,
+    deleteFailed: 'ลบไม่สำเร็จ',
     statusLabel: {
       PENDING_APPROVAL: 'รออนุมัติ',
       APPROVED: 'อนุมัติแล้ว',
@@ -88,8 +94,9 @@ const TEXT = {
       EDITED: 'แก้ไขข้อมูล',
       SUSPENDED: 'ระงับ',
       UNSUSPENDED: 'ยกเลิกระงับ',
+      DELETED: 'ลบถาวร',
     } as Record<string, string>,
-    logEntity: { DORM: 'หอพัก', ROOM: 'ห้องพัก' } as Record<string, string>,
+    logEntity: { DORM: 'หอพัก', ROOM: 'ห้องพัก', USER: 'บัญชีเจ้าของหอ' } as Record<string, string>,
 
     imagesLabel: 'รูปหอพัก',
     addImages: 'เพิ่มรูป',
@@ -144,6 +151,12 @@ const TEXT = {
     allDormsTitle: 'All dorms',
     status: 'Status',
     autoApprove: 'Auto-approve rooms',
+    deleteDorm: 'Delete',
+    deleteOwner: 'Delete owner account',
+    deleteOwnerConfirm: (name: string, dorm: string) =>
+      `Permanently delete owner "${name}"?\n\nDorm "${dorm}" and its rooms/reviews/favorites are removed too. This cannot be undone.`,
+    deleteConfirm: (name: string) => `Permanently delete "${name}"? Its rooms, reviews and favorites are removed too. This cannot be undone.`,
+    deleteFailed: 'Delete failed',
     statusLabel: {
       PENDING_APPROVAL: 'Pending',
       APPROVED: 'Approved',
@@ -173,8 +186,9 @@ const TEXT = {
       EDITED: 'Edited',
       SUSPENDED: 'Suspended',
       UNSUSPENDED: 'Unsuspended',
+      DELETED: 'Deleted',
     } as Record<string, string>,
-    logEntity: { DORM: 'Dorm', ROOM: 'Room' } as Record<string, string>,
+    logEntity: { DORM: 'Dorm', ROOM: 'Room', USER: 'Owner account' } as Record<string, string>,
 
     imagesLabel: 'Dorm photos',
     addImages: 'Add photos',
@@ -238,6 +252,34 @@ export default function AdminApprovalsPage() {
       reload();
     } catch {
       // เงียบไว้ก่อน — ไม่ให้พังทั้งหน้า
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // ลบบัญชีเจ้าของหอถาวร — backend อนุญาตเฉพาะเมื่อหอทุกแห่งถูกระงับ/ปฏิเสธ และไม่มีการจองผูกอยู่
+  async function removeOwner(dorm: AllDorm) {
+    if (!window.confirm(t.deleteOwnerConfirm(dorm.owner.name, dorm.name))) return;
+    setBusyId(dorm.id);
+    try {
+      await apiClient.delete(`/admin/approvals/owners/${dorm.owner.id}`);
+      reload();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : t.deleteFailed);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // ลบหอถาวร — backend อนุญาตเฉพาะหอที่ถูกปฏิเสธและไม่มีการจองผูกอยู่
+  async function removeDorm(dorm: AllDorm) {
+    if (!window.confirm(t.deleteConfirm(dorm.name))) return;
+    setBusyId(dorm.id);
+    try {
+      await apiClient.delete(`/admin/approvals/dorms/${dorm.id}`);
+      reload();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : t.deleteFailed);
     } finally {
       setBusyId(null);
     }
@@ -356,6 +398,41 @@ export default function AdminApprovalsPage() {
     }
   }
 
+  // รวมห้องเหมือนกันของหอเดียวกัน (ประเภท+ราคา+มัดจำ) เป็นกลุ่ม — ใช้ทั้งตารางจอใหญ่และการ์ดมือถือ
+  const roomGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      { key: string; dormName: string; ownerName: string; type: string; price: number; ids: string[]; rooms: PendingRoom[] }
+    >();
+    for (const r of pendingRooms) {
+      const key = `${r.dormId}|${r.type}|${r.pricePerMonth}|${r.deposit ?? 0}`;
+      const g = map.get(key);
+      if (g) {
+        g.ids.push(r.id);
+        g.rooms.push(r);
+      } else {
+        map.set(key, {
+          key,
+          dormName: r.dorm.name,
+          ownerName: r.dorm.owner.name,
+          type: r.type,
+          price: r.pricePerMonth,
+          ids: [r.id],
+          rooms: [r],
+        });
+      }
+    }
+    return [...map.values()];
+  }, [pendingRooms]);
+
+  // แยกหอตามสถานะ ไม่ให้ "ปฏิเสธ/ระงับ" ปนกับ "อนุมัติแล้ว"
+  const dormGroups = useMemo(() => {
+    const order = ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'SUSPENDED'];
+    return order
+      .map((status) => ({ status, dorms: allDorms.filter((d) => d.status.toUpperCase() === status) }))
+      .filter((g) => g.dorms.length > 0);
+  }, [allDorms]);
+
   return (
     <div>
       <Badge label={t.pendingCount(pending.length)} variant="warning" />
@@ -471,50 +548,35 @@ export default function AdminApprovalsPage() {
           <h2 className="text-base font-bold text-ink-strong">{t.roomsTitle}</h2>
           {pendingRooms.length > 0 && <Badge label={`${pendingRooms.length}`} variant="warning" />}
         </div>
-        <div className="mt-3 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-          <table className="w-full min-w-[720px] text-left text-sm">
+        {/* จอ md ขึ้นไป: ตารางพอดีความกว้าง ไม่ต้องเลื่อนแนวนอน */}
+        <div className="mt-3 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card md:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[22%]" />
+              <col className="w-[18%]" />
+              <col className="w-[13%]" />
+              <col className="w-[25%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-hairline text-xs text-ink-faint">
-                <th className="p-3 font-normal">{t.room}</th>
-                <th className="p-3 font-normal">{t.dorm}</th>
-                <th className="p-3 font-normal">{t.owner}</th>
-                <th className="p-3 font-normal">{t.price}</th>
-                <th className="p-3 font-normal"></th>
+              <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+                <th className="p-2.5 font-normal">{t.room}</th>
+                <th className="p-2.5 font-normal">{t.dorm}</th>
+                <th className="p-2.5 font-normal">{t.owner}</th>
+                <th className="p-2.5 text-right font-normal">{t.price}</th>
+                <th className="p-2.5 font-normal"></th>
               </tr>
             </thead>
             <tbody>
               {(() => {
-                // รวมห้องเหมือนกันของหอเดียวกัน (ประเภท+ราคา+มัดจำ) เป็นกลุ่ม — กดแตกดูรายห้อง + อนุมัติ/ปฏิเสธทั้งกลุ่ม
-                const map = new Map<
-                  string,
-                  { key: string; dormName: string; ownerName: string; type: string; price: number; ids: string[]; rooms: PendingRoom[] }
-                >();
-                for (const r of pendingRooms) {
-                  const key = `${r.dormId}|${r.type}|${r.pricePerMonth}|${r.deposit ?? 0}`;
-                  const g = map.get(key);
-                  if (g) {
-                    g.ids.push(r.id);
-                    g.rooms.push(r);
-                  } else {
-                    map.set(key, {
-                      key,
-                      dormName: r.dorm.name,
-                      ownerName: r.dorm.owner.name,
-                      type: r.type,
-                      price: r.pricePerMonth,
-                      ids: [r.id],
-                      rooms: [r],
-                    });
-                  }
-                }
-                return [...map.values()].map((g) => {
+                return roomGroups.map((g) => {
                   const open = expandedRoomGroups.has(g.key);
                   const busy = busyId === g.key;
                   return (
                     <Fragment key={g.key}>
                       <tr className="border-b border-hairline">
-                        <td className="p-3 font-medium text-ink-strong">
-                          <button onClick={() => toggleExpand(g.key)} className="inline-flex items-center gap-1.5 hover:text-tenant">
+                        <td className="p-2.5 font-medium text-ink-strong">
+                          <button onClick={() => toggleExpand(g.key)} className="inline-flex max-w-full items-center gap-1.5 hover:text-tenant">
                             <svg
                               width="14"
                               height="14"
@@ -527,11 +589,15 @@ export default function AdminApprovalsPage() {
                             {g.type} · {t.roomsCountUnit(g.ids.length)}
                           </button>
                         </td>
-                        <td className="p-3 text-ink-subtitle">{g.dormName}</td>
-                        <td className="p-3 text-ink-subtitle">{g.ownerName}</td>
-                        <td className="p-3 font-sans tabular-nums">฿{g.price.toLocaleString()}</td>
-                        <td className="p-3 text-right">
-                          <div className="flex justify-end gap-2">
+                        <td className="truncate p-2.5 text-ink-subtitle" title={g.dormName}>
+                          {g.dormName}
+                        </td>
+                        <td className="truncate p-2.5 text-ink-subtitle" title={g.ownerName}>
+                          {g.ownerName}
+                        </td>
+                        <td className="p-2.5 text-right font-sans tabular-nums">฿{g.price.toLocaleString()}</td>
+                        <td className="p-2.5 text-right">
+                          <div className="flex flex-wrap justify-end gap-1.5">
                             <button
                               onClick={() => approveGroup(g.key, g.ids)}
                               disabled={busy}
@@ -552,17 +618,21 @@ export default function AdminApprovalsPage() {
                       {open &&
                         g.rooms.map((r) => (
                           <tr key={r.id} className="border-b border-hairline bg-surface-canvas/40 last:border-0">
-                            <td className="py-2 pl-10 pr-3 text-[13px] font-medium text-ink-strong">{r.name || r.type}</td>
-                            <td className="py-2 pr-3 text-[13px] text-ink-subtitle">
+                            <td className="truncate py-2 pl-8 pr-2 text-[12.5px] font-medium text-ink-strong">
+                              {r.name || r.type}
+                            </td>
+                            <td className="truncate py-2 pr-2 text-[12.5px] text-ink-subtitle">
                               {r.type}
                               {(r.deposit ?? 0) > 0 && ` · ${lang === 'th' ? 'มัดจำ' : 'Deposit'} ฿${(r.deposit ?? 0).toLocaleString()}`}
                             </td>
-                            <td className="py-2 pr-3 text-[13px] text-ink-subtitle">
+                            <td className="truncate py-2 pr-2 text-[12.5px] text-ink-subtitle">
                               {(r.amenities ?? []).slice(0, 3).join(', ')}
                             </td>
-                            <td className="py-2 pr-3 font-sans text-[13px] tabular-nums">฿{r.pricePerMonth.toLocaleString()}</td>
-                            <td className="py-2 pr-3 text-right">
-                              <div className="flex justify-end gap-2">
+                            <td className="py-2 pr-2 text-right font-sans text-[12.5px] tabular-nums">
+                              ฿{r.pricePerMonth.toLocaleString()}
+                            </td>
+                            <td className="py-2 pr-2 text-right">
+                              <div className="flex flex-wrap justify-end gap-1.5">
                                 <button
                                   onClick={() => approveRoom(r.id)}
                                   disabled={busyId === r.id}
@@ -589,49 +659,172 @@ export default function AdminApprovalsPage() {
           </table>
           {pendingRooms.length === 0 && <p className="p-4 text-ink-faint">{t.roomsNone}</p>}
         </div>
+
+        {/* มือถือ: การ์ดต่อกลุ่มห้อง — กดหัวการ์ดเพื่อแตกดูรายห้อง */}
+        <div className="mt-3 flex flex-col gap-2.5 md:hidden">
+          {roomGroups.map((g) => {
+            const open = expandedRoomGroups.has(g.key);
+            const busy = busyId === g.key;
+            return (
+              <div key={g.key} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
+                <button onClick={() => toggleExpand(g.key)} className="flex w-full items-center gap-2 text-left">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className={`shrink-0 text-ink-faint transition-transform ${open ? 'rotate-90' : ''}`}
+                  >
+                    <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-ink-strong">
+                      {g.type} · {t.roomsCountUnit(g.ids.length)}
+                    </span>
+                    <span className="block truncate text-[12.5px] text-ink-muted">
+                      {g.dormName} · {g.ownerName}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-sans text-[14px] font-bold tabular-nums text-ink-strong">
+                    ฿{g.price.toLocaleString()}
+                  </span>
+                </button>
+
+                <div className="mt-2.5 flex gap-2">
+                  <button
+                    onClick={() => approveGroup(g.key, g.ids)}
+                    disabled={busy}
+                    className="flex-1 rounded-lg bg-success py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {g.ids.length > 1 ? t.approveAll : t.approve}
+                  </button>
+                  <button
+                    onClick={() => rejectGroup(g.key, g.ids)}
+                    disabled={busy}
+                    className="flex-1 rounded-lg bg-danger-tint py-2 text-xs font-semibold text-danger disabled:opacity-50"
+                  >
+                    {g.ids.length > 1 ? t.rejectAll : t.reject}
+                  </button>
+                </div>
+
+                {open && (
+                  <div className="mt-2.5 flex flex-col gap-2 border-t border-hairline pt-2.5">
+                    {g.rooms.map((r) => (
+                      <div key={r.id} className="rounded-[11px] bg-surface-canvas p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink-strong">
+                            {r.name || r.type}
+                          </span>
+                          <span className="shrink-0 font-sans text-[12.5px] tabular-nums text-ink-body">
+                            ฿{r.pricePerMonth.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 truncate text-[11.5px] text-ink-muted">
+                          {(r.deposit ?? 0) > 0 &&
+                            `${lang === 'th' ? 'มัดจำ' : 'Deposit'} ฿${(r.deposit ?? 0).toLocaleString()}`}
+                          {(r.amenities ?? []).length > 0 && ` · ${(r.amenities ?? []).slice(0, 3).join(', ')}`}
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => approveRoom(r.id)}
+                            disabled={busyId === r.id}
+                            className="flex-1 rounded-lg bg-success py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50"
+                          >
+                            {t.approve}
+                          </button>
+                          <button
+                            onClick={() => rejectRoom(r.id)}
+                            disabled={busyId === r.id}
+                            className="flex-1 rounded-lg bg-danger-tint py-1.5 text-[11.5px] font-semibold text-danger disabled:opacity-50"
+                          >
+                            {t.reject}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {pendingRooms.length === 0 && <p className="text-ink-faint">{t.roomsNone}</p>}
+        </div>
       </div>
 
       {/* ===== ALL DORMS ===== */}
       <div className="mt-8">
         <h2 className="text-base font-bold text-ink-strong">{t.allDormsTitle}</h2>
-        <div className="mt-3 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-          <table className="w-full min-w-[720px] text-left text-sm">
+        {/* จอ md ขึ้นไป: ตาราง (ไม่ต้องเลื่อนแนวนอน) */}
+        <div className="mt-3 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card md:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[16%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+              <col className="w-[37%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-hairline text-xs text-ink-faint">
-                <th className="p-3 font-normal">{t.dorm}</th>
-                <th className="p-3 font-normal">{t.owner}</th>
-                <th className="p-3 font-normal">{t.status}</th>
-                <th className="p-3 font-normal">{t.autoApprove}</th>
-                <th className="p-3 font-normal"></th>
+              <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+                <th className="p-2.5 font-normal">{t.dorm}</th>
+                <th className="p-2.5 font-normal">{t.owner}</th>
+                <th className="p-2.5 font-normal">{t.status}</th>
+                <th className="p-2.5 font-normal">{t.autoApprove}</th>
+                <th className="p-2.5 font-normal"></th>
               </tr>
             </thead>
             <tbody>
-              {allDorms.map((dorm) => {
+              {dormGroups.flatMap((group) => [
+                <tr key={`h-${group.status}`} className="border-b border-hairline bg-surface-canvas">
+                  <td colSpan={5} className="px-2.5 py-2 text-[11.5px] font-bold uppercase tracking-wide text-ink-muted">
+                    {t.statusLabel[group.status] ?? group.status} · {group.dorms.length}
+                  </td>
+                </tr>,
+                ...group.dorms.map((dorm) => {
                 const isSuspended = dorm.status.toUpperCase() === 'SUSPENDED';
+                const isRejected = dorm.status.toUpperCase() === 'REJECTED';
                 return (
                 <tr key={dorm.id} className="border-b border-hairline last:border-0">
-                  <td className="p-3 font-medium text-ink-strong">{dorm.name}</td>
-                  <td className="p-3 text-ink-subtitle">{dorm.owner.name}</td>
-                  <td className="p-3">
+                  <td className="truncate p-2.5 font-medium text-ink-strong" title={dorm.name}>
+                    {dorm.name}
+                  </td>
+                  <td className="truncate p-2.5 text-ink-subtitle" title={dorm.owner.name}>
+                    {dorm.owner.name}
+                  </td>
+                  <td className="p-2.5">
                     <Badge
                       label={t.statusLabel[dorm.status.toUpperCase()] ?? dorm.status}
                       variant={dorm.status.toUpperCase() === 'APPROVED' ? 'good' : dorm.status.toUpperCase() === 'REJECTED' || isSuspended ? 'critical' : 'warning'}
                     />
                   </td>
-                  <td className="p-3">
+                  <td className="p-2.5">
+                    {/* เปิด = เขียว ปุ่มชิดขวา · ปิด = เทา ปุ่มชิดซ้าย (ใช้ left ตรงๆ ไม่ใช้ translate กันตำแหน่งเพี้ยน) */}
                     <button
                       onClick={() => toggleAutoApprove(dorm.id, !dorm.autoApproveRooms)}
-                      className={`relative h-6 w-11 rounded-pill transition-colors ${dorm.autoApproveRooms ? 'bg-success' : 'bg-card-border'}`}
+                      aria-pressed={!!dorm.autoApproveRooms}
+                      className={`relative block h-6 w-11 rounded-pill transition-colors ${
+                        dorm.autoApproveRooms ? 'bg-success' : 'bg-card-border'
+                      }`}
                     >
                       <span
-                        className={`absolute top-0.5 h-5 w-5 rounded-pill bg-white shadow transition-transform ${
-                          dorm.autoApproveRooms ? 'translate-x-[22px]' : 'translate-x-0.5'
+                        className={`absolute top-0.5 h-5 w-5 rounded-pill bg-white shadow transition-all ${
+                          dorm.autoApproveRooms ? 'left-[22px]' : 'left-0.5'
                         }`}
                       />
                     </button>
                   </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-3">
+                  <td className="p-2.5 text-right">
+                    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                      {/* หอที่ถูกปฏิเสธ อนุมัติย้อนหลังได้ (คืนสิทธิ์เจ้าของหอ + ล้างเหตุผลปฏิเสธ) */}
+                      {isRejected && (
+                        <button
+                          onClick={() => approve(dorm.id)}
+                          disabled={busyId === dorm.id}
+                          className="rounded-lg bg-success px-2.5 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
+                        >
+                          {t.approve}
+                        </button>
+                      )}
                       <button onClick={() => setEditTarget(dorm)} className="text-sm font-semibold text-tenant">
                         {t.edit}
                       </button>
@@ -648,43 +841,173 @@ export default function AdminApprovalsPage() {
                       <Link href={`/admin/users?ownerId=${dorm.owner.id}`} className="text-sm font-semibold text-ink-subtitle hover:underline">
                         {t.viewOwner}
                       </Link>
+                      {isRejected && (
+                        <button
+                          onClick={() => removeDorm(dorm)}
+                          disabled={busyId === dorm.id}
+                          className="text-sm font-semibold text-danger hover:underline disabled:opacity-40"
+                        >
+                          {t.deleteDorm}
+                        </button>
+                      )}
+                      {/* ระงับหอแล้วถึงจะตัดบัญชีเจ้าของออกจากระบบได้ */}
+                      {isSuspended && (
+                        <button
+                          onClick={() => removeOwner(dorm)}
+                          disabled={busyId === dorm.id}
+                          className="rounded-[8px] bg-[#C0392B] px-2.5 py-1 text-[12px] font-semibold text-white disabled:opacity-40"
+                        >
+                          {t.deleteOwner}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
                 );
-              })}
+              }),
+              ])}
             </tbody>
           </table>
+        </div>
+
+        {/* มือถือ: การ์ดต่อหอ — แยกหัวข้อตามสถานะ */}
+        <div className="mt-3 flex flex-col gap-4 md:hidden">
+          {dormGroups.map((group) => (
+            <div key={group.status} className="flex flex-col gap-2.5">
+              <div className="text-[11.5px] font-bold uppercase tracking-wide text-ink-muted">
+                {t.statusLabel[group.status] ?? group.status} · {group.dorms.length}
+              </div>
+              {group.dorms.map((dorm) => {
+            const isSuspended = dorm.status.toUpperCase() === 'SUSPENDED';
+            const isRejected = dorm.status.toUpperCase() === 'REJECTED';
+            return (
+              <div key={dorm.id} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ink-strong">{dorm.name}</span>
+                  <Badge
+                    label={t.statusLabel[dorm.status.toUpperCase()] ?? dorm.status}
+                    variant={
+                      dorm.status.toUpperCase() === 'APPROVED'
+                        ? 'good'
+                        : dorm.status.toUpperCase() === 'REJECTED' || isSuspended
+                          ? 'critical'
+                          : 'warning'
+                    }
+                  />
+                </div>
+                <div className="mt-0.5 truncate text-[12.5px] text-ink-muted">{dorm.owner.name}</div>
+
+                <div className="mt-2.5 flex items-center justify-between gap-2 rounded-[10px] bg-surface-canvas px-3 py-2">
+                  <span className="text-[12.5px] text-ink-body">{t.autoApprove}</span>
+                  <button
+                    onClick={() => toggleAutoApprove(dorm.id, !dorm.autoApproveRooms)}
+                    aria-pressed={!!dorm.autoApproveRooms}
+                    className={`relative block h-6 w-11 shrink-0 rounded-pill transition-colors ${
+                      dorm.autoApproveRooms ? 'bg-success' : 'bg-card-border'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-pill bg-white shadow transition-all ${
+                        dorm.autoApproveRooms ? 'left-[22px]' : 'left-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] font-semibold">
+                  {isRejected && (
+                    <button
+                      onClick={() => approve(dorm.id)}
+                      disabled={busyId === dorm.id}
+                      className="rounded-lg bg-success px-3 py-1 text-[12.5px] text-white disabled:opacity-50"
+                    >
+                      {t.approve}
+                    </button>
+                  )}
+                  <button onClick={() => setEditTarget(dorm)} className="text-tenant">
+                    {t.edit}
+                  </button>
+                  <button onClick={() => openRoomsModal(dorm)} className="text-tenant">
+                    {t.manageRooms}
+                  </button>
+                  <button
+                    onClick={() => toggleSuspend(dorm.id, isSuspended)}
+                    disabled={busyId === dorm.id || dorm.status.toUpperCase() === 'PENDING_APPROVAL'}
+                    className={`disabled:opacity-40 ${isSuspended ? 'text-success' : 'text-danger'}`}
+                  >
+                    {isSuspended ? t.unsuspend : t.suspend}
+                  </button>
+                  <Link href={`/admin/users?ownerId=${dorm.owner.id}`} className="text-ink-subtitle underline">
+                    {t.viewOwner}
+                  </Link>
+                  {isRejected && (
+                    <button
+                      onClick={() => removeDorm(dorm)}
+                      disabled={busyId === dorm.id}
+                      className="text-danger disabled:opacity-40"
+                    >
+                      {t.deleteDorm}
+                    </button>
+                  )}
+                  {isSuspended && (
+                    <button
+                      onClick={() => removeOwner(dorm)}
+                      disabled={busyId === dorm.id}
+                      className="rounded-[9px] bg-[#C0392B] px-3 py-1 text-[12.5px] text-white disabled:opacity-40"
+                    >
+                      {t.deleteOwner}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* ===== APPROVAL HISTORY ===== */}
       <div className="mt-8">
         <h2 className="text-base font-bold text-ink-strong">{t.logTitle}</h2>
-        <div className="mt-3 overflow-x-auto rounded-card-lg border border-card-border bg-white px-2 shadow-card">
-          <table className="w-full min-w-[720px] text-left text-sm">
+        {/* จอ md ขึ้นไป: ตาราง */}
+        <div className="mt-3 hidden rounded-card-lg border border-card-border bg-white px-2 shadow-card md:block">
+          <table className="w-full table-fixed text-left text-[13px]">
+            <colgroup>
+              <col className="w-[16%]" />
+              <col className="w-[30%]" />
+              <col className="w-[24%]" />
+              <col className="w-[30%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-hairline text-xs text-ink-faint">
-                <th className="p-3 font-normal">{t.status}</th>
-                <th className="p-3 font-normal">{t.dorm}/{t.room}</th>
-                <th className="p-3 font-normal">{t.owner}</th>
-                <th className="p-3 font-normal"></th>
+              <tr className="border-b border-hairline text-[11.5px] text-ink-faint">
+                <th className="p-2.5 font-normal">{t.status}</th>
+                <th className="p-2.5 font-normal">{t.dorm}/{t.room}</th>
+                <th className="p-2.5 font-normal">{t.owner}</th>
+                <th className="p-2.5 font-normal"></th>
               </tr>
             </thead>
             <tbody>
               {log.map((entry) => (
                 <tr key={entry.id} className="border-b border-hairline last:border-0">
-                  <td className="p-3">
+                  <td className="p-2.5">
                     <Badge
                       label={t.logAction[entry.action] ?? entry.action}
-                      variant={entry.action === 'APPROVED' || entry.action === 'UNSUSPENDED' ? 'good' : entry.action === 'REJECTED' || entry.action === 'SUSPENDED' ? 'critical' : 'warning'}
+                      variant={entry.action === 'APPROVED' || entry.action === 'UNSUSPENDED' ? 'good' : entry.action === 'REJECTED' || entry.action === 'SUSPENDED' || entry.action === 'DELETED' ? 'critical' : 'warning'}
                     />
                   </td>
-                  <td className="p-3 text-ink-subtitle">
-                    {t.logEntity[entry.entityType] ?? entry.entityType} · {entry.entityId.slice(0, 8)}
+                  <td className="p-2.5 text-ink-subtitle">
+                    <span className="block truncate">
+                      {t.logEntity[entry.entityType] ?? entry.entityType} · {entry.entityId.slice(0, 8)}
+                    </span>
+                    {entry.note && (
+                      <span className="mt-0.5 block truncate text-[11.5px] text-ink-faint" title={entry.note}>
+                        {entry.note}
+                      </span>
+                    )}
                   </td>
-                  <td className="p-3 text-ink-subtitle">{entry.admin.name}</td>
-                  <td className="p-3 text-right font-sans text-xs tabular-nums text-ink-faint">
+                  <td className="truncate p-2.5 text-ink-subtitle">{entry.admin.name}</td>
+                  <td className="p-2.5 text-right font-sans text-[11.5px] tabular-nums text-ink-faint">
                     {new Date(entry.createdAt).toLocaleString(lang === 'th' ? 'th-TH' : 'en-US')}
                   </td>
                 </tr>
@@ -692,6 +1015,35 @@ export default function AdminApprovalsPage() {
             </tbody>
           </table>
           {log.length === 0 && <p className="p-4 text-ink-faint">{t.logNone}</p>}
+        </div>
+
+        {/* มือถือ: การ์ดต่อรายการ */}
+        <div className="mt-3 flex flex-col gap-2.5 md:hidden">
+          {log.map((entry) => (
+            <div key={entry.id} className="rounded-card-lg border border-card-border bg-white p-3.5 shadow-card">
+              <div className="flex items-center justify-between gap-2">
+                <Badge
+                  label={t.logAction[entry.action] ?? entry.action}
+                  variant={
+                    entry.action === 'APPROVED' || entry.action === 'UNSUSPENDED'
+                      ? 'good'
+                      : entry.action === 'REJECTED' || entry.action === 'SUSPENDED' || entry.action === 'DELETED'
+                        ? 'critical'
+                        : 'warning'
+                  }
+                />
+                <span className="shrink-0 font-sans text-[11.5px] tabular-nums text-ink-faint">
+                  {new Date(entry.createdAt).toLocaleString(lang === 'th' ? 'th-TH' : 'en-US')}
+                </span>
+              </div>
+              <div className="mt-1.5 truncate text-[13px] text-ink-body">
+                {t.logEntity[entry.entityType] ?? entry.entityType} · {entry.entityId.slice(0, 8)}
+              </div>
+              <div className="truncate text-[12.5px] text-ink-muted">{entry.admin.name}</div>
+              {entry.note && <div className="mt-1 text-[11.5px] leading-relaxed text-ink-faint">{entry.note}</div>}
+            </div>
+          ))}
+          {log.length === 0 && <p className="text-ink-faint">{t.logNone}</p>}
         </div>
       </div>
 

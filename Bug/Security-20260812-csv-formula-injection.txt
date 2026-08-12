@@ -1,0 +1,21 @@
+[MEDIUM] CSV export ไม่ neutralize spreadsheet formulas
+
+ไฟล์ที่เกี่ยวข้อง:
+- apps/web/src/lib/csv.ts:6-11
+
+ท่าโจมตี:
+1. ผู้โจมตีใส่ค่าข้อความที่ระบบนำไป export ได้ เช่น name, note หรือชื่อหอ โดยเริ่มด้วย
+   `=`, `+`, `-`, หรือ `@` (ตัวอย่าง `=HYPERLINK("https://attacker.example", "open")`)
+2. ผู้ดูแลหรือผู้ใช้ export CSV แล้วเปิดด้วย Excel/LibreOffice
+3. escape() ป้องกัน comma/quote/newline แต่ส่ง cell ที่นำด้วย formula prefix ออกไปตามเดิม
+   โปรแกรม spreadsheet จึงอาจประเมินค่าเป็น formula
+
+ผลกระทบ:
+ผู้โจมตีสามารถใช้ไฟล์ที่ export เป็นช่องทาง social engineering, external-link/command-style
+formula ตามความสามารถและนโยบายของ spreadsheet client ได้
+
+วิธีแก้แนะนำ:
+ก่อน CSV escaping ให้ prefix apostrophe (`'`) หากค่าเริ่มด้วย `=`, `+`, `-`, `@`, tab หรือ CR;
+ใช้ rule เดียวกันทั้ง header และ rows หาก header มาจาก dynamic source ในอนาคต
+
+สถานะ: พบจาก static review; ยังไม่ได้แก้โค้ด

@@ -88,12 +88,14 @@ model User {
   id        String   @id @default(cuid())
   role      Role
   name      String
-  email     String?  @unique
-  phone     String?  @unique
+  // อีเมล/เบอร์/googleId ไม่ unique เดี่ยวๆ อีกต่อไป — unique คู่กับ role แทน
+  // เพราะคนเดียวกันมีได้ทั้งบัญชี "ผู้เช่า" และบัญชี "เจ้าของหอ" ด้วยอีเมลเดียวกัน แต่ข้อมูลแยกขาดจากกัน
+  email     String?
+  phone     String?
   password  String?
   avatarUrl String?
   address   String?
-  googleId  String?  @unique
+  googleId  String?
   suspended Boolean  @default(false)
 
   // ยืนยันตัวตนด้วย OTP ทางอีเมล (ผู้ใช้กดยืนยันเองจากหน้าโปรไฟล์)
@@ -133,6 +135,9 @@ model User {
   approvalLogs  ApprovalLog[]
   sessions      Session[]
 
+  @@unique([email, role])
+  @@unique([phone, role])
+  @@unique([googleId, role])
   @@index([resetTokenHash])
 }
 
@@ -227,6 +232,7 @@ model Booking {
   rentalType     RentalType    @default(MONTHLY) // รายเดือน หรือ รายวัน
   leaseMonths    Int           @default(1) // ระยะเวลาเช่าที่ผู้เช่าเลือก (เดือน) — 1/3/6 (เฉพาะรายเดือน)
   nights         Int?          // จำนวนคืน (เฉพาะรายวัน) = checkOutDate - checkInDate
+  guests         Int?          // จำนวนผู้เข้าพัก (เฉพาะรายวัน) — เจ้าของหอเตรียมห้องได้ถูก
   status         BookingStatus @default(PENDING)
   contactName    String
   contactPhone   String
@@ -352,6 +358,13 @@ model OwnerApplication {
   otpSentAt    DateTime?
   otpAttempts  Int                     @default(0)
   verifiedAt   DateTime?
+
+  // ความลับสำหรับทำงานต่อกับใบสมัครนี้ (continuation secret) — เก็บเฉพาะ sha256
+  // id อย่างเดียวไม่พอเป็นหลักฐานความเป็นเจ้าของ เพราะ start() ด้วยอีเมลของคนอื่นก็ได้ id เดิมกลับไป
+  secretHash        String?
+  // secret ตัวที่ยืนยัน OTP สำเร็จ — finish ต้องมาจากตัวเดียวกันเท่านั้น
+  // (กันคนอื่นแข่งกด finish หลังเจ้าตัวยืนยันอีเมลแล้ว)
+  verifiedSecretHash String?
 
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt

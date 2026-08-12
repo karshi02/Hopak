@@ -84,6 +84,18 @@ export class ApprovalsController {
     return this.approvalsService.setAutoApproveRooms(dormId, enabled);
   }
 
+  // ลบบัญชีเจ้าของหอถาวร — ใช้หลังระงับหอแล้ว (หอทุกแห่งต้องถูกระงับ/ปฏิเสธ และไม่มีการจองผูกอยู่)
+  @Delete('owners/:ownerId')
+  removeOwnerAccount(@CurrentUser() admin: { id: string }, @Param('ownerId') ownerId: string) {
+    return this.approvalsService.removeOwnerAccount(ownerId, admin.id);
+  }
+
+  // ลบหอพักถาวร — เฉพาะหอที่ถูกปฏิเสธและไม่มีการจองผูกอยู่
+  @Delete('dorms/:dormId')
+  removeDorm(@CurrentUser() admin: { id: string }, @Param('dormId') dormId: string) {
+    return this.approvalsService.removeDorm(dormId, admin.id);
+  }
+
   @Get('dorms')
   listAllDorms() {
     return this.approvalsService.listAllDorms();

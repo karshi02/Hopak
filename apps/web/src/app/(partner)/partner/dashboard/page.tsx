@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
+import { getSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
 import { KpiCard } from '@/components/admin/KpiCard';
 import { RevenueChart, Donut } from '@/components/admin/RevenueChart';
 import { Badge, bookingStatusBadge } from '@/components/dashboard/Badge';
 import { usePartnerMode } from '@/hooks/usePartnerMode';
-import { calcOwnerPayout, COMMISSION_RATE } from '@hopak/shared';
+import { calcPayout, COMMISSION_RATE } from '@hopak/shared';
 import type { Booking, Dorm, Room } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
 
@@ -162,14 +163,32 @@ export default function PartnerDashboardPage() {
   const { isDaily } = usePartnerMode();
   const mode: Mode = isDaily ? 'd' : 'm';
 
-  useEffect(() => {
-    Promise.all([apiClient.get<DormWithRooms[]>('/dorms/mine'), apiClient.get<BookingWithRoom[]>('/bookings')])
+  // โหลดข้อมูล + อัปเดตสดผ่าน socket (จองใหม่ / จ่ายเงิน / สถานะเปลี่ยน) ไม่ต้องกดรีเฟรช
+  function load() {
+    return Promise.all([
+      apiClient.get<DormWithRooms[]>('/dorms/mine'),
+      apiClient.get<BookingWithRoom[]>('/bookings'),
+    ])
       .then(([d, b]) => {
         setDorms(d);
         setBookings(b);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+    const socket = getSocket();
+    const refresh = () => {
+      load();
+    };
+    socket.on('booking:new', refresh);
+    socket.on('booking:updated', refresh);
+    return () => {
+      socket.off('booking:new', refresh);
+      socket.off('booking:updated', refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function resubmitDorm(id: string) {
@@ -214,7 +233,7 @@ export default function PartnerDashboardPage() {
       row.room += b.roomPrice ?? 0;
       row.deposit += b.deposit ?? 0;
       row.gross += b.amount ?? 0;
-      row.net += calcOwnerPayout(b.amount ?? 0, b.roomPrice ?? 0);
+      row.net += calcPayout({ amount: b.amount ?? 0, commissionBase: b.roomPrice ?? 0, rentalType: b.rentalType }).ownerPayout;
     }
     return rows;
   }, [paidBookings, year]);
@@ -241,7 +260,10 @@ export default function PartnerDashboardPage() {
       rentAll += b.roomPrice ?? 0;
 
       const perNightRent = nights > 0 ? (b.roomPrice ?? 0) / nights : 0;
-      const perNightNet = nights > 0 ? calcOwnerPayout(b.amount ?? 0, b.roomPrice ?? 0) / nights : 0;
+      const perNightNet =
+        nights > 0
+          ? calcPayout({ amount: b.amount ?? 0, commissionBase: b.roomPrice ?? 0, rentalType: b.rentalType }).ownerPayout / nights
+          : 0;
 
       for (let i = 0; i < nights; i++) {
         const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);

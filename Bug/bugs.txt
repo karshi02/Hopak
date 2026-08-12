@@ -1657,3 +1657,78 @@ tsc api+web ผ่าน
 - login + partner-login: map โค้ด → ข้อความ (ตาราง ERRORS) ; โค้ดที่ไม่รู้จัก → genericError ไม่เอาค่าดิบจาก URL มาแสดง
 - ที่ปลอดภัยอยู่แล้ว ไม่ต้องแก้: ไม่มี JWT ใน URL (ส่งแค่ one-time code TTL 2 นาที, exchange ผ่าน POST, rate limit 20/นาที)
 tsc api+web ผ่าน
+
+[103] แยกหอพักรายวัน–รายเดือนให้ขาดจากกันทุกจุด + รายได้รายวันฝั่งแอดมิน (11/08/2026)
+ฝั่งผู้เช่า
+- bookings/new: ตัดปุ่มเลือก MONTHLY/DAILY ออก — รูปแบบการเช่ายึดจากห้อง (room.allowDaily) อย่างเดียว โชว์เป็นป้ายบอกแทน
+- dorms/[id]: อ่าน ?rental=daily → กรองห้องตามโหมด, group key แยก (d|pricePerDay / m|pricePerMonth|deposit), ราคาโชว์เฉพาะโหมดนั้น (เดิมโชว์ราคาเดือน+ป้ายรายวันพร้อมกัน)
+- HomeBrowse + search: ลิงก์ไปหน้าหอแนบ ?rental=daily ต่อเมื่ออยู่โหมดรายวัน
+ฝั่งแอดมิน
+- api GET /admin/finance/daily-summary?year&month (SUPER_ADMIN/FINANCE) — รวมเฉพาะ booking.rentalType=DAILY ที่ SETTLED/TRANSFERRED, group ตามหอ คืน rows/totals/adr
+- admin/finance: การ์ด "รายได้หอพักรายวัน" แยกต่างหากใต้ตารางรายเดือน — KPI 4 ตัว (จำนวนจอง/คืนที่ขายได้/ADR/ยอดรับรวม) + ตารางรายหอ (คืน, ยอดรับ, คอม, ยอดเจ้าของ + โอนแล้ว/รอโอน) + แถวรวม
+tsc api+web ผ่าน ; endpoint ตอบ 401 (route ติดแล้ว ต้อง auth)
+
+[104] เรียลไทม์ทุกฝั่ง — แจ้งเตือนเด้งทันที ไม่ต้องรีเฟรช (11/08/2026)
+API
+- bookings.service: emitToRole('admin','booking:new') ทั้ง 2 จุดที่สร้างการจอง + emitToRole('admin','booking:updated') ทุกจุดที่แจ้งผู้เช่า (เดิมแอดมินไม่ได้รับ event เลย ต้องกดรีเฟรชเอง)
+- payments.service: emitToRole('admin','booking:updated') ตอนจ่ายเงินสำเร็จ/ยกเลิกอัตโนมัติ
+WEB
+- components/RealtimeToasts.tsx (ใหม่): ฟัง notification:new เด้ง toast มุมขวาล่าง สูงสุด 4 ใบ หายเองใน 6 วิ ปิดเองได้ ; accent เปลี่ยนตามคอนโซล
+- admin/layout + partner/layout: mount RealtimeToasts (ม่วง #6D5AE0 / เขียว #12A150) — เดิม toast มีแค่ Navbar ฝั่งผู้เช่า คอนโซลไม่มีเลย
+- admin/bookings: subscribe booking:new + booking:updated → reload
+- partner/dashboard: แยกฟังก์ชัน load() แล้ว subscribe booking:new/updated → โหลดใหม่ (KPI/กราฟ/ปฏิทินขยับเอง)
+- partner/rooms: subscribe booking:new/updated → ห้องว่าง/ไม่ว่างเปลี่ยนสด
+ที่มีอยู่แล้ว: Navbar(ผู้เช่า) toast+กระดิ่ง, admin/layout dorm:new/room:new, admin/approvals, partner/requests, partner/income, useBookings, หน้าแจ้งเตือนทั้ง 2 ฝั่ง, tenant booking detail
+tsc api+web ผ่าน
+
+[105] แยกบัญชี "ผู้เช่า" กับ "เจ้าของหอ" ขาดจากกัน อีเมลเดียวกันมีได้ทั้งสองฝั่ง (12/08/2026)
+เดิม: User.email/phone/googleId เป็น @unique เดี่ยว → คนที่มีบัญชีผู้เช่าอยู่แล้วสมัครเปิดหอไม่ได้เลย (409 ตั้งแต่ start)
+SCHEMA + migration 20260812000000_user_unique_per_role
+- ลบ unique เดี่ยวของ email/phone/googleId → เปลี่ยนเป็น @@unique([email, role]) / ([phone, role]) / ([googleId, role])
+API
+- auth.service.verifyCredentials(dto, roles) — ค้นบัญชีตาม role เสมอ ; login=TENANT, partnerLogin=OWNER (ใหม่), adminLogin=ADMIN
+- auth.controller: POST /auth/partner-login (rate limit 10/นาที) ; forgot-password รับ role ('owner' → รีเซ็ตบัญชีเจ้าของหอ)
+- loginWithGoogle(profile, device, role) — หา/สร้างบัญชีตามฝั่งที่กดมา ; GET /auth/google?intent=owner เก็บ cookie hopak_oauth_intent (httpOnly, 10 นาที) แล้ว callback อ่านจาก header (โปรเจกต์ไม่มี cookie-parser)
+- owner-applications.start: เช็คชนเฉพาะ role OWNER (เดิมเช็คทุก role เลยบล็อกคนมีบัญชีผู้เช่า)
+- seed.ts: upsert ใช้ where email_role
+WEB
+- partner-login → POST /auth/partner-login (เดิมใช้ /auth/login แล้วเช็ค role ทีหลัง)
+- partner-login + partner-register: ปุ่ม Google ส่ง ?intent=owner
+- ลิงก์ลืมรหัสผ่านฝั่งเจ้าของหอ → /forgot-password?role=owner ; หน้า forgot ส่ง role ไปด้วย
+เทส E2E: สมัครผู้เช่า 201 → สมัครซ้ำ 409 → owner-application ด้วยอีเมลเดิม 201 → finish 201
+  login ผู้เช่า(รหัส A)=201 · login เจ้าของหอ(รหัส B)=201 · สลับรหัสข้ามฝั่ง=401 ทั้งคู่
+  DB: 2 แถว อีเมลเดียวกัน role TENANT/OWNER แยกกัน
+tsc api+web ผ่าน
+
+[106] ระบบจองรายวัน: ค่าคอม 10% เฉพาะรายวัน + ปฏิทินเลือกช่วงวัน + จำนวนผู้เข้าพัก (12/08/2026)
+SHARED
+- fees.ts: เพิ่ม DAILY_COMMISSION_RATE = 0.1 + commissionRateFor(rentalType) ; รายเดือนคง COMMISSION_RATE = 0.2
+- commission.ts: calcCommission(base, rate?) + calcPayout({amount, commissionBase, rentalType}) คืน rate/commission/chamberShare/platformShare/ownerPayout
+API
+- payments.service.createCharge: ใช้ calcPayout ตาม booking.rentalType (รายวัน 10% ฐาน = ยอดเต็มเพราะไม่มีมัดจำ / รายเดือน 20% ฐาน = ค่าห้อง)
+- schema + migration 20260812200000_booking_guests: Booking.guests Int?
+- CreateBookingDto: guests (1-10) ; createDaily บันทึก guests
+WEB
+- components/booking/DailyCalendar.tsx (ใหม่): ปฏิทิน 2 เดือน เลือกช่วงวัน ปิดวันที่เต็ม/วันในอดีต กันเลือกคร่อมวันเต็ม สรุปคืน×ราคา
+- bookings/new: แทน input date 2 ช่องด้วยปฏิทิน + ตัวเลือกจำนวนผู้เข้าพัก 1/2/3 (ส่ง guests)
+- partner/rooms/new: กล่องสรุปรายวันเปลี่ยนเป็น 10% (เดิมโชว์ 20% ผิด)
+- partner/dashboard: ใช้ calcPayout ตาม rentalType (เดิมคิด 20% กับรายวันด้วย)
+ตรวจเลข: รายวัน ฿1,100 → คอม ฿110 → เจ้าของหอ ฿990 · รายเดือน ค่าห้อง 10,000 + มัดจำ 10,000 → คอม 2,000 → เจ้าของหอ 18,000
+ไม่แจกแจงค่าคอมให้ผู้เช่าเห็นในบิล (ผู้เช่าจ่ายเท่าราคาห้อง ไม่มีค่าธรรมเนียมบวก)
+tsc api+web ผ่าน
+
+[107] แอดมิน: แยกโอนเงิน + แยกรายได้ ระหว่างหอรายเดือนกับหอรายวัน + หน้าแดชบอร์ดรายได้ใหม่ (12/08/2026)
+API - admin/finance
+- transferForDormViaXendit(dormId, adminId, amount?, note?, rentalType?) : ระบุ rentalType = ดึงเฉพาะ payment ของ booking ประเภทนั้น (booking.rentalType) ไม่ระบุ = โอนรวมเหมือนเดิม
+  บันทึก rentalType ลง metadata การโอน + ใส่ต่อท้าย description ที่ส่ง Xendit
+- payoutBreakdown(dormId?) ใหม่: ต่อหอคืน { monthly, daily } แต่ละก้อนมี gross/commission/ownerPayout/pending/transferred/count + totals ทั้งระบบ
+- revenueBreakdown(period, year?) ใหม่: period = day (30 วันล่าสุด) / month (12 เดือนของปี) / year (ทุกปี) คืนรายแถว monthlyCommission·dailyCommission·monthlyGross·dailyGross + totals
+- listDetailed: แนบ rentalType มาด้วย
+- routes: GET /admin/finance/payout-breakdown , GET /admin/finance/revenue-breakdown , POST payouts/dorm/:dormId/transfer-xendit รับ body.rentalType
+WEB
+- (admin)/admin/revenue/page.tsx (ใหม่): สลับ วัน/เดือน/ปี · KPI 4 ใบ (รายได้แพลตฟอร์มรวม / จากหอรายเดือน / จากหอรายวัน / ยอดรับรวม) · แถบสัดส่วน · กราฟแท่งซ้อน · ตารางเดสก์ท็อป + การ์ดมือถือ · export CSV
+  สี MONTHLY #2F6FE0 / DAILY #12A150
+- (admin)/admin/finance: เพิ่มการ์ด "โอนเงินแยกประเภท" — สรุปยอดรายเดือน/รายวันทั้งระบบ แล้วต่อหอมี 2 ช่องแยก ปุ่มโอนคนละปุ่ม (ส่ง rentalType) ปุ่มดิสเอเบิลเมื่อ pending = 0
+  busy key เปลี่ยนเป็น `${dormId}-${rentalType}` กันปุ่มอีกฝั่งค้างตาม
+- admin/layout: เพิ่มเมนู /admin/revenue ใต้กลุ่มแดชบอร์ด + หัวข้อ/คำโปรย TH/EN
+tsc api+web ผ่าน

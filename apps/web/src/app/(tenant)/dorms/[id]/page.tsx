@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
@@ -26,6 +26,11 @@ const TEXT = {
     perUnit: '/ หน่วย',
     waterRate: 'ค่าน้ำ',
     deposit: 'ค่ามัดจำ',
+    pricePerNight: 'ราคาต่อคืน',
+    noDeposit: 'เงินมัดจำ',
+    noDepositValue: 'ไม่เก็บ',
+    utilitiesIncluded: 'ค่าน้ำ-ค่าไฟ',
+    utilitiesIncludedValue: 'รวมแล้ว',
     ownerDescription: 'รายละเอียดหอพัก',
     map: 'ตำแหน่งบนแผนที่',
     availableRooms: 'ประเภทห้องที่ว่าง',
@@ -86,6 +91,11 @@ const TEXT = {
     perUnit: '/ unit',
     waterRate: 'Water',
     deposit: 'Deposit',
+    pricePerNight: 'Per night',
+    noDeposit: 'Deposit',
+    noDepositValue: 'None',
+    utilitiesIncluded: 'Water & electricity',
+    utilitiesIncludedValue: 'Included',
     ownerDescription: 'Dorm details',
     map: 'Location on map',
     availableRooms: 'Available room types',
@@ -242,6 +252,7 @@ interface RoomVariant {
 }
 
 export default function DormDetailPage() {
+  const searchParams = useSearchParams();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { lang } = useLang();
@@ -305,9 +316,18 @@ export default function DormDetailPage() {
     }
   }
 
+  // โหมดมาจาก ?rental=daily (มาจากหน้าแรก/ค้นหาฝั่งรายวัน) — รายเดือนกับรายวันแยกขาด ห้องไม่ปนกัน
+  const isDaily = searchParams.get('rental') === 'daily';
   const availableRooms = useMemo(
-    () => (dorm ? dorm.rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE') : []),
-    [dorm],
+    () =>
+      dorm
+        ? dorm.rooms.filter(
+            (r) =>
+              r.status.toUpperCase() === 'AVAILABLE' &&
+              (isDaily ? Boolean(r.allowDaily) && (r.pricePerDay ?? 0) > 0 : !r.allowDaily),
+          )
+        : [],
+    [dorm, isDaily],
   );
 
   // จัดกลุ่มตามประเภท → แบบห้อง (ราคา/มัดจำเดียวกัน) นับจำนวนห้องว่าง + รวมรูปทุกห้องในกลุ่ม
@@ -319,17 +339,20 @@ export default function DormDetailPage() {
         const images = Array.from(new Set(rooms.flatMap((r) => r.images ?? [])));
         const variantMap = new Map<string, RoomVariant>();
         for (const room of rooms) {
-          const key = `${room.pricePerMonth}|${room.deposit ?? 0}|${room.pricePerDay ?? 0}|${room.allowDaily ? 1 : 0}`;
+          const key = isDaily
+            ? `d|${room.pricePerDay ?? 0}`
+            : `m|${room.pricePerMonth}|${room.deposit ?? 0}`;
           const existing = variantMap.get(key);
           if (existing) existing.count += 1;
           else variantMap.set(key, { key, room, count: 1 });
         }
-        const variants = [...variantMap.values()].sort((a, b) => a.room.pricePerMonth - b.room.pricePerMonth);
-        const minPrice = variants.length ? variants[0].room.pricePerMonth : 0;
+        const priceOf = (r: Room) => (isDaily ? r.pricePerDay ?? 0 : r.pricePerMonth);
+        const variants = [...variantMap.values()].sort((a, b) => priceOf(a.room) - priceOf(b.room));
+        const minPrice = variants.length ? priceOf(variants[0].room) : 0;
         return { type, rooms, images, variants, minPrice };
       })
       .filter((g) => g.rooms.length > 0);
-  }, [availableRooms]);
+  }, [availableRooms, isDaily]);
 
   if (!dorm) return <PageLoader />;
 
@@ -584,16 +607,13 @@ export default function DormDetailPage() {
                               {t.availableCount(variant.count)}
                             </span>
                             <div className="min-w-[80px] shrink-0 text-right sm:min-w-[90px]">
-                              <span className="text-[17px] font-bold text-tenant sm:text-[18px]">
-                                ฿{room.pricePerMonth.toLocaleString()}
+                              <span
+                                className="text-[17px] font-bold sm:text-[18px]"
+                                style={{ color: isDaily ? '#12A150' : '#2F6FE0' }}
+                              >
+                                ฿{(isDaily ? room.pricePerDay ?? 0 : room.pricePerMonth).toLocaleString()}
                               </span>
-                              <span className="text-xs text-ink-faint">{t.perMonth}</span>
-                              {room.allowDaily && (room.pricePerDay ?? 0) > 0 && (
-                                <div className="mt-0.5 text-[11.5px] font-semibold text-success">
-                                  {t.dailyTag} ฿{(room.pricePerDay ?? 0).toLocaleString()}
-                                  <span className="text-ink-faint">{t.perNight}</span>
-                                </div>
-                              )}
+                              <span className="text-xs text-ink-faint">{isDaily ? t.perNight : t.perMonth}</span>
                             </div>
                           </div>
                         );
@@ -768,32 +788,48 @@ export default function DormDetailPage() {
               <>
                 <div className="flex items-baseline gap-1.5">
                   <span className="font-sans text-[34px] font-bold tracking-tight text-tenant">
-                    ฿{cheapestRoom.pricePerMonth.toLocaleString()}
+                    ฿{(isDaily ? cheapestRoom.pricePerDay ?? 0 : cheapestRoom.pricePerMonth).toLocaleString()}
                   </span>
-                  <span className="text-[15px] text-ink-faint">{t.perMonth}</span>
+                  <span className="text-[15px] text-ink-faint">{isDaily ? t.perNight : t.perMonth}</span>
                 </div>
                 <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#E7F7EF] px-3 py-1.5 text-[12.5px] font-bold text-[#12704A]">
                   <span className="h-[7px] w-[7px] rounded-full bg-[#1FB56E]" />
                   {t.availableCount(availableRooms.length)}
                 </div>
 
+                {/* รายวันไม่มีมัดจำ/ค่าน้ำ/ค่าไฟ — จ่ายตามจำนวนคืนอย่างเดียว */}
                 <div className="my-4 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink-faint">{t.deposit}</span>
-                    <span className="font-semibold">฿{costDeposit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink-faint">{t.electricRate}</span>
-                    <span className="font-semibold">
-                      ฿{costElectric} {t.perUnit}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink-faint">{t.waterRate}</span>
-                    <span className="font-semibold">
-                      ฿{costWater} {t.perUnit}
-                    </span>
-                  </div>
+                  {isDaily ? (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-ink-faint">{t.noDeposit}</span>
+                        <span className="font-semibold text-[#12704A]">{t.noDepositValue}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-ink-faint">{t.utilitiesIncluded}</span>
+                        <span className="font-semibold text-[#12704A]">{t.utilitiesIncludedValue}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-ink-faint">{t.deposit}</span>
+                        <span className="font-semibold">฿{costDeposit.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-ink-faint">{t.electricRate}</span>
+                        <span className="font-semibold">
+                          ฿{costElectric} {t.perUnit}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-ink-faint">{t.waterRate}</span>
+                        <span className="font-semibold">
+                          ฿{costWater} {t.perUnit}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {isOwnerHere ? (
@@ -809,7 +845,7 @@ export default function DormDetailPage() {
                 ) : (
                   <>
                     <button
-                      onClick={() => router.push(`/bookings/new?roomId=${cheapestRoom.id}`)}
+                      onClick={() => router.push(`/bookings/new?roomId=${cheapestRoom.id}${isDaily ? '&rental=daily' : ''}`)}
                       className="h-[52px] w-full rounded-[13px] bg-[linear-gradient(135deg,#2F6FE0,#5B9DFF)] text-[16px] font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.35)]"
                     >
                       {t.bookNow}
@@ -913,26 +949,46 @@ export default function DormDetailPage() {
                   </span>
                 </div>
 
-                {/* spec grid — เฉพาะข้อมูลจริงที่ระบบเก็บ (ห้องว่าง/มัดจำ/ค่าไฟ/ค่าน้ำ) */}
+                {/* spec grid — รายเดือนโชว์มัดจำ/ค่าน้ำ/ค่าไฟ ; รายวันไม่มีสามอย่างนี้ (คิดเป็นรายคืนล้วน) */}
                 <div className="mt-4 grid grid-cols-2 gap-2.5">
-                  {[
-                    { label: t.specAvailable, value: t.specRooms(modalVariant.count), d: 'M3 21V8l9-5 9 5v13M9 21v-6h6v6' },
-                    {
-                      label: t.deposit,
-                      value: `฿${(modalVariant.room.deposit ?? dorm.deposit).toLocaleString()}`,
-                      d: 'M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6',
-                    },
-                    {
-                      label: t.electricRate,
-                      value: `฿${modalVariant.room.electricRate ?? dorm.electricRate} ${t.perUnit}`,
-                      d: 'M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z',
-                    },
-                    {
-                      label: t.waterRate,
-                      value: `฿${modalVariant.room.waterRate ?? dorm.waterRate} ${t.perUnit}`,
-                      d: 'M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z',
-                    },
-                  ].map((s) => (
+                  {(isDaily
+                    ? [
+                        {
+                          label: t.specAvailable,
+                          value: t.specRooms(modalVariant.count),
+                          d: 'M3 21V8l9-5 9 5v13M9 21v-6h6v6',
+                        },
+                        {
+                          label: t.pricePerNight,
+                          value: `฿${(modalVariant.room.pricePerDay ?? 0).toLocaleString()}`,
+                          d: 'M20 14.2A8.2 8.2 0 019.8 4a8.4 8.4 0 100 16.4 8.2 8.2 0 0010.2-6.2z',
+                        },
+                        { label: t.noDeposit, value: t.noDepositValue, d: 'M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6' },
+                        { label: t.utilitiesIncluded, value: t.utilitiesIncludedValue, d: 'M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z' },
+                      ]
+                    : [
+                        {
+                          label: t.specAvailable,
+                          value: t.specRooms(modalVariant.count),
+                          d: 'M3 21V8l9-5 9 5v13M9 21v-6h6v6',
+                        },
+                        {
+                          label: t.deposit,
+                          value: `฿${(modalVariant.room.deposit ?? dorm.deposit).toLocaleString()}`,
+                          d: 'M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6',
+                        },
+                        {
+                          label: t.electricRate,
+                          value: `฿${modalVariant.room.electricRate ?? dorm.electricRate} ${t.perUnit}`,
+                          d: 'M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z',
+                        },
+                        {
+                          label: t.waterRate,
+                          value: `฿${modalVariant.room.waterRate ?? dorm.waterRate} ${t.perUnit}`,
+                          d: 'M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z',
+                        },
+                      ]
+                  ).map((s) => (
                     <div key={s.label} className="flex items-center gap-2.5 rounded-[12px] border border-[#EEF1F6] bg-[#F7F9FC] p-2.5">
                       <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-[#EAF1FF]">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -978,16 +1034,18 @@ export default function DormDetailPage() {
                   <div className="flex items-end justify-between gap-3 border-t border-[#F0F2F6] pt-4">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-[26px] font-bold tracking-tight text-tenant sm:text-[30px]">
-                        ฿{modalVariant.room.pricePerMonth.toLocaleString()}
+                        ฿{(isDaily ? modalVariant.room.pricePerDay ?? 0 : modalVariant.room.pricePerMonth).toLocaleString()}
                       </span>
-                      <span className="text-[14px] text-ink-faint">{t.perMonth}</span>
+                      <span className="text-[14px] text-ink-faint">{isDaily ? t.perNight : t.perMonth}</span>
                     </div>
                     {isOwnerHere ? (
                       <span className="text-[12.5px] font-semibold text-ink-faint">{t.ownDormSub}</span>
                     ) : (
                       <button
                         type="button"
-                        onClick={() => router.push(`/bookings/new?roomId=${modalVariant.room.id}`)}
+                        onClick={() =>
+                          router.push(`/bookings/new?roomId=${modalVariant.room.id}${isDaily ? '&rental=daily' : ''}`)
+                        }
                         className="h-[50px] shrink-0 rounded-[13px] bg-[linear-gradient(135deg,#2F6FE0,#5B9DFF)] px-6 text-[15px] font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.32)] sm:px-[30px]"
                       >
                         {t.bookThisRoom}

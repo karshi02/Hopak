@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService, type DeviceInfo } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -34,6 +34,13 @@ export class AuthController {
     return this.authService.login(dto, deviceFromReq(req));
   }
 
+  // เข้าสู่ระบบฝั่งเจ้าของหอ — คนละบัญชีกับฝั่งผู้เช่า แม้อีเมลเดียวกัน
+  @Post('partner-login')
+  @RateLimit(10, 60_000)
+  partnerLogin(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.authService.partnerLogin(dto, deviceFromReq(req));
+  }
+
   @Post('admin-login')
   @RateLimit(10, 60_000)
   adminLogin(@Body() dto: LoginDto, @Req() req: Request) {
@@ -42,8 +49,9 @@ export class AuthController {
 
   @Post('forgot-password')
   @RateLimit(5, 60_000) // ส่งอีเมลรีเซ็ต: 5 ครั้ง/นาที/IP กันสแปมอีเมล
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto.email);
+  forgotPassword(@Body() dto: ForgotPasswordDto & { role?: string }) {
+    // ?role=owner = รีเซ็ตรหัสของบัญชีเจ้าของหอ (อีเมลเดียวกันมีได้ 2 บัญชี)
+    return this.authService.forgotPassword(dto.email, dto.role === 'owner' ? 'OWNER' : 'TENANT');
   }
 
   @Post('reset-password')
@@ -69,13 +77,33 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
-  googleAuth() {}
+  googleAuth(@Query('intent') intent: string | undefined, @Res({ passthrough: true }) res: Response) {
+    // จำไว้ว่าเข้ามาจากฝั่งไหน (ผู้เช่า/เจ้าของหอ) เพื่อให้ callback หยิบบัญชีให้ถูกฝั่ง
+    // ใช้ cookie แยกจาก OAuth state (state ใช้กัน CSRF อยู่แล้ว ไม่ยุ่งกัน)
+    res.cookie('hopak_oauth_intent', intent === 'owner' ? 'owner' : 'tenant', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 10 * 60 * 1000,
+    });
+  }
 
   @Get('google/callback')
   @UseGuards(GoogleCallbackGuard)
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
     try {
-      const { accessToken } = await this.authService.loginWithGoogle(req.user, deviceFromReq(req));
+      // อ่าน cookie จาก header ตรงๆ — โปรเจกต์นี้ไม่ได้ใช้ cookie-parser (req.cookies จะเป็น undefined)
+      const intent = (req.headers.cookie ?? '')
+        .split(';')
+        .map((part: string) => part.trim())
+        .find((part: string) => part.startsWith('hopak_oauth_intent='))
+        ?.slice('hopak_oauth_intent='.length);
+      res.clearCookie('hopak_oauth_intent');
+      const { accessToken } = await this.authService.loginWithGoogle(
+        req.user,
+        deviceFromReq(req),
+        intent === 'owner' ? 'OWNER' : 'TENANT',
+      );
       // ส่ง "โค้ดแลก token" ชั่วคราวผ่าน query (?code=) ไม่ใช่ JWT ตรงๆ — query รอด redirect ข้าม origin
       // (fragment # หายตอน 302) โค้ดใช้ครั้งเดียว/หมดอายุ 2 นาที หลุด log ก็ไร้ค่า ต่างจาก JWT 7 วัน
       const binding = issueGoogleOAuthExchangeBinding(res);

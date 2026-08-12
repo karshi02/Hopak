@@ -1,11 +1,25 @@
-import { COMMISSION_RATE, CHAMBER_RATE } from '../constants/fees';
+import { COMMISSION_RATE, CHAMBER_RATE, commissionRateFor, type RentalKind } from '../constants/fees';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ค่าคอมคิดจาก "ฐานที่ส่งเข้ามา" (ใช้จริง = ค่าห้อง roomPrice เท่านั้น มัดจำไม่โดนหัก)
 // เช่น ค่าห้อง 1000 → คอม 20% = 200
-export function calcCommission(base: number): number {
-  return round2(base * COMMISSION_RATE);
+export function calcCommission(base: number, rate: number = COMMISSION_RATE): number {
+  return round2(base * rate);
+}
+
+// ชุดตัวเลขทั้งหมดของบิลเดียว — ใช้อัตราตามประเภทการเช่า (รายเดือน 20% / รายวัน 10%)
+export function calcPayout(params: { amount: number; commissionBase: number; rentalType?: RentalKind | string | null }) {
+  const rate = commissionRateFor(params.rentalType);
+  const commission = calcCommission(params.commissionBase, rate);
+  const chamberShare = round2(commission * CHAMBER_RATE);
+  return {
+    rate,
+    commission,
+    chamberShare,
+    platformShare: round2(commission - chamberShare),
+    ownerPayout: round2(params.amount - commission),
+  };
 }
 
 // ส่วนแบ่งหอการค้า = 10% ของ "ค่าคอม"
