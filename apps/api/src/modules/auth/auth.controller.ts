@@ -76,7 +76,9 @@ export class AuthController {
   }
 
   // หน้าสมัครเจ้าของหอเอาโค้ดมาแลกเป็น "ชื่อ + อีเมล" ของบัญชี Google เพื่อกรอกฟอร์มให้ (ยังไม่ล็อกอิน)
-  @Post('google/profile-exchange')
+  // path ต้องอยู่ใต้ /auth/google/exchange — cookie binding ถูกตั้ง path นั้นไว้
+  // ถ้าตั้งเป็น /auth/google/profile-exchange เบราว์เซอร์จะไม่ส่ง cookie มาด้วย แล้วแลกโค้ดไม่ผ่าน
+  @Post('google/exchange/profile')
   @RateLimit(20, 60_000)
   googleProfileExchange(
     @Body() body: { code: string },

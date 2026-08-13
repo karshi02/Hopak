@@ -178,7 +178,7 @@ export default function PartnerRegisterPage() {
       return;
     }
     apiClient
-      .postWithCredentials<{ name: string; email?: string }>('/auth/google/profile-exchange', { code: gcode })
+      .postWithCredentials<{ name: string; email?: string }>('/auth/google/exchange/profile', { code: gcode })
       .then((profile) => {
         if (!profile.email) {
           setError('บัญชี Google นี้ไม่มีอีเมล กรุณากรอกอีเมลเอง');

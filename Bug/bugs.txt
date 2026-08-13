@@ -2021,3 +2021,12 @@ Bug/Payment-20260813-xendit-status-pending.txt: สรุปว่าอะไ�
 ทดสอบจริง: ?intent=owner_register -> Set-Cookie owner_register · ?intent=owner -> owner
   ไม่ใส่ -> tenant · ?intent=evil -> tenant · Location ชี้ไป accounts.google.com พร้อม state ปกติ
 tsc api ผ่าน
+
+[128] บั๊กต่อเนื่องจาก [127]: กด Gmail แล้วขึ้น "เชื่อมต่อ Google ไม่สำเร็จ" (13/08/2026)
+พอ intent cookie ทำงานแล้ว callback เด้งกลับ /partner-register?gcode= ได้ถูก แต่แลกโค้ดไม่ผ่าน
+สาเหตุ: cookie binding (hopak_google_oauth_exchange) ตั้ง path = /auth/google/exchange
+  แต่ endpoint ที่เพิ่มไว้คือ /auth/google/profile-exchange ซึ่งอยู่คนละ path
+  เบราว์เซอร์เลยไม่ส่ง cookie มาด้วย -> binding undefined -> exchangeGoogleProfileCode โยน 401
+แก้: ย้าย route เป็น POST /auth/google/exchange/profile (อยู่ใต้ path ของ cookie) + แก้ฝั่งเว็บให้เรียก path ใหม่
+ทดสอบ: path เก่า = 404, path ใหม่ = 401 ด้วยโค้ดมั่ว (ถึง handler จริง)
+tsc api+web ผ่าน
