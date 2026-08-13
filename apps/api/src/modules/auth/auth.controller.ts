@@ -86,18 +86,12 @@ export class AuthController {
     return this.authService.exchangeGoogleProfileCode(body.code, consumeGoogleOAuthExchangeBinding(req, res));
   }
 
+  // ?intent=owner | owner_register | tenant — GoogleAuthGuard เป็นคนอ่านและตั้ง cookie hopak_oauth_intent
+  // (guard redirect ไป Google ตั้งแต่ใน canActivate เมธอดนี้จึงไม่เคยถูกเรียกจริง)
   @Get('google')
   @UseGuards(GoogleAuthGuard)
-  googleAuth(@Query('intent') intent: string | undefined, @Res({ passthrough: true }) res: Response) {
-    // จำไว้ว่าเข้ามาจากฝั่งไหน (ผู้เช่า/เจ้าของหอ/สมัครเปิดหอ) เพื่อให้ callback ทำงานให้ถูกทาง
-    // ใช้ cookie แยกจาก OAuth state (state ใช้กัน CSRF อยู่แล้ว ไม่ยุ่งกัน)
-    const allowed = ['owner', 'owner_register', 'tenant'];
-    res.cookie('hopak_oauth_intent', allowed.includes(intent ?? '') ? intent! : 'tenant', {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 10 * 60 * 1000,
-    });
+  googleAuth() {
+    // ไม่มีอะไรต้องทำ — passport พาไป Google ตั้งแต่ใน guard แล้ว
   }
 
   @Get('google/callback')

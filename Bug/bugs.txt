@@ -2006,3 +2006,18 @@ Bug/Payment-20260813-xendit-status-pending.txt: สรุปว่าอะไ�
 - ยังไม่เคยเห็น booking เด้งเป็น PAID เองจากการจ่ายจริง (รอบก่อน simulate ตอบ 200 แต่ payment โดน cron เก็บไปก่อนเพราะ QR หมดอายุ)
   => ยังไม่ยืนยันว่า Xendit ยิง webhook มาถึงเซิร์ฟเวอร์จริงไหม ต้องเช็ค callback URL ช่อง QR CODES ใน dashboard เป็นอันดับแรก
 - ยังเป็น development mode เงินไม่จริง รอ KYC
+
+[127] บั๊กใหญ่: ปุ่ม Google ฝั่งเจ้าของหอไม่เคยทำงานถูกเลย เด้งไปหน้าผู้เช่าเสมอ (13/08/2026)
+อาการ: กด "สมัครด้วย Gmail" ที่ partner-register แล้วถ้าอีเมลนั้นมีบัญชีผู้เช่าอยู่แล้ว ระบบล็อกอินเป็นผู้เช่าแล้วเด้งไปหน้า user
+สาเหตุ: GET /auth/google ตั้ง cookie hopak_oauth_intent ใน route handler
+  แต่ GoogleAuthGuard (AuthGuard('google')) สั่ง redirect ไป Google ตั้งแต่ใน canActivate
+  = handler ไม่เคยถูกเรียก cookie ไม่เคยถูกส่งออกเลยสักครั้ง
+  callback จึงอ่าน intent ไม่เจอ ตกไปเป็น 'tenant' ทุกครั้ง -> loginWithGoogle(TENANT) -> role tenant -> ไปหน้า /
+  กระทบทั้ง intent=owner (ปุ่มที่ partner-login) และ intent=owner_register (ปุ่มที่ partner-register)
+  งาน [117] ที่ทำ flow owner_register ไว้จึงไม่เคยมีโอกาสทำงานจริง
+แก้: ย้ายการตั้ง cookie ไปไว้ใน GoogleAuthGuard.getAuthenticateOptions() (ทำงานก่อน redirect และมี response ให้ใช้)
+  whitelist ค่า intent ที่นั่นแทน ค่ามั่ว/ไม่ใส่ = tenant
+  route handler เหลือเป็นเมธอดว่าง (passport พาไป Google ตั้งแต่ใน guard)
+ทดสอบจริง: ?intent=owner_register -> Set-Cookie owner_register · ?intent=owner -> owner
+  ไม่ใส่ -> tenant · ?intent=evil -> tenant · Location ชี้ไป accounts.google.com พร้อม state ปกติ
+tsc api ผ่าน
