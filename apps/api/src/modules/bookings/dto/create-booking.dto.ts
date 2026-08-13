@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 export class CreateBookingDto {
   @IsString()
@@ -15,7 +15,10 @@ export class CreateBookingDto {
   @IsString()
   contactName!: string;
 
+  // เบอร์ไทย 10 หลักขึ้นต้นด้วย 0 — ตรวจฝั่งเซิร์ฟเวอร์ด้วย ไม่พึ่งหน้าเว็บอย่างเดียว
+  // (ยิง API ตรงก็ยังต้องผ่านกฎเดียวกัน) เจ้าของหอต้องโทรกลับหาผู้เช่าได้จริง
   @IsString()
+  @Matches(/^0\d{9}$/, { message: 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก ขึ้นต้นด้วย 0' })
   contactPhone!: string;
 
   @IsOptional()

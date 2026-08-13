@@ -24,6 +24,7 @@ const TEXT = {
     phoneLabel: 'เบอร์โทรศัพท์',
     phonePlaceholder: '0812345678',
     phoneHint: 'แก้ไขเบอร์ได้ถ้าต้องการใช้เบอร์อื่นสำหรับการจองนี้',
+    phoneInvalid: 'กรอกเบอร์โทรให้ครบ 10 หลัก (ขึ้นต้นด้วย 0)',
     checkInLabel: 'วันเข้าอยู่ที่ต้องการ',
     otherDate: 'เลือกวันอื่น',
     leaseLabel: 'ระยะเวลาเช่า',
@@ -80,6 +81,7 @@ const TEXT = {
     phoneLabel: 'Phone number',
     phonePlaceholder: '0812345678',
     phoneHint: 'You can edit the number if you want to use a different one for this booking',
+    phoneInvalid: 'Enter a 10-digit phone number starting with 0',
     checkInLabel: 'Preferred move-in date',
     otherDate: 'Pick another date',
     leaseLabel: 'Lease term',
@@ -269,6 +271,12 @@ function NewBookingForm() {
       setError(t.fillRequired);
       return;
     }
+    // เบอร์ไทยต้องครบ 10 หลักและขึ้นต้นด้วย 0 — เดิมกรอกกี่หลักก็ผ่าน
+    // เจ้าของหอโทรกลับไม่ได้ = การจองเสียเปล่า
+    if (!/^0\d{9}$/.test(contactPhone)) {
+      setError(t.phoneInvalid);
+      return;
+    }
     if (isDaily) {
       if (!checkOutDate || nights < 1) {
         setError(t.pickCheckout);
@@ -384,10 +392,15 @@ function NewBookingForm() {
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, ''))}
                   className={`${inputBase} font-sans`}
+                  pattern="0[0-9]{9}"
                   required
                 />
               </div>
-              <p className="mt-1.5 text-[11.5px] text-ink-faint">{t.phoneHint}</p>
+              {contactPhone && !/^0\d{9}$/.test(contactPhone) ? (
+                <p className="mt-1.5 text-[11.5px] font-semibold text-danger">{t.phoneInvalid}</p>
+              ) : (
+                <p className="mt-1.5 text-[11.5px] text-ink-faint">{t.phoneHint}</p>
+              )}
             </div>
           </div>
 
