@@ -58,6 +58,10 @@ const TEXT = {
     photosSub: 'รูปแรกจะเป็นรูปปกที่ผู้เช่าเห็น · แนะนำ 4–8 รูป',
     addPhoto: 'เพิ่มรูป',
     inheritedTitle: 'รูปจากหอพัก (ใช้อัตโนมัติ)',
+    dormPhotoAdd: '+ เพิ่มรูปหอพัก',
+    dormPhotoBusy: 'กำลังอัปโหลด...',
+    dormPhotoConfirm: 'ลบรูปนี้ออกจากหอพัก?',
+    dormPhotoError: 'จัดการรูปหอพักไม่สำเร็จ',
     inheritedNote: 'ถ้าไม่อัปรูปเฉพาะห้อง ห้องนี้จะใช้รูปหอพักด้านบน และอัปเดตตามหอแบบเรียลไทม์ (ไม่กระทบโปรไฟล์หอ)',
     cover: 'ปก',
     basicInfo: 'ข้อมูลห้องพัก',
@@ -79,6 +83,7 @@ const TEXT = {
     submitDaily: 'เปิดจองรายวัน',
     rent: 'ค่าเช่า / เดือน',
     deposit: 'เงินมัดจำ',
+    pricingRequired: 'กรอกราคาให้ครบก่อน',
     water: 'ค่าน้ำ / หน่วย',
     electric: 'ค่าไฟ / หน่วย',
     dailySection: 'เช่ารายวัน',
@@ -106,6 +111,10 @@ const TEXT = {
     photosSub: 'First photo is the cover tenants see · 4–8 recommended',
     addPhoto: 'Add photo',
     inheritedTitle: 'Photos from the dorm (used automatically)',
+    dormPhotoAdd: '+ Add dorm photo',
+    dormPhotoBusy: 'Uploading...',
+    dormPhotoConfirm: 'Remove this photo from the dorm?',
+    dormPhotoError: 'Could not update dorm photos',
     inheritedNote: 'If you don’t upload room-specific photos, this room uses the dorm photos above and updates in realtime (does not affect the dorm profile)',
     cover: 'Cover',
     basicInfo: 'Room info',
@@ -127,6 +136,7 @@ const TEXT = {
     submitDaily: 'Open for daily booking',
     rent: 'Rent / month',
     deposit: 'Deposit',
+    pricingRequired: 'Fill in the pricing first',
     water: 'Water / unit',
     electric: 'Electricity / unit',
     dailySection: 'Daily rental',
@@ -160,13 +170,15 @@ export default function NewRoomPage() {
   const [quantity, setQuantity] = useState(1);
   const [roomType, setRoomType] = useState<'AIR' | 'FAN'>('AIR');
   const [description, setDescription] = useState('');
-  const [price, setPrice] = useState(3500);
-  const [deposit, setDeposit] = useState(7000);
-  const [waterRate, setWaterRate] = useState(18);
-  const [electricRate, setElectricRate] = useState(8);
+  // เริ่มเป็นค่าว่าง — เดิมใส่ตัวเลขตัวอย่างไว้ (3500/7000/18/8) เจ้าของหอกดผ่านได้เลยโดยไม่ทันดู
+  // แล้วห้องขึ้นเว็บด้วยราคาที่ไม่ใช่ของจริง
+  const [price, setPrice] = useState('');
+  const [deposit, setDeposit] = useState('');
+  const [waterRate, setWaterRate] = useState('');
+  const [electricRate, setElectricRate] = useState('');
   // โหมดห้อง — มาจาก ?mode=daily หรือสวิตช์กลางของคอนโซล ; ห้องเป็นรายเดือน "หรือ" รายวัน อย่างใดอย่างหนึ่ง
   const allowDaily = searchParams.get('mode') === 'daily' || (!searchParams.get('mode') && isDaily);
-  const [pricePerDay, setPricePerDay] = useState(590);
+  const [pricePerDay, setPricePerDay] = useState('');
   const [amenities, setAmenities] = useState<Set<string>>(new Set(['ac', 'bath', 'wifi', 'bed']));
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -174,6 +186,56 @@ export default function NewRoomPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // รูปของ "หอพัก" (คนละชุดกับรูปห้อง) — แก้ได้จากหน้านี้เลย ไม่ต้องย้อนไปหน้าหอ
+  const [dormPhotoBusy, setDormPhotoBusy] = useState(false);
+  const dormPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // อัปเดตหอในลิสต์ให้ตรงกับที่ API คืนมา — พรีวิวฝั่งขวาใช้ selectedDorm.images อยู่
+  const applyDormImages = (images: string[]) =>
+    setDorms((prev) => prev.map((d) => (d.id === dormId ? { ...d, images } : d)));
+
+  async function addDormPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length || !dormId) return;
+    setDormPhotoBusy(true);
+    try {
+      const body = new FormData();
+      files.forEach((f) => body.append('photos', f));
+      const res = await fetch(`${API_URL}/dorms/${dormId}/images`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body,
+      });
+      if (!res.ok) throw new Error();
+      const updated: Dorm = await res.json();
+      applyDormImages(updated.images ?? []);
+    } catch {
+      setError(t.dormPhotoError);
+    } finally {
+      setDormPhotoBusy(false);
+    }
+  }
+
+  async function removeDormPhoto(index: number) {
+    if (!dormId || !window.confirm(t.dormPhotoConfirm)) return;
+    setDormPhotoBusy(true);
+    try {
+      const updated = await apiClient.delete<Dorm>(`/dorms/${dormId}/images/${index}`);
+      applyDormImages(updated.images ?? []);
+    } catch {
+      setError(t.dormPhotoError);
+    } finally {
+      setDormPhotoBusy(false);
+    }
+  }
+
+  const num = (v: string) => Number(v) || 0;
+  // ค่าเช่า/ราคาต่อคืน ต้องมากกว่า 0 · มัดจำ-ค่าน้ำ-ค่าไฟ ใส่ 0 ได้ แต่ต้องกรอก (ห้ามเว้นว่าง)
+  const pricingFilled = allowDaily
+    ? num(pricePerDay) > 0
+    : num(price) > 0 && deposit.trim() !== '' && waterRate.trim() !== '' && electricRate.trim() !== '';
 
   useEffect(() => {
     apiClient
@@ -209,20 +271,24 @@ export default function NewRoomPage() {
 
   async function handleSubmit() {
     if (!dormId) return;
+    if (!pricingFilled) {
+      setError(t.pricingRequired);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const formData = new FormData();
       formData.append('type', roomType);
       // ห้องรายวันไม่มีค่าเช่ารายเดือน/มัดจำ/ค่าน้ำค่าไฟ — ส่ง 0 ไปเพื่อไม่ให้ไปโผล่ฝั่งรายเดือน
-      formData.append('pricePerMonth', String(allowDaily ? 0 : price));
+      formData.append('pricePerMonth', String(allowDaily ? 0 : num(price)));
       formData.append('name', ''); // เว้นว่างเสมอ — backend สุ่มชื่อห้องให้อัตโนมัติ
       formData.append('description', description);
-      formData.append('deposit', String(allowDaily ? 0 : deposit));
-      formData.append('waterRate', String(allowDaily ? 0 : waterRate));
-      formData.append('electricRate', String(allowDaily ? 0 : electricRate));
+      formData.append('deposit', String(allowDaily ? 0 : num(deposit)));
+      formData.append('waterRate', String(allowDaily ? 0 : num(waterRate)));
+      formData.append('electricRate', String(allowDaily ? 0 : num(electricRate)));
       formData.append('allowDaily', String(allowDaily));
-      formData.append('pricePerDay', String(allowDaily ? pricePerDay : 0));
+      formData.append('pricePerDay', String(allowDaily ? num(pricePerDay) : 0));
       formData.append('amenities', JSON.stringify(Array.from(amenities)));
       formData.append('quantity', String(quantity));
       photos.forEach((f) => formData.append('photos', f));
@@ -276,19 +342,44 @@ export default function NewRoomPage() {
           <p className="mb-4 mt-1 text-[12.5px] text-ink-muted">{t.photosSub}</p>
 
           {/* รูปหอพัก (ดึงมาอัตโนมัติ) — ใช้เมื่อไม่อัปรูปเฉพาะห้อง อัปเดตตามหอแบบเรียลไทม์ */}
-          {selectedDorm?.images && selectedDorm.images.length > 0 && photos.length === 0 && (
+          {selectedDorm && photos.length === 0 && (
             <div className="mb-4 rounded-[13px] border border-dashed border-tenant/40 bg-tenant-tint/40 p-3">
-              <div className="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-tenant-dark">
+              <div className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] font-semibold text-tenant-dark">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M3 10l9-6 9 6M5 9v10h14V9M9 19v-6h6v6" stroke="#1E4FB0" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {t.inheritedTitle}
+                <button
+                  type="button"
+                  onClick={() => dormPhotoInputRef.current?.click()}
+                  disabled={dormPhotoBusy}
+                  className="ml-auto rounded-lg bg-white px-2.5 py-1 text-[11.5px] font-bold text-tenant disabled:opacity-50"
+                >
+                  {dormPhotoBusy ? t.dormPhotoBusy : t.dormPhotoAdd}
+                </button>
+                <input
+                  ref={dormPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={addDormPhotos}
+                />
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {selectedDorm.images.slice(0, 8).map((url) => (
+                {(selectedDorm.images ?? []).slice(0, 8).map((url, i) => (
                   <div key={url} className="relative aspect-square overflow-hidden rounded-lg bg-surface-canvas">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeDormPhoto(i)}
+                      disabled={dormPhotoBusy}
+                      aria-label="remove"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-[11px] text-white disabled:opacity-50"
+                    >
+                      &times;
+                    </button>
                   </div>
                 ))}
               </div>
@@ -371,7 +462,7 @@ export default function NewRoomPage() {
         {/* pricing */}
         <div className="rounded-card-lg border border-card-border bg-white p-[22px] shadow-card">
           <div className="text-[15.5px] font-bold text-ink-strong">{allowDaily ? t.pricingDaily : t.pricing}</div>
-          <p className="mb-4 mt-1 text-[12.5px] text-ink-muted">{allowDaily ? t.pricingDailySub : t.pricingSub}</p>
+          {!allowDaily && <p className="mb-4 mt-1 text-[12.5px] text-ink-muted">{t.pricingSub}</p>}
           {allowDaily ? (
             // โหมดรายวัน — คิดต่อคืนอย่างเดียว ไม่มีค่าเช่ารายเดือน/มัดจำ/ค่าน้ำค่าไฟ
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
@@ -383,8 +474,9 @@ export default function NewRoomPage() {
                     type="number"
                     min={0}
                     value={pricePerDay}
-                    onChange={(e) => setPricePerDay(Math.max(0, Number(e.target.value)))}
-                    className="w-full font-sans text-2xl font-bold text-ink-strong outline-none"
+                    onChange={(e) => setPricePerDay(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full font-sans text-2xl font-bold text-ink-strong outline-none placeholder:text-ink-faint"
                   />
                   <span className="shrink-0 text-sm font-medium text-ink-muted">{t.perNight}</span>
                 </div>
@@ -393,10 +485,10 @@ export default function NewRoomPage() {
               <div className="rounded-[13px] border border-hairline bg-success-tint p-3.5">
                 <div className="mb-2 text-xs font-semibold text-success">{t.netPerNight}</div>
                 <div className="font-sans text-2xl font-bold text-success">
-                  ฿{Math.round(pricePerDay * (1 - DAILY_COMMISSION_RATE)).toLocaleString()}
+                  ฿{Math.round(num(pricePerDay) * (1 - DAILY_COMMISSION_RATE)).toLocaleString()}
                 </div>
                 <div className="mt-1 text-[11.5px] text-ink-muted">
-                  ฿{pricePerDay.toLocaleString()} − ฿{Math.round(pricePerDay * DAILY_COMMISSION_RATE).toLocaleString()} (10%)
+                  ฿{num(pricePerDay).toLocaleString()} − ฿{Math.round(num(pricePerDay) * DAILY_COMMISSION_RATE).toLocaleString()} (10%)
                 </div>
               </div>
             </div>
@@ -409,8 +501,9 @@ export default function NewRoomPage() {
                 <input
                   type="number"
                   value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                  className="w-full font-sans text-2xl font-bold text-ink-strong outline-none"
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full font-sans text-2xl font-bold text-ink-strong outline-none placeholder:text-ink-faint"
                 />
               </div>
             </div>
@@ -421,8 +514,9 @@ export default function NewRoomPage() {
                 <input
                   type="number"
                   value={deposit}
-                  onChange={(e) => setDeposit(Number(e.target.value))}
-                  className="w-full font-sans text-2xl font-bold text-ink-strong outline-none"
+                  onChange={(e) => setDeposit(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full font-sans text-2xl font-bold text-ink-strong outline-none placeholder:text-ink-faint"
                 />
               </div>
             </div>
@@ -433,8 +527,9 @@ export default function NewRoomPage() {
                 <input
                   type="number"
                   value={waterRate}
-                  onChange={(e) => setWaterRate(Number(e.target.value))}
-                  className="w-full bg-transparent font-sans text-2xl font-bold text-accent-dark outline-none"
+                  onChange={(e) => setWaterRate(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-transparent font-sans text-2xl font-bold text-accent-dark outline-none placeholder:text-ink-faint"
                 />
               </div>
             </div>
@@ -445,8 +540,9 @@ export default function NewRoomPage() {
                 <input
                   type="number"
                   value={electricRate}
-                  onChange={(e) => setElectricRate(Number(e.target.value))}
-                  className="w-full bg-transparent font-sans text-2xl font-bold text-accent-dark outline-none"
+                  onChange={(e) => setElectricRate(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-transparent font-sans text-2xl font-bold text-accent-dark outline-none placeholder:text-ink-faint"
                 />
               </div>
             </div>
@@ -493,7 +589,7 @@ export default function NewRoomPage() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !dormId}
+            disabled={submitting || !dormId || !pricingFilled}
             className="flex-[1.6] rounded-[13px] py-3 text-[14.5px] font-bold text-white disabled:opacity-50"
             style={{ background: allowDaily ? '#12A150' : '#2F6FE0' }}
           >
@@ -549,12 +645,12 @@ export default function NewRoomPage() {
               <div className="text-right">
                 {allowDaily ? (
                   <div className="font-sans text-lg font-bold text-success">
-                    ฿{pricePerDay.toLocaleString()}
+                    ฿{num(pricePerDay).toLocaleString()}
                     <span className="text-xs font-medium text-ink-muted">{t.perNight}</span>
                   </div>
                 ) : (
                   <div className="font-sans text-lg font-bold text-tenant">
-                    ฿{price.toLocaleString()}
+                    ฿{num(price).toLocaleString()}
                     <span className="text-xs font-medium text-ink-muted">{t.perMonth}</span>
                   </div>
                 )}
@@ -576,15 +672,15 @@ export default function NewRoomPage() {
             </div>
             <div className="mt-3.5 flex flex-wrap gap-x-2 gap-y-1 text-[11.5px] text-ink-muted">
               <span>
-                {t.water} ฿{waterRate}
+                {t.water} ฿{num(waterRate)}
               </span>
               <span>·</span>
               <span>
-                {t.electric} ฿{electricRate}
+                {t.electric} ฿{num(electricRate)}
               </span>
               <span>·</span>
               <span>
-                {t.deposit} ฿{deposit.toLocaleString()}
+                {t.deposit} ฿{num(deposit).toLocaleString()}
               </span>
             </div>
             <div className="mt-4 rounded-xl bg-tenant py-2.5 text-center text-sm font-bold text-white">{t.bookBtn}</div>
