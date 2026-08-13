@@ -1906,3 +1906,26 @@ tsc api+web ผ่าน
     จึง revoke ทั้งหมดรวมเครื่องตัวเอง แล้วให้หน้าเว็บ clearToken + พาไปล็อกอินใหม่ (?error=password_changed ทั้ง /login และ /partner-login)
   ทดสอบ: login -> /users/me = 200 -> เปลี่ยนรหัส { success, signedOut: true } -> token เดิม = 401
 tsc api+web ผ่าน
+
+[120] Payouts webhook + เทียบยอดใน webhook เงินเข้า (13/08/2026)
+[4] เทียบยอด/สกุลเงินก่อนยืนยันการชำระ
+- webhooks.controller: ส่ง data.amount + data.currency ต่อให้ service
+- payments.service.confirmByCharge(chargeId, paid?): currency ไม่ใช่ THB = ไม่ยืนยัน (currency_mismatch)
+  จ่ายน้อยกว่ายอดจริงเกิน 1 สตางค์ = ไม่ยืนยัน (amount_mismatch) log error ไว้ให้แอดมินตาม
+  เหตุผล: callback token พิสูจน์แค่ว่ามาจาก Xendit ไม่ได้พิสูจน์ว่าจ่ายครบ
+[3] รับผลการโอนออก (Xendit Payouts v2)
+- schema + migration 20260813000000_payment_payout_tracking:
+  Payment เพิ่ม payoutId / payoutRef / payoutStatus / payoutFailedReason + index payoutId
+- finance.service.transferForDormViaXendit: เก็บ payoutId + payoutRef ที่ใช้ยิง Xendit ลงทุก payment ในรอบนั้น
+  (เดิมมาร์ค TRANSFERRED ทันทีแบบไม่มีอะไรผูกกลับ = โอนล้มเหลวก็ไม่มีใครรู้)
+- route ใหม่ POST /bookings/payment/webhook/xendit/payout (ใช้ token เดียวกัน ผ่าน assertFromXendit ตัวเดียวกัน)
+- payments.service.applyPayoutResult: SUCCEEDED/COMPLETED = คงสถานะ บันทึกผล
+  FAILED/REVERSED/CANCELLED/REFUNDED/EXPIRED = ดึงกลับเป็น SETTLED (รอโอนใหม่) ล้าง transferredAt เก็บสาเหตุ
+  emit payout:failed / payout:updated เข้าห้อง role:admin แบบเรียลไทม์
+  สถานะระหว่างทาง (PENDING/ACCEPTED/LOCKED) = บันทึกไว้เฉยๆ ไม่แตะสถานะเงิน
+ทดสอบจริงกับ API local:
+  จ่ายขาด 900/1000 -> amount_mismatch คงเป็น PENDING · สกุล IDR -> currency_mismatch คงเป็น PENDING
+  ยอดตรง 1000 THB -> SETTLED · payout FAILED -> กลับเป็น SETTLED, transferredAt = null, reason = INVALID_DESTINATION
+  token ผิด -> 403 ทั้งสอง route
+tsc api+web ผ่าน · migrate deploy local ผ่าน (37 migrations)
+ต้องทำตอน deploy: ตั้ง callback URL ของ PAYOUTS v2 ใน Xendit dashboard = https://api.hoprak.com/bookings/payment/webhook/xendit/payout

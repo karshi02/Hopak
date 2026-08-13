@@ -275,6 +275,15 @@ model Payment {
   // สลิปที่แอดมินโอนเงิน payout ให้เจ้าของหอ (คนละสลิปกับ slipKey ของลูกค้า)
   transferSlipKey String?
   transferredAt   DateTime?
+
+  // การโอนออกผ่าน Xendit Payouts — เก็บไว้ผูก webhook กลับมาหา payment ที่โอนรอบนี้
+  // ถ้าโอนล้มเหลว/ตีกลับ webhook จะดึงสถานะกลับมาเป็นรอโอนใหม่ ไม่ค้างเป็น TRANSFERRED ทั้งที่เงินไม่ถึง
+  payoutId     String?
+  payoutRef    String?
+  payoutStatus String?
+  payoutFailedReason String?
+
+  @@index([payoutId])
 }
 
 model Notification {

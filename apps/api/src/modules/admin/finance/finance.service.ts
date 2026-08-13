@@ -48,20 +48,30 @@ export class FinanceService {
     const bonusAmount = Math.max(0, transferAmount - calculatedTotal);
 
     // ยิง Xendit โอนออกจริง — ได้ payoutId (disb-...) กลับมา
+    const payoutRef = this.disbursement.freshReference(`dorm-${dormId}`);
     const payout = await this.disbursement.createPayout({
       channelCode: channel,
       accountNumber: owner.bankAccountNumber,
       accountHolderName: owner.bankAccountName,
       amount: transferAmount,
-      referenceId: this.disbursement.freshReference(`dorm-${dormId}`),
+      referenceId: payoutRef,
       description: `Hoprak payout - ${dorm.name}${rentalType ? ` (${rentalType === 'DAILY' ? 'รายวัน' : 'รายเดือน'})` : ''}`,
     });
 
     const now = new Date();
     if (payments.length > 0) {
+      // เก็บ payoutId/ref ไว้ด้วย — webhook ของ Xendit จะอ้างกลับมาด้วยค่าพวกนี้เวลาโอนสำเร็จ/ล้มเหลว
+      // สถานะตอนนี้เป็นแค่ "ส่งคำสั่งโอนแล้ว" ยังไม่ใช่เงินถึงปลายทาง — รอ webhook ยืนยันอีกที
       await this.prisma.payment.updateMany({
         where: { id: { in: payments.map((p) => p.id) } },
-        data: { status: 'TRANSFERRED', transferredAt: now },
+        data: {
+          status: 'TRANSFERRED',
+          transferredAt: now,
+          payoutId: payout.payoutId,
+          payoutRef,
+          payoutStatus: payout.status,
+          payoutFailedReason: null,
+        },
       });
     }
 

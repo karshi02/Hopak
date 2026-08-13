@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { calcPayout } from '@hopak/shared';
 import { PrismaService } from '../../prisma.service';
@@ -10,6 +10,8 @@ import { generateCheckInToken, checkInTokenExpiry } from '../bookings/bookings.s
 
 @Injectable()
 export class PaymentsService {
+  private logger = new Logger(PaymentsService.name);
+
   // เวลาถือห้องระหว่างชำระเงิน — เกินแล้วไม่จ่าย คืนห้อง+ยกเลิก booking
   private static readonly HOLD_MS = 10 * 60 * 1000;
 
@@ -168,11 +170,28 @@ export class PaymentsService {
     return { chargeId: charge.chargeId, qrString: charge.qrString, amount: booking.amount, paymentDeadline: deadline };
   }
 
-  // เรียกจาก webhook เมื่อ Xendit ยืนยันว่าเงินเข้าจริง — idempotent (Xendit ยิงซ้ำได้)
-  async confirmByCharge(chargeId: string) {
+  /**
+   * เรียกจาก webhook เมื่อ Xendit ยืนยันว่าเงินเข้าจริง — idempotent (Xendit ยิงซ้ำได้)
+   *
+   * paid = ยอด/สกุลเงินที่ webhook แจ้งมา ต้องเทียบกับยอดที่ต้องจ่ายก่อนถือว่าชำระแล้ว
+   * (callback token พิสูจน์แค่ว่ามาจาก Xendit ไม่ได้พิสูจน์ว่าจ่ายครบ)
+   * ยอมรับส่วนต่างปัดเศษได้ 1 สตางค์ แต่จ่ายขาดเกินกว่านั้น = ไม่ยืนยัน ปล่อยให้แอดมินตรวจเอง
+   */
+  async confirmByCharge(chargeId: string, paid?: { amount?: number; currency?: string }) {
     const payment = await this.prisma.payment.findUnique({ where: { gatewayChargeId: chargeId } });
     if (!payment) return { ok: false };
     if (payment.status !== 'PENDING') return { ok: true }; // ยืนยันไปแล้ว — ไม่ทำซ้ำ
+
+    if (paid?.currency && paid.currency.toUpperCase() !== 'THB') {
+      this.logger.error(`webhook สกุลเงินไม่ตรง charge=${chargeId} currency=${paid.currency} — ไม่ยืนยัน`);
+      return { ok: false, reason: 'currency_mismatch' };
+    }
+    if (paid?.amount != null && paid.amount + 0.01 < payment.amount) {
+      this.logger.error(
+        `webhook ยอดไม่ตรง charge=${chargeId} จ่ายมา=${paid.amount} ต้องจ่าย=${payment.amount} — ไม่ยืนยัน`,
+      );
+      return { ok: false, reason: 'amount_mismatch' };
+    }
 
     await this.prisma.payment.update({
       where: { id: payment.id },
@@ -180,6 +199,68 @@ export class PaymentsService {
     });
     await this.finalizePaid(payment.bookingId);
     return { ok: true };
+  }
+
+  /**
+   * ผลการโอนเงินออกให้เจ้าของหอจาก Xendit Payouts
+   * สำเร็จ = คงสถานะ TRANSFERRED ไว้ แค่บันทึกสถานะล่าสุด
+   * ล้มเหลว/ตีกลับ = ดึงกลับเป็น SETTLED (รอโอนใหม่) + เก็บสาเหตุ + เด้งแจ้งแอดมินแบบเรียลไทม์
+   *   ไม่งั้นยอดจะค้างเป็น "โอนแล้ว" ทั้งที่เงินไม่ถึงเจ้าของหอ และไม่มีใครรู้
+   */
+  async applyPayoutResult(params: {
+    payoutId?: string;
+    referenceId?: string;
+    status: string;
+    failureCode?: string;
+  }) {
+    const where = params.payoutId ? { payoutId: params.payoutId } : { payoutRef: params.referenceId! };
+    const payments = await this.prisma.payment.findMany({ where });
+    if (payments.length === 0) return { ok: false };
+
+    const failed = ['FAILED', 'REVERSED', 'CANCELLED', 'REFUNDED', 'EXPIRED'].includes(params.status);
+    const succeeded = ['SUCCEEDED', 'COMPLETED'].includes(params.status);
+    if (!failed && !succeeded) {
+      // ระหว่างทาง (PENDING/LOCKED/ACCEPTED) — บันทึกสถานะไว้เฉยๆ
+      await this.prisma.payment.updateMany({ where, data: { payoutStatus: params.status } });
+      return { ok: true, pending: true };
+    }
+
+    if (succeeded) {
+      await this.prisma.payment.updateMany({
+        where,
+        data: { payoutStatus: params.status, payoutFailedReason: null },
+      });
+      this.realtime.emitToRole('admin', 'payout:updated', {
+        payoutId: params.payoutId,
+        status: params.status,
+        count: payments.length,
+      });
+      return { ok: true };
+    }
+
+    const total = payments.reduce((sum, p) => sum + p.ownerPayout, 0);
+    await this.prisma.payment.updateMany({
+      where,
+      data: {
+        status: 'SETTLED',
+        transferredAt: null,
+        payoutStatus: params.status,
+        payoutFailedReason: params.failureCode ?? params.status,
+      },
+    });
+    this.logger.error(
+      `โอนออกล้มเหลว payout=${params.payoutId ?? params.referenceId} status=${params.status} ` +
+        `code=${params.failureCode ?? '-'} ดึงกลับเป็นรอโอน ${payments.length} รายการ รวม ${total}`,
+    );
+    this.realtime.emitToRole('admin', 'payout:failed', {
+      payoutId: params.payoutId,
+      referenceId: params.referenceId,
+      status: params.status,
+      failureCode: params.failureCode,
+      count: payments.length,
+      amount: total,
+    });
+    return { ok: true, reverted: payments.length };
   }
 
   // ดัน booking เป็น PAID + ออกโทเค็น/ใบเสร็จ + ตัดห้อง + แจ้งผู้เช่า/เจ้าของหอ — เรียกหลังเงินเข้ายืนยันแล้ว
