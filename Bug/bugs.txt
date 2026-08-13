@@ -1938,3 +1938,21 @@ tsc api+web ผ่าน · migrate deploy local ผ่าน (37 migrations)
   ตรวจแล้วไฟล์ครบ 19 ไอคอน committed ปกติ ไม่โดน gitignore = ปัญหาอยู่ที่ image ล้วนๆ
 แก้: COPY --from=build /app/apps/web/public ./apps/web/public
 ต้อง build ใหม่ (ขั้นนี้เคย CACHED อยู่ ต้องแน่ใจว่า layer เปลี่ยนจริง)
+
+[122] prod ขึ้นจริงแล้ว — DNS + SSL + nginx (13/08/2026)
+DNS (HostAtom/DirectAdmin): A record ครบ @ / www / app / api -> 203.170.190.188 (ตั้งไว้อยู่แล้ว ไม่ต้องเพิ่ม)
+  mail/pop/smtp/ftp -> 103.30.127.7 ของโฮสต์ ห้ามแตะ
+บั๊ก nginx ที่เจอระหว่างทาง 2 ตัว:
+ 1) block app.hoprak.com เดิมมีแค่ return 301 https://app.hoprak.com = เด้งหาตัวเอง ไม่ได้ proxy ไป 3001 เลย
+    ถ้ารัน certbot ตอนนั้น มันจะคัดลอก block นี้ไปเป็น 443 -> วนซ้ำไม่รู้จบ เข้าเว็บไม่ได้
+    และ ACME challenge ก็โดน 301 ทับ = ออก/ต่ออายุใบรับรองไม่ผ่าน
+    แก้: app proxy ไป 127.0.0.1:3001 จริง + ทุก block ตอบ /.well-known/acme-challenge/ ก่อน redirect
+ 2) limit_req_zone ประกาศซ้ำ — เซิร์ฟเวอร์มี conf.d/hopak-ratelimit.conf อยู่แล้ว
+    พอ copy ไฟล์รวม zone ลง conf.d อีก nginx fail "already bound to key" -> คอนฟิกเก่ายังรันอยู่ (curl ได้ 301 ตลอด)
+    แก้: แยก docker/nginx-hopak-ratelimit.conf ออกมา ไฟล์ server block ไม่ประกาศ zone แล้ว
+ไฟล์จริงบนเซิร์ฟเวอร์: /etc/nginx/sites-available/hoprak.com (symlink จาก sites-enabled) + /etc/nginx/conf.d/hopak-ratelimit.conf
+  /etc/nginx/sites-available/nginx-hopak.conf เป็นของเก่าไม่ได้ใช้ (ทำให้หลงทางตอน grep)
+SSL: certbot --nginx ออกครบ 4 โดเมน · http -> 301 https · certbot renew --dry-run ผ่าน · certbot.timer ทำงาน
+  ไฟล์บนเซิร์ฟเวอร์ไม่ตรงกับรีโปแล้ว (certbot เติม block 443 เอง) ก๊อปทับตรงๆ = SSL หาย สำรองไว้ที่ /root/hoprak.com.with-ssl.bak
+ผลตรวจสุดท้าย: https://app.hoprak.com = 200 · https://api.hoprak.com/dorms = JSON · /bank-icons/KBANK.png = 200
+เขียน docker/DEPLOY.md เก็บขั้นตอน+กับดักทั้งหมดไว้แล้ว
