@@ -1929,3 +1929,12 @@ tsc api+web ผ่าน
   token ผิด -> 403 ทั้งสอง route
 tsc api+web ผ่าน · migrate deploy local ผ่าน (37 migrations)
 ต้องทำตอน deploy: ตั้ง callback URL ของ PAYOUTS v2 ใน Xendit dashboard = https://api.hoprak.com/bookings/payment/webhook/xendit/payout
+
+[121] บั๊ก: ไฟล์ใน public/ ทั้งหมด 404 บนเซิร์ฟเวอร์จริง (ไอคอนธนาคารไม่ขึ้น) (13/08/2026)
+อาการ: หน้า partner/settings ช่องเลือกธนาคาร โลโก้แตกทุกอัน (local ปกติ)
+สาเหตุ: docker/Dockerfile.web ก๊อป public ไปที่ /app/public
+  แต่ Next standalone แบบ monorepo รัน "node apps/web/server.js" -> มันหา public ที่ apps/web/public
+  ไฟล์เลยไม่เจอทั้งโฟลเดอร์ ไม่ใช่แค่ไอคอนธนาคาร (hero-banner.jpg, leaflet/*.png ก็โดนด้วย)
+  ตรวจแล้วไฟล์ครบ 19 ไอคอน committed ปกติ ไม่โดน gitignore = ปัญหาอยู่ที่ image ล้วนๆ
+แก้: COPY --from=build /app/apps/web/public ./apps/web/public
+ต้อง build ใหม่ (ขั้นนี้เคย CACHED อยู่ ต้องแน่ใจว่า layer เปลี่ยนจริง)
