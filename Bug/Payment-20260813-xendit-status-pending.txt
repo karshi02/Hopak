@@ -1,0 +1,124 @@
+รายงานสถานะระบบชำระเงิน Xendit — พักไว้ก่อน
+วันที่: 13/08/2026
+สถานะ: ยังไม่ปิดงาน (รอ KYC + ยังไม่ได้ทดสอบ flow จ่ายเงินจนจบ)
+
+═══════════════════════════════════════════════════════════════
+1. ตอนนี้ทำอะไรไปแล้วบ้าง (ใช้งานได้จริงบน prod)
+═══════════════════════════════════════════════════════════════
+
+[ผ่านแล้ว] สร้าง QR พร้อมเพย์
+  - POST https://api.xendit.co/qr_codes ผ่าน XenditGateway
+  - ยืนยันแล้วบนเซิร์ฟเวอร์จริง: QR ขึ้นบนมือถือ ไม่มี error ใน log
+  - channel_code = TH_PROMPTPAY, currency = THB, type = DYNAMIC (ยอดฝังในตัว QR)
+  - reference_id = bookingId (Xendit ส่งกลับมาใน webhook)
+
+[ผ่านแล้ว] webhook เงินเข้า — POST /bookings/payment/webhook/xendit
+  - ตรวจ x-callback-token แบบ fail-closed: ไม่ตั้ง XENDIT_WEBHOOK_TOKEN = ปฏิเสธทุก callback
+  - เทียบ token ด้วย timingSafeEqual บน sha256
+  - เทียบยอด + สกุลเงินก่อนยืนยัน: จ่ายขาดเกิน 1 สตางค์ = amount_mismatch, ไม่ใช่ THB = currency_mismatch
+  - ทดสอบบน local แล้ว: จ่ายขาด 900/1000 คงเป็น PENDING · ยอดตรง = SETTLED
+  - บน prod ยืนยันแค่ว่า token ทำงาน (ยิงมั่วได้ 403 invalid webhook token)
+
+[ผ่านแล้ว] webhook โอนออก — POST /bookings/payment/webhook/xendit/payout
+  - รับ payout.succeeded / payout.failed
+  - FAILED/REVERSED/CANCELLED/REFUNDED/EXPIRED = ดึง payment กลับเป็น SETTLED (รอโอนใหม่)
+    ล้าง transferredAt เก็บ payoutFailedReason + emit payout:failed เข้าห้อง role:admin
+  - ทดสอบบน local แล้ว: FAILED -> กลับเป็น SETTLED, transferredAt = null
+  - payload ตัวอย่างจาก dashboard ตรงกับ handler (data.id / data.reference_id / data.status)
+
+[ผ่านแล้ว] QR ไม่ออกใหม่เมื่อรีเฟรช
+  - payment PENDING + deadline ยังไม่ถึง = คืน QR ตัวเดิม + เส้นตายเดิม
+  - เดิมรีเฟรชทีไรก็สร้าง QR ใหม่ + ต่อ hold ห้องอีก 10 นาที = ยึดห้องได้ไม่จำกัด
+
+═══════════════════════════════════════════════════════════════
+2. ที่ยังไม่ได้ทำ / ยังไม่ได้พิสูจน์
+═══════════════════════════════════════════════════════════════
+
+[ยังไม่เทสต์] flow จ่ายเงินจนจบบน prod
+  ยังไม่เคยเห็น booking เด้งเป็น PAID เองจากการจ่ายจริง
+  รอบที่ลอง: simulate ตอบ 200 SUCCEEDED แล้ว แต่ payment แถวนั้นหายไปก่อน
+  (QR หมดอายุ 10 นาที cron เก็บกวาดไปแล้ว) เลยเช็คผลไม่ได้
+  => ยังไม่ยืนยันว่า Xendit ยิง webhook มาถึงเซิร์ฟเวอร์เราจริงหรือไม่
+
+[ยังไม่ยืนยัน] callback URL ใน Xendit dashboard ตั้งครบหรือยัง
+  ต้องมี 2 ช่อง:
+    QR CODES -> QR code paid & refunded
+      https://api.hoprak.com/bookings/payment/webhook/xendit
+    DISBURSEMENT -> Payouts v2
+      https://api.hoprak.com/bookings/payment/webhook/xendit/payout
+
+[ยังเป็น test mode] ยังรับเงินจริงไม่ได้
+  คีย์ที่ใช้อยู่เป็น xnd_development_... (สร้าง 13/08/2026 ชื่อคีย์ตั้งไว้ว่า "Public Key" — ชื่อสับสน ควรเปลี่ยน)
+  สิทธิ์ที่ให้ไว้: การรับชำระเงิน = Write, การส่งเงินออก = Write
+  เงินที่จ่ายผ่าน QR ตอนนี้เป็นเงินปลอมทั้งหมด
+
+═══════════════════════════════════════════════════════════════
+3. วิธีทดสอบต่อ (ทำได้เลยไม่ต้องรอ KYC)
+═══════════════════════════════════════════════════════════════
+
+ขั้นที่ 1 — จองบนเว็บให้ถึงหน้า QR แล้วเปิดหน้านั้นค้างไว้ (จะได้เห็นมันข้ามไปขั้น 3 เอง)
+
+ขั้นที่ 2 — บน VPS รันภายใน 10 นาที (QR หมดอายุแล้วเทสต์ไม่ได้):
+
+cd /opt/hopak/docker
+ID=$(docker compose -f docker-compose.prod.yml exec -T -w /app/apps/api api node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.payment.findFirst({where:{status:'PENDING',gatewayChargeId:{not:null}},orderBy:{createdAt:'desc'},select:{gatewayChargeId:true,amount:true}}).then(r=>{console.log(r.gatewayChargeId+' '+r.amount);process.exit(0)})" | tr -d '\r')
+set -- $ID; echo "qr=$1 amount=$2"
+docker compose -f docker-compose.prod.yml exec -T -w /app/apps/api api node -e "fetch('https://api.xendit.co/qr_codes/$1/payments/simulate',{method:'POST',headers:{Authorization:'Basic '+Buffer.from(process.env.XENDIT_SECRET_KEY+':').toString('base64'),'api-version':'2022-07-31','Content-Type':'application/json'},body:JSON.stringify({amount:$2})}).then(async r=>console.log(r.status, await r.text()))"
+
+ขั้นที่ 3 — ผลที่ต้องได้:
+  - หน้าจอมือถือข้ามไปขั้นที่ 3 เองภายใน 1-2 วิ ไม่ต้องรีเฟรช (ผ่าน socket)
+  - payment.status = SETTLED, settledAt มีเวลา
+  - booking.status = PAID
+  - ได้ใบเสร็จ
+
+ถ้า simulate ตอบ 200 แต่ payment ยัง PENDING = Xendit ไม่ได้ยิง webhook มา
+ให้ไปเช็ค callback URL ช่อง QR CODES ใน dashboard ก่อนเป็นอันดับแรก
+
+═══════════════════════════════════════════════════════════════
+4. ต้องทำอะไรบ้างตอน KYC ผ่าน (สลับเป็น live)
+═══════════════════════════════════════════════════════════════
+
+เปลี่ยนพร้อมกัน 3 ค่าใน /opt/hopak/apps/api/.env.production:
+  XENDIT_SECRET_KEY   -> xnd_production_...
+  (public key ถ้ามีที่ใช้ฝั่ง web) -> xnd_public_production_...
+  XENDIT_WEBHOOK_TOKEN -> โทเค็นของ Live mode (คนละตัวกับ test mode)
+
+แล้ว:
+  docker compose -f docker-compose.prod.yml up -d --force-recreate api
+  ตรวจ: curl -X POST https://api.hoprak.com/bookings/payment/webhook/xendit -d '{}' -H "Content-Type: application/json"
+        ต้องได้ 403 invalid webhook token (ไม่ใช่ webhook not configured)
+
+ตั้ง callback URL ใหม่ในฝั่ง Live mode ด้วย (dashboard แยก test/live คนละชุด)
+
+ข้อควรระวัง: โทเค็น webhook ของ test mode เคยหลุดเข้าแชทไปแล้ว (13/08/2026)
+เป็น test mode เลยไม่มีผลกับเงินจริง แต่ของ live ห้ามหลุดเด็ดขาด
+ใครมีโทเค็นสามารถปลอม callback ยืนยันการจองโดยไม่จ่ายเงินได้
+
+═══════════════════════════════════════════════════════════════
+5. ช่องว่างที่รู้อยู่ (ยังไม่ได้แก้ ตั้งใจปล่อยไว้ก่อน)
+═══════════════════════════════════════════════════════════════
+
+- webhook เชื่อ payload ทั้งก้อนเมื่อ token ถูก
+  เทียบยอด/สกุลเงินแล้ว แต่ไม่ได้เทียบ reference_id กับ booking ที่ผูกกับ chargeId
+  (chargeId เป็น unique อยู่แล้วจึงยังไม่เป็นช่องโหว่ แต่เพิ่มได้จะแน่นขึ้น)
+
+- ไม่มีการดึงสถานะจาก Xendit เอง (polling/reconcile)
+  ถ้า webhook หายไปรอบนึง (เน็ตล่ม/เซิร์ฟเวอร์ดาวน์) จะไม่มีอะไรมาตามเก็บ
+  Xendit มี auto-retry ให้แล้วถ้าเปิดไว้ แต่ฝั่งเราไม่มี fallback
+
+- payout ทำเป็นชุด (หลาย payment ต่อ 1 payoutId) ถ้าล้มเหลวจะดึงกลับทั้งชุด
+  ยังไม่รองรับกรณีล้มเหลวบางส่วน (Xendit ไม่ได้แบ่งจ่ายบางส่วนอยู่แล้ว จึงยังไม่เป็นปัญหา)
+
+- IP allowlist ของ API key: ถ้าตั้งไว้ ต้องมี 203.170.190.188
+  ตั้งแล้วเครื่อง dev จะเรียก Xendit ไม่ได้
+
+═══════════════════════════════════════════════════════════════
+6. ไฟล์ที่เกี่ยวข้อง
+═══════════════════════════════════════════════════════════════
+
+apps/api/src/modules/payments/gateway/xendit.gateway.ts       สร้าง QR
+apps/api/src/modules/payments/gateway/disbursement.gateway.ts  โอนออก (payouts v2)
+apps/api/src/modules/payments/webhooks.controller.ts           รับ webhook ทั้ง 2 ทาง
+apps/api/src/modules/payments/payments.service.ts              confirmByCharge / applyPayoutResult / createCharge
+apps/api/src/modules/admin/finance/finance.service.ts          สั่งโอนให้เจ้าของหอ
+docker/DEPLOY.md                                               ขั้นตอน deploy + URL webhook
