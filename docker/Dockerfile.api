@@ -24,5 +24,7 @@ COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build /app/apps/api/tsconfig.json ./apps/api/tsconfig.json
+# สคริปต์ดูแลข้อมูล (backfill/audit) — รันด้วยมือผ่าน docker compose exec ตอน deploy
+COPY --from=build /app/apps/api/scripts ./apps/api/scripts
 EXPOSE 4000
 CMD ["node", "apps/api/dist/src/main.js"]
