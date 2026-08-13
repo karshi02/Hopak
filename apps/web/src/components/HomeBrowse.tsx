@@ -447,6 +447,18 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const zonesTitle = (isTh && homeContent.zonesTitleTh) || t.zonesTitle;
   const zonesSub = (isTh && homeContent.zonesSubTh) || t.zonesSub;
   const topSearchPlaceholder = useTypewriter(t.topSearchPhrases);
+
+  // ช่องค้นหาบนหัวมีข้อความพิมพ์เองอยู่ แต่ซ่อนบนจอเล็ก (sm:flex)
+  // จอเล็กเลยย้ายข้อความนั้นมาเป็น placeholder ของช่องค้นหาใน hero แทน
+  // placeholder เป็น prop ไม่ใช่ CSS ทำด้วย media query ไม่ได้ ต้องรู้ขนาดจอจริง
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
   const roomTypeOptions = ROOM_TYPE_OPTIONS[lang];
   const priceRangeOptions = PRICE_RANGE_OPTIONS[lang];
 
@@ -779,7 +791,11 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                   setSelectedPlace(null);
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder={`${provinceLabel(province)} · ${currentDorms.length} ${t.dormsUnit}`}
+                placeholder={
+                  isMobile
+                    ? topSearchPlaceholder
+                    : `${provinceLabel(province)} · ${currentDorms.length} ${t.dormsUnit}`
+                }
                 className="w-full truncate bg-transparent text-[17px] font-semibold text-ink-strong outline-none placeholder:font-semibold placeholder:text-ink-strong"
               />
             </div>
