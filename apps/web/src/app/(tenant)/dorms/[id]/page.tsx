@@ -381,7 +381,8 @@ export default function DormDetailPage() {
   const modalImages = modalVariant?.room.images ?? [];
 
   return (
-    <main className="mx-auto max-w-[1240px] px-4 py-5 sm:px-6">
+    // pb เผื่อแถบราคาลอยล่างจอมือถือทับเนื้อหา
+    <main className="mx-auto max-w-[1240px] px-4 py-5 pb-[92px] sm:px-6 lg:pb-5">
       <p className="text-[13px] text-ink-faint">
         <a href="/search" className="hover:text-tenant">
           {t.search}
@@ -782,7 +783,8 @@ export default function DormDetailPage() {
         </div>
 
         {/* ===== RIGHT: BOOKING CARD ===== */}
-        <div className="lg:sticky lg:top-[88px]">
+        {/* การ์ดราคาเกาะตามการเลื่อนตลอดหน้า — จำกัดความสูงไม่ให้ล้นจอ ไม่งั้นท้ายการ์ดจะหลุดออกนอกวิว */}
+        <div className="lg:sticky lg:top-[88px] lg:max-h-[calc(100vh-104px)] lg:overflow-y-auto lg:pr-0.5">
           <div className="rounded-[20px] border border-[#EAEDF2] bg-white p-6 shadow-[0_8px_26px_rgba(16,24,40,0.1)]">
             {cheapestRoom ? (
               <>
@@ -878,6 +880,29 @@ export default function DormDetailPage() {
           )}
         </div>
       </div>
+
+      {/* ===== แถบราคาลอยล่างจอ (มือถือ) — การ์ดขวาเป็น sticky ได้เฉพาะ lg ขึ้นไป ====== */}
+      {cheapestRoom && !isOwnerHere && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#EAEDF2] bg-white/95 px-4 py-3 shadow-[0_-6px_20px_rgba(16,24,40,0.1)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-[1240px] items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-1">
+                <span className="font-sans text-[22px] font-bold tracking-tight text-tenant">
+                  ฿{(isDaily ? cheapestRoom.pricePerDay ?? 0 : cheapestRoom.pricePerMonth).toLocaleString()}
+                </span>
+                <span className="text-[13px] text-ink-faint">{isDaily ? t.perNight : t.perMonth}</span>
+              </div>
+              <div className="truncate text-[11.5px] text-[#12704A]">{t.availableCount(availableRooms.length)}</div>
+            </div>
+            <button
+              onClick={() => router.push(`/bookings/new?roomId=${cheapestRoom.id}${isDaily ? '&rental=daily' : ''}`)}
+              className="h-[46px] shrink-0 rounded-[13px] bg-[linear-gradient(135deg,#2F6FE0,#5B9DFF)] px-6 text-[15px] font-bold text-white shadow-[0_8px_18px_rgba(47,111,224,0.35)]"
+            >
+              {t.bookNow}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ===== ROOM DETAIL MODAL ===== */}
       {modalVariant && (

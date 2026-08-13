@@ -28,6 +28,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const err = new Error(body.message ?? `Request failed: ${res.status}`);
     // แนบ HTTP status ไว้ให้ผู้เรียกแยกเคสได้ (เช่น 409 = ห้องถูกจองอยู่)
     (err as Error & { status?: number }).status = res.status;
+    // โค้ดจาก body ให้แยกเคสได้โดยไม่ต้องจับข้อความ (เช่น too_many_attempts)
+    if (body.code) (err as Error & { code?: string }).code = body.code;
     throw err;
   }
   return res.json();

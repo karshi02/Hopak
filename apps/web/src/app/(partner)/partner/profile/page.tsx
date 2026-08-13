@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
-import { getToken } from '@/lib/auth';
+import { getToken, clearToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
 import type { Dorm, User } from '@hopak/shared';
 
@@ -182,6 +182,9 @@ export default function PartnerProfilePage() {
       setNewPassword('');
       setConfirmPassword('');
       setPwSaved(true);
+      // เปลี่ยนรหัสแล้วทุกเซสชันถูกตัดทิ้ง (รวมเครื่องนี้) — token เดิมใช้ไม่ได้แล้ว ต้องล็อกอินใหม่
+      clearToken();
+      setTimeout(() => window.location.replace('/partner-login?error=password_changed'), 1200);
     } catch (err) {
       setPwError(err instanceof Error ? err.message : t.pwError);
     } finally {

@@ -28,6 +28,8 @@ export class DormsService {
                 { name: { contains: query.q, mode: 'insensitive' as const } },
                 { province: { contains: query.q, mode: 'insensitive' as const } },
                 { university: { contains: query.q, mode: 'insensitive' as const } },
+                // ที่อยู่ด้วย — หน้าแรกลิงก์รายอำเภอมาที่ ?q=<ชื่ออำเภอ> ระบบไม่มีฟิลด์อำเภอแยก
+                { address: { contains: query.q, mode: 'insensitive' as const } },
               ],
             }
           : {}),

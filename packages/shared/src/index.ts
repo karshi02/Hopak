@@ -4,6 +4,7 @@ export * from './types/booking';
 export * from './types/payment';
 export * from './constants/fees';
 export * from './constants/provinces';
+export * from './constants/districts';
 export * from './constants/universities';
 export * from './logic/commission';
 export * from './logic/cancellation';

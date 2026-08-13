@@ -158,15 +158,51 @@ export default function PartnerRegisterPage() {
 
   const next = () => setStep((current) => Math.min(4, current + 1) as Step);
   const back = () => setStep((current) => Math.max(1, current - 1) as Step);
-  // สมัครด้วย Google — ส่งไป OAuth จริง (ฝั่งเจ้าของหอ) ไม่ใช่ข้อมูลปลอมแบบเดิม
+  // สมัครด้วย Google — ไม่ใช่การล็อกอิน แค่ขอชื่อ/อีเมลของบัญชี Google มากรอกฟอร์มให้
+  // (intent=owner_register: callback จะเด้งกลับมาที่หน้านี้พร้อม ?gcode= ไม่แตะบัญชีใดๆ)
   const goGmail = () => {
-    sessionStorage.setItem('googleIntent', 'owner');
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}/auth/google?intent=owner`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}/auth/google?intent=owner_register`;
   };
+
+  // กลับมาจาก Google: แลกโค้ดเป็นชื่อ+อีเมล แล้วยิงขอ OTP ต่อให้เลย ผู้ใช้ไม่ต้องพิมพ์ซ้ำ
+  const [googleProfile, setGoogleProfile] = useState<{ name: string; email: string } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gcode = params.get('gcode');
+    const queryError = params.get('error');
+    if (!gcode && !queryError) return;
+    // ล้าง query ทันที ไม่ให้โค้ด/สถานะค้างใน address bar หรือ history
+    window.history.replaceState(null, '', '/partner-register');
+    if (!gcode) {
+      setError('เชื่อมต่อ Google ไม่สำเร็จ กรุณากรอกอีเมลเอง');
+      return;
+    }
+    apiClient
+      .postWithCredentials<{ name: string; email?: string }>('/auth/google/profile-exchange', { code: gcode })
+      .then((profile) => {
+        if (!profile.email) {
+          setError('บัญชี Google นี้ไม่มีอีเมล กรุณากรอกอีเมลเอง');
+          return;
+        }
+        setName(profile.name);
+        setEmail(profile.email);
+        setGoogleProfile({ name: profile.name, email: profile.email });
+      })
+      .catch(() => setError('เชื่อมต่อ Google ไม่สำเร็จ กรุณากรอกอีเมลเอง'));
+  }, []);
+
+  // ได้โปรไฟล์ครบแล้วค่อยยิงสร้างใบสมัคร + ส่ง OTP (state ต้องลงก่อน ไม่งั้นส่งค่าว่าง)
+  useEffect(() => {
+    if (!googleProfile || name !== googleProfile.name || email !== googleProfile.email) return;
+    setGoogleProfile(null);
+    void startApplication();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleProfile, name, email]);
 
   // ขั้น 1 → สร้างใบสมัคร แล้วให้ backend ส่ง OTP เข้าอีเมล
   async function startApplication() {
     setError(null);
+    setOwnerExists(false); // เปลี่ยนอีเมลแล้วลองใหม่ ต้องไม่ค้างกล่องเตือนของอีเมลก่อนหน้า
     if (!name.trim() || !email.trim()) {
       setError('กรอกชื่อและอีเมลก่อน');
       return;
@@ -176,13 +212,22 @@ export default function PartnerRegisterPage() {
       let id = appId;
       let secret = appSecret;
       if (!id || !secret) {
-        const app = await apiClient.post<{ id: string; secret: string }>('/owner-applications', {
-          name: name.trim(),
-          email: email.trim(),
-        });
+        const app = await apiClient.post<{ id: string; secret?: string; requiresOtp?: boolean }>(
+          '/owner-applications',
+          { name: name.trim(), email: email.trim() },
+        );
         id = app.id;
-        secret = app.secret;
         setAppId(id);
+        // อีเมลนี้มีใบสมัครที่กรอกค้างไว้ — ระบบไม่ล้างทิ้งให้แล้ว (กันคนอื่นที่รู้อีเมลมาลบข้อมูลเรา)
+        // ต้องยืนยัน OTP ก่อนถึงจะได้สิทธิ์กรอกต่อ ฝั่ง API จะออก secret ใหม่ให้ตอนยืนยันผ่าน
+        if (app.requiresOtp || !app.secret) {
+          setAppSecret(null);
+          setResendIn(60);
+          setOtpExpiresIn(600);
+          setStep(2);
+          return;
+        }
+        secret = app.secret;
         setAppSecret(secret);
       }
       await apiClient.post(`/owner-applications/${id}/send-otp`, {}, { 'x-application-secret': secret });
@@ -225,7 +270,13 @@ export default function PartnerRegisterPage() {
     }
     setBusy(true);
     try {
-      await apiClient.post(`/owner-applications/${appId}/verify-otp`, { code }, secretHeader());
+      // ยืนยันโดยไม่มี secret (กลับมาทำใบสมัครเดิมต่อ) API จะออก secret ใหม่มาให้ตรงนี้
+      const res = await apiClient.post<{ secret?: string }>(
+        `/owner-applications/${appId}/verify-otp`,
+        { code },
+        secretHeader(),
+      );
+      if (res.secret) setAppSecret(res.secret);
       setOtpVerified(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'รหัสไม่ถูกต้องหรือหมดอายุ');
@@ -404,18 +455,30 @@ export default function PartnerRegisterPage() {
                 <Field label="อีเมล" hint="เราจะส่งรหัส OTP ไปยืนยัน"><input value={email} type="email" onChange={(event) => setEmail(event.target.value)} placeholder="your@email.com" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 font-sans text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field>
               </div>
               <div className="flex-1" />
-              {error && (
-                <p className="mt-4 text-[13px] font-semibold text-danger">
-                  {error}
-                  {ownerExists && (
-                    <>
-                      {' '}
-                      <Link href="/partner-login" className="underline">
-                        เข้าสู่ระบบเจ้าของหอ
-                      </Link>
-                    </>
-                  )}
-                </p>
+              {/* อีเมลนี้มีบัญชีเจ้าของหออยู่แล้ว — บอกให้ชัดตรงนี้เลย พร้อมทางไปต่อ ไม่ต้องให้เดา */}
+              {ownerExists ? (
+                <div className="mt-4 rounded-[13px] border border-[#F0C9A6] bg-[#FFF7EF] p-4">
+                  <p className="text-[14px] font-bold text-[#8A5A22]">อีเมลนี้มีบัญชีเจ้าของหออยู่แล้ว</p>
+                  <p className="mt-1 text-[13px] text-[#7A6852]">
+                    เข้าสู่ระบบด้วยอีเมลนี้ได้เลย หรือถ้าจำรหัสผ่านไม่ได้ให้ตั้งรหัสใหม่
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2.5">
+                    <Link
+                      href="/partner-login"
+                      className="flex h-[42px] items-center rounded-[11px] bg-[#0E9F8E] px-4 text-[13.5px] font-bold text-white"
+                    >
+                      เข้าสู่ระบบเจ้าของหอ
+                    </Link>
+                    <Link
+                      href="/forgot-password?role=owner"
+                      className="flex h-[42px] items-center rounded-[11px] border border-[#E7ECEA] bg-white px-4 text-[13.5px] font-bold text-[#33413B]"
+                    >
+                      ลืมรหัสผ่าน
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                error && <p className="mt-4 text-[13px] font-semibold text-danger">{error}</p>
               )}
               <button onClick={startApplication} disabled={busy} className="mt-8 flex h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#0E9F8E] text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(14,159,142,.3)] transition hover:bg-[#0B7A6C] disabled:opacity-60">{busy ? 'กำลังส่ง...' : 'ส่งรหัสยืนยัน'} <ArrowIcon /></button>
               <p className="mt-5 text-center text-sm text-[#5B655F] min-[821px]:hidden">มีบัญชีแล้ว? <Link href="/partner-login" className="font-bold text-[#0E9F8E]">เข้าสู่ระบบ</Link></p>

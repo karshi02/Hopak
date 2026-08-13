@@ -24,6 +24,10 @@ export interface DeviceInfo {
 
 const GOOGLE_CODE_TTL_MS = 2 * 60 * 1000;
 
+// ใส่รหัสผิดครบ 10 ครั้งใน 30 นาที = พาไปหน้าตั้งรหัสใหม่ (ไม่บอกผู้ใช้ว่าผิดมากี่ครั้งแล้ว)
+const MAX_LOGIN_FAILURES = 10;
+const LOGIN_FAILURE_WINDOW_MS = 30 * 60 * 1000;
+
 @Injectable()
 export class AuthService {
   private logger = new Logger(AuthService.name);
@@ -32,6 +36,10 @@ export class AuthService {
   // จึงไม่อันตรายแม้หลุดเข้า log (ต่างจาก JWT อายุ 7 วันที่หลุดแล้วใช้เข้าบัญชีได้เลย)
   private googleCodes = new Map<string, { token: string; bindingHash: string; expiresAt: number }>();
 
+  // นับรหัสผ่านผิดต่ออีเมล+ฝั่งที่ล็อกอิน เก็บในหน่วยความจำ (รีสตาร์ทแล้วหาย ยอมรับได้ — เป็นตัวช่วยผู้ใช้ ไม่ใช่ rate limit หลัก
+  // ซึ่งมี RateLimitGuard คุมอยู่แล้ว) ข้อดีคือไม่ต้องเขียน DB ทุกครั้งที่มีคนเดารหัส
+  private loginFailures = new Map<string, { count: number; expiresAt: number }>();
+
   createGoogleExchangeCode(token: string, binding: string): string {
     const code = randomBytes(24).toString('hex');
     const bindingHash = createHash('sha256').update(binding).digest('hex');
@@ -39,6 +47,36 @@ export class AuthService {
     // กวาดโค้ดหมดอายุทิ้ง กัน map โตไม่มีที่สิ้นสุด
     for (const [k, v] of this.googleCodes) if (v.expiresAt < Date.now()) this.googleCodes.delete(k);
     return code;
+  }
+
+  // โปรไฟล์ Google สำหรับ "กรอกฟอร์มสมัครเจ้าของหอให้อัตโนมัติ" — ยังไม่ใช่การล็อกอิน ไม่มี token ผูกอยู่
+  // ใช้กลไกโค้ดใช้ครั้งเดียวเหมือน login เพื่อไม่ให้ชื่อ/อีเมลโผล่ใน URL
+  private googleProfiles = new Map<
+    string,
+    { profile: { name: string; email?: string; emailVerified: boolean }; bindingHash: string; expiresAt: number }
+  >();
+
+  createGoogleProfileCode(
+    profile: { name: string; email?: string; emailVerified?: boolean },
+    binding: string,
+  ): string {
+    const code = randomBytes(24).toString('hex');
+    this.googleProfiles.set(code, {
+      profile: { name: profile.name, email: profile.email, emailVerified: !!profile.emailVerified },
+      bindingHash: createHash('sha256').update(binding).digest('hex'),
+      expiresAt: Date.now() + GOOGLE_CODE_TTL_MS,
+    });
+    for (const [k, v] of this.googleProfiles) if (v.expiresAt < Date.now()) this.googleProfiles.delete(k);
+    return code;
+  }
+
+  exchangeGoogleProfileCode(code: string, binding?: string) {
+    const entry = this.googleProfiles.get(code);
+    this.googleProfiles.delete(code); // ใช้ครั้งเดียวเสมอ
+    const bindingHash = binding ? createHash('sha256').update(binding).digest('hex') : undefined;
+    const ok = !!entry && !!bindingHash && entry.bindingHash === bindingHash && entry.expiresAt >= Date.now();
+    if (!ok) throw new UnauthorizedException('รหัสเข้าสู่ระบบไม่ถูกต้องหรือหมดอายุ');
+    return entry!.profile;
   }
 
   exchangeGoogleCode(code: string, binding?: string): { accessToken: string } {
@@ -113,16 +151,37 @@ export class AuthService {
   // ถ้าไม่ระบุ role จะหลุดไปเจอบัญชีผิดฝั่ง (login ฝั่งผู้เช่าแล้วได้บัญชีเจ้าของหอ)
   private async verifyCredentials(dto: LoginDto, roles: ('TENANT' | 'OWNER' | 'ADMIN')[]) {
     const identity = dto.email ? { email: dto.email } : { phone: dto.phone };
+    const failureKey = `${roles.join(',')}:${dto.email ?? dto.phone ?? ''}`.toLowerCase();
+
     const user = await this.prisma.user.findFirst({
       where: { ...identity, role: { in: roles } },
     });
-    if (!user || !user.password) throw new UnauthorizedException('Invalid credentials');
 
-    const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const wrong = !user || !user.password || !(await bcrypt.compare(dto.password, user.password));
+    if (wrong) {
+      // นับพลาดต่อ "อีเมล+ฝั่งที่ล็อกอิน" ไม่ว่าบัญชีจะมีจริงหรือไม่ — ถ้านับเฉพาะบัญชีที่มีจริง
+      // การเด้งไปหน้าเปลี่ยนรหัสจะกลายเป็นตัวบอกว่าอีเมลไหนมีในระบบ
+      const failures = this.bumpLoginFailure(failureKey);
+      if (failures >= MAX_LOGIN_FAILURES) {
+        // ข้อความยังเป็น "รหัสผ่านไม่ถูกต้อง" เหมือนเดิม ไม่บอกจำนวนครั้ง — ส่งแค่โค้ดให้หน้าเว็บพาไปตั้งรหัสใหม่
+        throw new UnauthorizedException({ message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง', code: 'too_many_attempts' });
+      }
+      throw new UnauthorizedException({ message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง', code: 'invalid_credentials' });
+    }
+
     if (user.suspended) throw new UnauthorizedException('บัญชีนี้ถูกระงับการใช้งาน');
 
+    this.loginFailures.delete(failureKey); // เข้าได้แล้ว เริ่มนับใหม่
     return user;
+  }
+
+  private bumpLoginFailure(key: string): number {
+    const now = Date.now();
+    const entry = this.loginFailures.get(key);
+    const count = entry && entry.expiresAt > now ? entry.count + 1 : 1;
+    this.loginFailures.set(key, { count, expiresAt: now + LOGIN_FAILURE_WINDOW_MS });
+    for (const [k, v] of this.loginFailures) if (v.expiresAt <= now) this.loginFailures.delete(k);
+    return count;
   }
 
   // เข้าสู่ระบบฝั่งผู้เช่า — เห็นเฉพาะบัญชี TENANT
@@ -148,19 +207,31 @@ export class AuthService {
    * ฝั่งเจ้าของหอ: ไม่สร้างบัญชีใหม่ให้อัตโนมัติ ต้องสมัครผ่านหน้าเปิดหอพักก่อน (แอดมินอนุมัติ)
    */
   async loginWithGoogle(
-    profile: { googleId: string; email?: string; name: string },
+    profile: { googleId: string; email?: string; emailVerified?: boolean; name: string },
     device?: DeviceInfo,
     role: 'TENANT' | 'OWNER' = 'TENANT',
   ) {
     let user = await this.prisma.user.findFirst({ where: { googleId: profile.googleId, role } });
 
-    // ห้ามผูก Google identity กับบัญชีเดิมด้วย email เพียงอย่างเดียว เพราะผู้โจมตี
-    // อาจสมัครจอง email ของเหยื่อไว้ก่อนแล้วคง password ของตัวเองไว้ได้
+    // ผูก Google identity เข้ากับบัญชีเดิมที่สมัครด้วยรหัสผ่านได้ ต่อเมื่อ "ยืนยันอีเมลแล้วทั้งสองฝั่ง":
+    // Google ยืนยันว่าอีเมลนี้เป็นของคนที่เพิ่งล็อกอิน + บัญชีในระบบก็ผ่านการยืนยันอีเมล (OTP) มาแล้ว
+    // ถ้าผูกด้วย email เฉยๆ ผู้โจมตีจะจองอีเมลเหยื่อไว้ก่อนพร้อมรหัสผ่านของตัวเอง แล้วรอเหยื่อกด Google เพื่อยึดบัญชีได้
     if (!user && profile.email) {
       const existingByEmail = await this.prisma.user.findFirst({ where: { email: profile.email, role } });
       if (existingByEmail) {
-        throw new ConflictException('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบด้วยวิธีเดิม');
+        if (!profile.emailVerified || !existingByEmail.emailVerified) {
+          throw new ConflictException('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน');
+        }
+        user = await this.prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: { googleId: profile.googleId },
+        });
       }
+    }
+
+    // ฝั่งเจ้าของหอไม่สร้างบัญชีใหม่ให้อัตโนมัติ — ต้องสมัครผ่านหน้าเปิดหอพัก (มีเอกสาร/รอแอดมินอนุมัติ) ก่อน
+    if (!user && role === 'OWNER') {
+      throw new UnauthorizedException('ยังไม่มีบัญชีเจ้าของหอสำหรับอีเมลนี้ กรุณาสมัครเปิดหอพักก่อน');
     }
 
     if (!user) {
@@ -169,6 +240,8 @@ export class AuthService {
           role: 'TENANT',
           name: profile.name,
           email: profile.email,
+          // Google ยืนยันอีเมลให้แล้วก็ถือว่ายืนยันแล้ว ไม่ต้องให้ผู้ใช้ทำ OTP ซ้ำ
+          emailVerified: profile.emailVerified ?? false,
           googleId: profile.googleId,
         },
       });

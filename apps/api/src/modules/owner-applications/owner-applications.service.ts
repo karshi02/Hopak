@@ -78,6 +78,22 @@ export class OwnerApplicationsService {
     return app;
   }
 
+  /**
+   * ใบสมัครนี้ "มีอะไรให้เสีย" แล้วหรือยัง — ยืนยันอีเมลแล้ว หรือกรอก/อัปโหลดอะไรไว้แล้ว
+   * ใช้ตัดสินว่า start() ซ้ำด้วยอีเมลเดิมจะล้างทับได้ไหม
+   */
+  private hasProgress(app: {
+    status: string;
+    dormName: string | null;
+    address: string | null;
+    province: string | null;
+    images: string[];
+    documents: string[];
+  }): boolean {
+    if (app.status !== 'DRAFT') return true;
+    return !!(app.dormName || app.address || app.province || app.images.length || app.documents.length);
+  }
+
   // documents ใน DB เก็บเป็น storage key (private) ไม่ใช่ URL ถาวร — ต้องแปลงเป็นลิงก์ชั่วคราวทุกครั้งก่อนส่งออก
   private withDocumentUrls<T extends { documents: string[] }>(app: T): T {
     return { ...app, documents: app.documents.map((key) => this.uploads.getPrivateUrl(key)) };
@@ -108,8 +124,15 @@ export class OwnerApplicationsService {
       throw new ConflictException('อีเมลนี้สมัครเปิดหอพักไปแล้ว กรุณาเข้าสู่ระบบ');
     }
 
-    // ใบสมัครเก่าที่ยังไม่เสร็จ (อีเมลเดิม กลับมากรอกใหม่) ต้องเริ่มรูป/เอกสาร/สถานะยืนยันเมลใหม่หมด
-    // ห้ามพกข้อมูล/ไฟล์จากความพยายามครั้งก่อนมาโชว์ทับ — ไม่งั้นเหมือนเห็นรูปของใบสมัครอื่นที่ไม่เกี่ยวกัน
+    // ใบสมัครที่ "กรอกค้างไว้แล้ว" ห้ามถูกล้างโดยคนที่แค่รู้อีเมล — เดิมใครก็ยิง endpoint นี้
+    // ด้วยอีเมลเหยื่อแล้วลบข้อมูล/ไฟล์ทิ้ง พร้อมหมุน secret จนเจ้าตัวทำต่อไม่ได้ (targeted DoS)
+    // ทางเดียวที่จะกลับเข้าใบสมัครนั้นคือยืนยัน OTP ทางอีเมล ซึ่งพิสูจน์ได้จริงว่าเป็นเจ้าของอีเมล
+    if (existing && this.hasProgress(existing)) {
+      await this.sendOtpTo(existing);
+      return { id: existing.id, status: existing.status, email: existing.email, requiresOtp: true as const };
+    }
+
+    // ใบสมัครเปล่า (เพิ่งเริ่มแล้วทิ้งไว้ ยังไม่มีข้อมูลอะไร) เริ่มใหม่ทับได้ ไม่มีอะไรให้เสีย
     // continuation secret ใหม่ทุกครั้งที่เริ่ม/เริ่มใหม่ — secret เก่าใช้ไม่ได้ทันที
     const secret = randomBytes(32).toString('hex');
     const secretHash = hashSecret(secret);
@@ -223,6 +246,12 @@ export class OwnerApplicationsService {
 
   async sendOtp(id: string, secret?: string) {
     const app = await this.getOrThrow(id, secret);
+    return this.sendOtpTo(app);
+  }
+
+  // แกนส่ง OTP — เรียกได้ทั้งจาก sendOtp (ถือ secret แล้ว) และจาก start() ตอนขอสิทธิ์กลับเข้าใบสมัครเดิม
+  private async sendOtpTo(app: { id: string; email: string; status: string; otpSentAt: Date | null }) {
+    const id = app.id;
     if (app.status === 'COMPLETED') throw new ForbiddenException('ใบสมัครนี้เสร็จสิ้นแล้ว');
     if (app.otpSentAt && Date.now() - app.otpSentAt.getTime() < OTP_RESEND_COOLDOWN_MS) {
       throw new BadRequestException('กรุณารอสักครู่ก่อนขอรหัสใหม่');
@@ -247,8 +276,17 @@ export class OwnerApplicationsService {
     return { sent, email: app.email };
   }
 
+  /**
+   * ยืนยัน OTP — ไม่ต้องมี continuation secret ก็ทำได้
+   * เพราะการกรอกรหัสที่ส่งเข้าอีเมลได้ถูกต้อง เป็นหลักฐานความเป็นเจ้าของอีเมลที่หนักแน่นกว่า secret
+   * เคสที่ต้องใช้: เจ้าตัวปิดแท็บ/เปลี่ยนเครื่อง แล้วกลับมาสมัครต่อด้วยอีเมลเดิม (start() ไม่ยอมล้างใบสมัครให้แล้ว)
+   * ยืนยันสำเร็จโดยไม่มี secret จะออก secret ใหม่ให้ = secret เก่าใช้ไม่ได้ทันที
+   */
   async verifyOtp(id: string, code: string, secret?: string) {
-    const app = await this.getOrThrow(id, secret);
+    const app = secret
+      ? await this.getOrThrow(id, secret)
+      : await this.prisma.ownerApplication.findUnique({ where: { id } });
+    if (!app) throw new NotFoundException('ไม่พบใบสมัคร');
     if (app.status === 'COMPLETED') throw new ForbiddenException('ใบสมัครนี้เสร็จสิ้นแล้ว');
     if (!app.otpCodeHash || !app.otpExpiresAt) throw new BadRequestException('กรุณาขอรหัส OTP ก่อน');
     if (app.otpExpiresAt.getTime() < Date.now()) throw new UnauthorizedException('รหัส OTP หมดอายุ กรุณาขอรหัสใหม่');
@@ -262,6 +300,10 @@ export class OwnerApplicationsService {
       throw new UnauthorizedException('รหัส OTP ไม่ถูกต้อง');
     }
 
+    // ยืนยันโดยไม่ถือ secret = ขอสิทธิ์กลับเข้าใบสมัคร ออก secret ใหม่ให้ (ตัวเก่าใช้ไม่ได้ทันที)
+    const reclaimed = secret ? null : randomBytes(32).toString('hex');
+    const secretHash = reclaimed ? hashSecret(reclaimed) : app.secretHash;
+
     const updated = await this.prisma.ownerApplication.update({
       where: { id },
       data: {
@@ -269,12 +311,13 @@ export class OwnerApplicationsService {
         verifiedAt: new Date(),
         otpCodeHash: null,
         otpExpiresAt: null,
+        secretHash,
         // ผูกผลการยืนยันไว้กับ secret ตัวที่ยืนยัน — คนอื่นที่ถือ secret คนละตัวจะ finish ต่อไม่ได้
-        verifiedSecretHash: app.secretHash,
+        verifiedSecretHash: secretHash,
       },
       select: SAFE_SELECT,
     });
-    return this.withDocumentUrls(updated);
+    return { ...this.withDocumentUrls(updated), ...(reclaimed ? { secret: reclaimed } : {}) };
   }
 
   async finish(id: string, dto: FinishApplicationDto, secret?: string) {
@@ -301,6 +344,9 @@ export class OwnerApplicationsService {
             email: app.email,
             phone: app.phone,
             password: passwordHash,
+            // ผ่าน OTP ทางอีเมลมาแล้วในขั้นตอนสมัคร ไม่ต้องให้ยืนยันซ้ำ
+            // (จำเป็นด้วย เพราะการล็อกอินด้วย Google จะผูกกับบัญชีเดิมได้เฉพาะบัญชีที่ยืนยันอีเมลแล้ว)
+            emailVerified: true,
           },
         });
 

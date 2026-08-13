@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PROVINCES } from '@hopak/shared';
+import { PROVINCES, addressInDistrict, findDistrict } from '@hopak/shared';
 import type { Campaign, Dorm, Room } from '@hopak/shared';
 
 type SponsoredCampaign = Campaign & { dorm: Dorm & { rooms: Room[] } };
@@ -105,7 +105,9 @@ const TEXT = {
       { value: 'price_asc', label: 'ราคา ต่ำ - สูง' },
       { value: 'price_desc', label: 'ราคา สูง - ต่ำ' },
     ],
-    distanceSort: 'ใกล้ที่สุด',
+    distanceSort: 'ใกล้ฉันก่อน',
+    geoUse: 'เรียงตามระยะทางจากฉัน',
+    geoRetry: 'เปิดตำแหน่งเพื่อเรียงตามระยะทาง',
     distanceFrom: (place: string) => `ระยะห่างจาก ${place}`,
     kmAway: (km: number) => `${km.toFixed(1)} กม.`,
 
@@ -159,6 +161,8 @@ const TEXT = {
       { value: 'price_desc', label: 'Price: high to low' },
     ],
     distanceSort: 'Nearest first',
+    geoUse: 'Sort by distance from me',
+    geoRetry: 'Enable location to sort by distance',
     distanceFrom: (place: string) => `Distance from ${place}`,
     kmAway: (km: number) => `${km.toFixed(1)} km`,
 
@@ -191,6 +195,8 @@ export default function SearchPage() {
   const [sponsored, setSponsored] = useState<SponsoredCampaign[]>([]);
 
   const q = params.get('q') ?? undefined;
+  // ?district= มาจากการ์ดย่อยรายอำเภอหน้าแรก — ระบบไม่มีฟิลด์อำเภอ กรองจาก address ฝั่งหน้าเว็บ
+  const district = params.get('district');
   const { dorms, loading } = useDormSearch({ q, province: province || undefined });
   const { favoriteIds, toggle } = useFavorites();
 
@@ -223,14 +229,32 @@ export default function SearchPage() {
       .catch(() => setSponsored([]));
   }, []);
 
-  // ขอตำแหน่งเครื่อง (กดอนุญาตเอง) — ไม่ได้ก็แค่ไม่โชว์ระยะทาง ไม่เดาค่า
-  useEffect(() => {
-    if (hasPlace || !navigator.geolocation) return; // มีพิกัดสถานที่ใน URL แล้ว ไม่ต้องใช้ตำแหน่งเครื่อง
+  const [geoDenied, setGeoDenied] = useState(false);
+
+  // ขอตำแหน่งเครื่อง — ได้แล้วสลับไปเรียง "ใกล้ฉันก่อน" ให้เลย (เว้นแต่ผู้ใช้เลือกวิธีเรียงเองไว้แล้ว)
+  const askLocation = () => {
+    if (!navigator.geolocation) {
+      setGeoDenied(true);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
-      (pos) => setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setMyLocation(null),
+      (pos) => {
+        setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGeoDenied(false);
+        setSortBy((cur) => (cur === 'recommended' ? 'distance_asc' : cur));
+      },
+      () => {
+        setMyLocation(null);
+        setGeoDenied(true);
+      },
       { enableHighAccuracy: false, timeout: 8000 },
     );
+  };
+
+  useEffect(() => {
+    if (hasPlace) return; // มีพิกัดสถานที่ใน URL แล้ว ไม่ต้องใช้ตำแหน่งเครื่อง
+    askLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasPlace]);
 
   const amenityOptions = useMemo(() => {
@@ -250,6 +274,9 @@ export default function SearchPage() {
       return { dorm, availableRooms, startingRoom, distanceKm };
     });
 
+    if (district) {
+      list = list.filter((x) => addressInDistrict(x.dorm.address, district));
+    }
     // โหมดรายวัน: ตัดหอที่ไม่มีห้องเปิดรายวันออก
     if (dailyMode) {
       list = list.filter((x) => x.availableRooms.length > 0);
@@ -278,7 +305,7 @@ export default function SearchPage() {
     }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng, dailyMode, myLocation]);
+  }, [district, dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng, dailyMode, myLocation]);
 
   const heroStats = useMemo(() => {
     let cheapest: number | null = null;
@@ -335,6 +362,16 @@ export default function SearchPage() {
                 </svg>
                 {provinceLabel(province)}
               </div>
+            )}
+            {/* กรองรายอำเภอมาจากหน้าแรก — กด x เพื่อกลับไปดูทั้งจังหวัด */}
+            {district && (
+              <Link
+                href={`/search?province=${encodeURIComponent(province)}`}
+                className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-white/28 bg-white/16 px-3.5 py-1.5 text-[12.5px] font-semibold text-[#EAF1FF]"
+              >
+                {district}
+                <span className="text-[14px] leading-none text-white/70">&times;</span>
+              </Link>
             )}
             <div className="mt-3.5 text-[28px] font-bold leading-tight tracking-tight text-white sm:text-[34px]">
               {province ? t.heroTitleIn(provinceLabel(province)) : t.heroTitleAll}
@@ -485,7 +522,7 @@ export default function SearchPage() {
             />
           </svg>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={pillSelectClass}>
-            {hasPlace && (
+            {(hasPlace || myLocation) && (
               <option value="distance_asc">
                 {t.sortBy}: {t.distanceSort}
               </option>
@@ -497,6 +534,21 @@ export default function SearchPage() {
             ))}
           </select>
         </div>
+
+        {/* ไม่มีจุดอ้างอิงระยะทาง = เรียงใกล้-ไกลไม่ได้ ให้กดขออนุญาตตำแหน่งเองอีกครั้ง */}
+        {!hasPlace && !myLocation && (
+          <button
+            type="button"
+            onClick={askLocation}
+            className="flex h-[42px] items-center gap-2 rounded-pill border border-[#D8DCE2] bg-white px-4 text-[13px] font-semibold text-ink-body hover:border-tenant hover:text-tenant"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z" stroke="currentColor" strokeWidth="1.8" />
+              <circle cx="12" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+            </svg>
+            {geoDenied ? t.geoRetry : t.geoUse}
+          </button>
+        )}
       </div>
 
       {hasPlace && placeName && (
@@ -627,8 +679,14 @@ export default function SearchPage() {
                         <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#9AA0AB" strokeWidth="1.8" />
                         <circle cx="12" cy="10" r="3" stroke="#9AA0AB" strokeWidth="1.8" />
                       </svg>
-                      {dorm.university || dorm.province}
-                      {distanceKm != null && <span className="font-semibold text-tenant"> · {t.kmAway(distanceKm)}</span>}
+                      <span className="truncate">
+                        {[dorm.university, findDistrict(dorm.address), provinceLabel(dorm.province)]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                      {distanceKm != null && (
+                        <span className="shrink-0 font-semibold text-tenant">· {t.kmAway(distanceKm)}</span>
+                      )}
                     </div>
                     {dorm.amenities.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1.5">

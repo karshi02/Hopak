@@ -31,9 +31,10 @@ const TEXT = {
     removeConfirm: 'ลบโปสเตอร์นี้?',
 
     areaLabel: 'รูปพื้นหลัง "ทำเลยอดนิยม" หน้าแรก',
-    areaDesc: 'ตั้งรูปพื้นหลังต่อจังหวัด ใช้แทนสีไล่ระดับเริ่มต้นบนการ์ดทำเลยอดนิยม',
-    areaChoose: 'เลือกรูป',
-    areaRemove: 'ลบรูป',
+    areaDesc: 'ใส่ได้หลายรูปต่อจังหวัด (สูงสุด 8) การ์ดหน้าแรกจะเลื่อนสไลด์ให้เอง — ไม่ใส่รูป = ใช้สีไล่ระดับเริ่มต้น',
+    areaChoose: 'เพิ่มรูป (เลือกได้หลายไฟล์)',
+    areaRemove: 'ลบรูปทั้งหมด',
+    areaPhotoCount: (n: number) => `${n} รูป`,
     areaUploading: 'กำลังอัปโหลด...',
 
     promoLabel: 'การ์ดจุดขาย 3 ใบ (ใต้แถบค้นหาหน้าแรก)',
@@ -71,9 +72,10 @@ const TEXT = {
     removeConfirm: 'Remove this poster?',
 
     areaLabel: 'Homepage "Popular Areas" background images',
-    areaDesc: 'Set a background image per province — replaces the default gradient on popular-area cards.',
-    areaChoose: 'Choose image',
-    areaRemove: 'Remove',
+    areaDesc: 'Add multiple images per province (up to 8) — the homepage card cycles through them. No image = default gradient.',
+    areaChoose: 'Add images (multi-select)',
+    areaRemove: 'Remove all',
+    areaPhotoCount: (n: number) => `${n} photos`,
     areaUploading: 'Uploading...',
 
     promoLabel: 'Three selling-point cards (below the homepage search bar)',
@@ -123,7 +125,8 @@ export default function AdminWebsiteSettingsPage() {
   const [posterError, setPosterError] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
 
-  const [areaImages, setAreaImages] = useState<Record<string, string>>({});
+  // จังหวัดละหลายรูปได้ — หน้าแรกเลื่อนดูทีละรูป
+  const [areaImages, setAreaImages] = useState<Record<string, string[]>>({});
   const [uploadingArea, setUploadingArea] = useState<string | null>(null);
 
   // การ์ดจุดขาย 3 ใบ — เก็บ 3 ช่องเสมอเพื่อให้ฟอร์มมีครบทุกใบแม้ backend ยังไม่มีข้อมูล
@@ -136,7 +139,7 @@ export default function AdminWebsiteSettingsPage() {
       .get<{
         heroImageUrl: string | null;
         posterUrls: string[];
-        areaImages: Record<string, string>;
+        areaImages: Record<string, string[]>;
         promoCards: PromoCard[];
       }>('/settings/hero')
       .then((data) => {
@@ -271,14 +274,15 @@ export default function AdminWebsiteSettingsPage() {
     }
   }
 
+  // เลือกได้หลายไฟล์ต่อครั้ง — ต่อท้ายรูปเดิมของจังหวัดนั้น (API ตัดที่ 8 รูป)
   async function handleAreaImageChange(province: string, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
+    if (!files.length) return;
     setUploadingArea(province);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      files.forEach((f) => formData.append('files', f));
       formData.append('province', province);
       const res = await fetch(`${API_URL}/admin/settings/area-image`, {
         method: 'POST',
@@ -286,7 +290,7 @@ export default function AdminWebsiteSettingsPage() {
         body: formData,
       });
       if (res.ok) {
-        const data: { areaImages: Record<string, string> } = await res.json();
+        const data: { areaImages: Record<string, string[]> } = await res.json();
         setAreaImages(data.areaImages ?? {});
       }
     } finally {
@@ -294,14 +298,19 @@ export default function AdminWebsiteSettingsPage() {
     }
   }
 
-  async function handleRemoveAreaImage(province: string) {
+  // ไม่ส่ง index = ลบทั้งจังหวัด · ส่ง index = ลบทีละรูป
+  async function handleRemoveAreaImage(province: string, index?: number) {
     if (!window.confirm(t.removeConfirm)) return;
-    const res = await fetch(`${API_URL}/admin/settings/area-image/${encodeURIComponent(province)}`, {
+    const path =
+      index === undefined
+        ? `/admin/settings/area-image/${encodeURIComponent(province)}`
+        : `/admin/settings/area-image/${encodeURIComponent(province)}/${index}`;
+    const res = await fetch(`${API_URL}${path}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${getToken()}` },
     });
     if (res.ok) {
-      const data: { areaImages: Record<string, string> } = await res.json();
+      const data: { areaImages: Record<string, string[]> } = await res.json();
       setAreaImages(data.areaImages ?? {});
     }
   }
@@ -393,17 +402,41 @@ export default function AdminWebsiteSettingsPage() {
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {PROVINCES.map((province) => {
-            const url = areaImages[province];
+            const urls = areaImages[province] ?? [];
             const isUploading = uploadingArea === province;
             return (
               <div key={province} className="overflow-hidden rounded-btn border border-card-border">
                 <div className="relative h-24 bg-surface-canvas">
-                  {url ? (
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  {urls[0] ? (
+                    <img src={urls[0]} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t.none}</div>
                   )}
+                  {urls.length > 1 && (
+                    <span className="absolute right-1.5 top-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-bold text-white">
+                      {t.areaPhotoCount(urls.length)}
+                    </span>
+                  )}
                 </div>
+
+                {/* รูปทั้งหมดของจังหวัด — กด x ลบทีละรูป */}
+                {urls.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5 border-b border-card-border p-2">
+                    {urls.map((u, i) => (
+                      <div key={u} className="relative h-10 w-10 overflow-hidden rounded-[7px]">
+                        <img src={u} alt="" className="h-full w-full object-cover" />
+                        <button
+                          onClick={() => handleRemoveAreaImage(province, i)}
+                          aria-label="remove"
+                          className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl-[6px] bg-black/60 text-[10px] font-bold leading-none text-white"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="p-2">
                   <p className="truncate text-xs font-semibold text-ink-strong">{province}</p>
                   <div className="mt-1.5 flex items-center gap-2">
@@ -412,12 +445,13 @@ export default function AdminWebsiteSettingsPage() {
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         className="hidden"
                         disabled={isUploading}
                         onChange={(e) => handleAreaImageChange(province, e)}
                       />
                     </label>
-                    {url && (
+                    {urls.length > 0 && (
                       <button
                         onClick={() => handleRemoveAreaImage(province)}
                         className="text-xs font-semibold text-danger"

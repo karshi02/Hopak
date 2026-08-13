@@ -55,6 +55,14 @@ export default function ForgotPasswordPage() {
     if (mail) setEmail((prev) => prev || mail);
   }, [user]);
 
+  // ถูกพามาจากหน้าล็อกอินเพราะใส่รหัสผิดหลายครั้ง — อีเมลส่งต่อผ่าน sessionStorage ไม่ผ่าน URL
+  useEffect(() => {
+    const handed = sessionStorage.getItem('hopak_reset_email');
+    if (!handed) return;
+    sessionStorage.removeItem('hopak_reset_email');
+    setEmail((prev) => prev || handed);
+  }, []);
+
   async function handleSubmit() {
     setError(null);
     if (!email.trim()) {

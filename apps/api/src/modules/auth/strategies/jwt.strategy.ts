@@ -47,7 +47,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       adminRole = admin.adminRole as AdminRole;
     }
 
-    return { id: payload.sub, role: payload.role, adminRole };
+    // ส่ง jti ต่อไปด้วย — บาง route ต้องรู้ว่า "เซสชันปัจจุบัน" คืออันไหน (เช่น เปลี่ยนรหัสผ่านแล้วเตะเครื่องอื่นออก)
+    return { id: payload.sub, role: payload.role, adminRole, jti: payload.jti };
   }
 }
 //ปิด session ทุก request (ถ้า token มี jti) — เตะออกจากอุปกรณ์นั้นได้จริงโดยไม่ต้อง

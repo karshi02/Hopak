@@ -1732,3 +1732,177 @@ WEB
   busy key เปลี่ยนเป็น `${dormId}-${rentalType}` กันปุ่มอีกฝั่งค้างตาม
 - admin/layout: เพิ่มเมนู /admin/revenue ใต้กลุ่มแดชบอร์ด + หัวข้อ/คำโปรย TH/EN
 tsc api+web ผ่าน
+
+[108] หน้าหอพัก (ผู้เช่า): การ์ดราคาเกาะตามการเลื่อนทั้งหน้า + แถบราคาลอยบนมือถือ (12/08/2026)
+- (tenant)/dorms/[id]: คอลัมน์ขวาเดิม lg:sticky อยู่แล้ว แต่การ์ดสูงเกินจอทำให้ท้ายการ์ดหลุดออกนอกวิว
+  เพิ่ม lg:max-h-[calc(100vh-104px)] lg:overflow-y-auto -> เกาะตามตั้งแต่บนสุดถึงล่างสุด
+- มือถือ/แท็บเล็ต (< lg) ไม่มี sticky เลย: เพิ่มแถบลอยล่างจอ fixed bottom z-40 โชว์ราคา + จำนวนห้องว่าง + ปุ่มจองเลย
+  ซ่อนเมื่อเป็นเจ้าของหอเอง (isOwnerHere) หรือไม่มีห้องว่าง · ราคาเปลี่ยนตามโหมด รายเดือน/รายวัน
+  main เพิ่ม pb-[92px] lg:pb-5 กันแถบทับเนื้อหาท้ายหน้า · โมดัลห้อง z-[60] ยังทับแถบได้ถูกต้อง
+tsc web ผ่าน
+
+[109] หน้าแรก: เอาแถบ TRUST BADGES ออก (12/08/2026)
+- components/HomeBrowse.tsx: ลบบล็อก TRUST BADGES ทั้งก้อน (ราคาโปร่งใส / จองปลอดภัย / รีวิวจริงจากผู้เช่า)
+- ลบตัวแปร trustCards ที่ไม่มีคนใช้แล้ว (t.trust + homeContent.trust ยังคงไว้ ไม่กระทบหน้า admin/website/edit)
+- เช็คหน้าแรก: เหลือ "ราคาโปร่งใส" แค่ในหัวข้อ hero เท่านั้น
+tsc web ผ่าน
+
+[110] หน้าแรก: เอาแถบผู้สนับสนุน YEC Mahasarakham ออก (12/08/2026)
+- components/HomeBrowse.tsx footer: ลบ "ได้รับการสนับสนุนโดย" + <img /yec-mahasarakham.png> เหลือแค่เส้นคั่นกับระยะห่างเดิม
+- คีย์ sponsoredBy ใน t ยังคงไว้ (ไม่มีที่อื่นใช้ แต่ไม่กระทบ)
+เช็คหน้าแรก: ไม่เจอ yec-mahasarakham / ได้รับการสนับสนุน แล้ว · tsc web ผ่าน
+
+[111] ทำเลยอดนิยม: ใส่ได้หลายรูปต่อจังหวัด + เลื่อนดูได้ (13/08/2026)
+API - settings
+- settings.service: areaImages เปลี่ยนจาก Record<string,string> เป็น Record<string,string[]>
+  normalizeAreaImages() แปลงค่าเก่า (string เดี่ยว) เป็น array ตอนอ่าน -> ไม่ต้อง migrate DB
+  addAreaImages(province, urls[]) ต่อท้ายรูปเดิม จำกัด MAX_AREA_IMAGES = 8
+  removeAreaImage(province, index?) : ไม่ส่ง index = ลบทั้งจังหวัด · ส่ง index = ลบทีละรูป (ลบหมดแล้วลบคีย์ทิ้ง)
+- settings.controller: POST /admin/settings/area-image ใช้ FileFieldsInterceptor รับทั้งช่อง file (เดิม) และ files (หลายไฟล์)
+  เพิ่ม DELETE /admin/settings/area-image/:province/:index
+WEB
+- components/HomeBrowse.tsx: แยก component ZoneCard — สไลด์รูป fade 500ms, auto เลื่อนทุก 4 วิ (หยุดเมื่อเมาส์ชี้),
+  ลูกศรซ้าย/ขวาโผล่ตอน hover, จุดบอกตำแหน่งมุมขวาบน กดข้ามได้ ; ปุ่มทุกตัว preventDefault กันหลุดไปหน้า search เพราะทั้งการ์ดเป็น Link
+  ไม่มีรูป = ใช้ gradient เดิมตามลำดับการ์ด
+- admin/website: input multiple, badge นับจำนวนรูป, แถวรูปย่อยกด x ลบทีละรูป, ปุ่มเดิมเปลี่ยนเป็น "ลบรูปทั้งหมด"
+tsc api+web ผ่าน · route ใหม่ตอบ 401 (มีจริง ผ่าน guard)
+
+[112] หน้าแรก: การ์ดย่อยรายอำเภอ เฉพาะมหาสารคาม (13/08/2026)
+SHARED
+- constants/districts.ts (ใหม่): MSK_PROVINCE, MSK_DISTRICTS 13 อำเภอ พร้อมชื่อพ้อง ไทย+อังกฤษ
+  (address จาก Google Places มาเป็นอังกฤษ เช่น "Amphoe Mueang Maha Sarakham" เทียบชื่อไทยตรงๆ ไม่เจอ)
+  addressInDistrict(address, districtName) เทียบแบบ lowercase substring
+- index.ts export เพิ่ม
+WEB
+- HomeBrowse: mskDistricts นับหอจริงต่ออำเภอจาก address (ไม่มีฟิลด์อำเภอในระบบ) โชว์เฉพาะอำเภอที่มีหอ > 0
+  การ์ดย่อยอยู่ใต้แถวทำเลยอดนิยม เป็นกล่องขาวแยก หัวข้อ "ทำเลย่อยในมหาสารคาม" ลิงก์ไป /search?province=มหาสารคาม&district=<ชื่ออำเภอ>
+  จังหวัดอื่นไม่แตกการ์ดย่อย (ข้อมูลยังไม่พอ)
+- search: รับ ?district= กรอง client-side ด้วย addressInDistrict ตัวเดียวกัน + ชิปโชว์ชื่ออำเภอ กด x กลับไปดูทั้งจังหวัด
+API
+- dorms.service search: เพิ่ม address เข้า OR ของ q (เดิมค้นแค่ name/province/university)
+tsc api+web ผ่าน · shared build ผ่าน
+ยังไม่ได้เช้คด้วยตา: การ์ดย่อย render ฝั่ง client เลย curl ไม่เห็น ต้องเปิดเบราว์เซอร์
+
+[113] หน้าแรก: การ์ด "หอพักแนะนำ" โชว์ทำเลด้วย (13/08/2026)
+- shared/constants/districts.ts: เพิ่ม findDistrict(address) คืนชื่ออำเภอ (มหาสารคาม) หาไม่เจอ = null
+- HomeBrowse การ์ดหอพักแนะนำ: เดิมโชว์ university ?? province อย่างใดอย่างหนึ่ง
+  เปลี่ยนเป็น มหาวิทยาลัย (ถ้ามี) + บรรทัดทำเลพร้อมไอคอนหมุด = "อำเภอ · จังหวัด" (ไม่รู้อำเภอโชว์แค่จังหวัด)
+tsc web + shared build ผ่าน
+
+[114] บั๊ก: หน้าแรกค้างว่าง "ยังไม่มีหอพักในจังหวัดนี้" + overlay TypeError: Failed to fetch (13/08/2026)
+อาการ: หน้าแรกโชว์ 0 หอพัก ทั้งที่ API มี 3 หอ · Next dev overlay ขึ้น Unhandled Runtime Error ที่ api-client.ts:14
+สาเหตุ: hooks/useDormSearch.ts เรียก apiClient.get(...).then(setDorms).finally(...) ไม่มี .catch
+  พอ API รีสตาร์ท (nest watch reload ตอนแก้ dorms.service) fetch reject -> promise ลอย -> overlay + dorms ค้างเป็น [] จนกว่าจะรีเฟรชเอง
+แก้: ใส่ .catch + ลองซ้ำอัตโนมัติ 2 ครั้ง (1.5s, 3s) แล้วค่อยยอมแพ้เป็นลิสต์ว่าง + cancel flag/clearTimeout ตอน unmount
+  API ไม่ได้ล่มจริง (เช็ค /dorms /settings/hero /promotions/sponsored = 200 ทั้งหมด, CORS ปกติ)
+tsc web ผ่าน
+
+[115] หน้าค้นหา: เรียงตามระยะทางใกล้ไปไกล + โชว์ทำเลบนการ์ด (13/08/2026)
+- search/page.tsx: เดิมตัวเลือก "ใกล้ที่สุด" โผล่เฉพาะตอนมีพิกัดใน URL (hasPlace) ทั้งที่ระบบขอตำแหน่งเครื่องอยู่แล้ว
+  เปลี่ยนเงื่อนไขเป็น hasPlace || myLocation -> ค้นด้วยจังหวัดเฉยๆ ก็เรียงตามระยะได้
+- แยก askLocation() ออกมา: ได้พิกัดแล้วสลับ sortBy เป็น distance_asc ให้อัตโนมัติ (เฉพาะตอนยังเป็น recommended ไม่ทับที่ผู้ใช้เลือกเอง)
+  เก็บ geoDenied ไว้โชว์ปุ่มขอใหม่ "เปิดตำแหน่งเพื่อเรียงตามระยะทาง" ข้างช่องเรียงลำดับ (โชว์เมื่อไม่มีจุดอ้างอิงเลย)
+- การ์ดผลค้นหา: บรรทัดทำเลเดิม university || province เปลี่ยนเป็น มหาวิทยาลัย · อำเภอ · จังหวัด (findDistrict จาก address) + ระยะทาง กม. ต่อท้าย
+- ข้อมูลจริง: หอมหาสารคามทั้ง 3 มี lat/lng ครบ คำนวณระยะได้จริง
+tsc web ผ่าน
+
+[116] บั๊ก: สมัครเจ้าของหอด้วยอีเมลเดิมแล้วล็อกอินด้วย Google ฝั่งเจ้าของหอไม่ได้ (13/08/2026)
+อาการ: ใส่อีเมล+รหัสผ่านเข้าได้ แต่กดปุ่ม "เข้าสู่ระบบด้วย Google" ที่ /partner-login ไม่ผ่าน
+สาเหตุ (3 จุด):
+1) auth.service.loginWithGoogle: บัญชีเจ้าของหอสมัครด้วยรหัสผ่าน ไม่มี googleId
+   หา googleId+role ไม่เจอ -> เจอ email+role -> โยน ConflictException ทันที (กฎห้ามผูก Google ด้วย email อย่างเดียว)
+   = บัญชีที่สมัครแบบรหัสผ่านจะใช้ Google ไม่ได้ตลอดกาล
+2) owner-applications.finish: สร้าง User role OWNER โดยไม่ตั้ง emailVerified ทั้งที่ผ่าน OTP อีเมลมาแล้ว
+3) loginWithGoogle ตอนไม่เจอบัญชี hardcode สร้าง role: 'TENANT' แม้ intent = owner (ขัดกับคอมเมนต์ตัวเอง)
+   -> กด Google ที่หน้าเจ้าของหอแล้วได้บัญชีผู้เช่าใหม่เงียบๆ
+แก้:
+- google.strategy: ส่ง emailVerified ของ Google ออกมาด้วย (profile.emails[0].verified / _json.email_verified รับได้ทั้ง boolean และ string)
+- loginWithGoogle: ผูก googleId เข้าบัญชีเดิมได้เมื่อ "ยืนยันอีเมลแล้วทั้งสองฝั่ง" เท่านั้น
+  (Google ยืนยัน + บัญชีในระบบ emailVerified = true) ไม่ครบเงื่อนไข = ยังบล็อกเหมือนเดิม
+  กันเคสคนร้ายจองอีเมลเหยื่อไว้ก่อนพร้อมรหัสผ่านตัวเอง แล้วรอเหยื่อกด Google เพื่อยึดบัญชี (บัญชีที่จองไว้ไม่ผ่าน OTP)
+- role OWNER + ไม่มีบัญชี = โยน UnauthorizedException ไม่สร้างบัญชีให้อัตโนมัติแล้ว
+- สมัครผ่าน Google ใหม่ (TENANT) ตั้ง emailVerified ตามที่ Google บอก ไม่ต้อง OTP ซ้ำ
+- owner-applications.finish: ตั้ง emailVerified: true (ผ่าน OTP แล้ว)
+- auth.controller: ย้ายการอ่าน cookie intent ออกนอก try -> error เด้งกลับ /partner-login ไม่ใช่ /login
+  แยกโค้ด error: no_owner_account, use_password_login (เดิมรวบเป็น google_login_failed หมด)
+- partner-login: แปลโค้ดใหม่ 2 ตัวเป็นข้อความ TH/EN
+ข้อมูลเดิม: OWNER 5 บัญชีมี emailVerified = false (สมัครก่อนแก้) backfill เป็น true แล้ว ไม่งั้นยังล็อกอิน Google ไม่ได้
+  หมายเหตุ: backfill รวมบัญชีที่แอดมินสร้างให้ด้วย ถ้าแอดมินกรอกอีเมลผิดเป็นของคนอื่น คนนั้นจะผูก Google เข้าบัญชีได้ -> ให้ codex ดูตอนตรวจ security
+tsc api+web ผ่าน
+เทสต์: auth.service.google-oauth.test.ts เขียนใหม่ให้ตรงพฤติกรรมจริง (ของเดิม mock findUnique แต่โค้ดใช้ findFirst มาตั้งแต่แยกบัญชีตาม role = เทสต์พังอยู่ก่อนแล้ว)
+  ยังรันไม่ได้: jest หา preset ts-jest ไม่เจอ (ts-jest ไม่ได้ติดตั้ง) - ปัญหา env มีอยู่ก่อน ไม่ใช่จากงานนี้
+
+[116-ต่อ] ทบทวนผลกระทบ/ช่องโหว่ของการแก้ Google login (13/08/2026)
+- backfill รอบแรก (updateMany OWNER ทั้งหมด) กว้างเกินไป — ตั้ง emailVerified ให้บัญชีที่แอดมินสร้างเองด้วย ทั้งที่ไม่เคยพิสูจน์ว่าเป็นเจ้าของอีเมล
+  เขียน apps/api/scripts/audit-owner-email-verified.js ตรวจหลักฐาน (OwnerApplication status COMPLETED = ผ่าน verifyOtp แน่นอน / มี googleId = เคยล็อกอิน Google)
+  รัน --fix ตั้งกลับเป็น false 4 บัญชีที่ไม่มีหลักฐาน (webflowtest, owner@hopak.com, qa-tenant-test, k123) เหลือ true เฉพาะ karshi0234 + drafterx2034 ที่มีใบสมัคร COMPLETED จริง
+  หมายเหตุ: verifiedSecretHash ถูกล้างเป็น null ตอน finish() เลยใช้เป็นหลักฐานไม่ได้ ต้องดู status COMPLETED แทน
+- apps/api/scripts/backfill-owner-email-verified.js: สคริปต์ backfill แบบเจาะจง (dry-run เป็นค่าเริ่มต้น ต้องใส่ --apply) สำหรับรันบน prod ถ้าต้องการ
+- ตรวจทางที่จะยึดบัญชี: ผู้ใช้แก้อีเมลตัวเองไม่ได้ (UpdateProfileDto ไม่มีฟิลด์ email) -> ไม่มีท่า "เปลี่ยนอีเมลเป็นของเหยื่อแล้วผูก Google"
+  บัญชีที่แอดมินสร้าง emailVerified = false ตั้งแต่ต้น -> ผูก Google ไม่ได้ ตราบใดที่ไม่ backfill แบบเหวี่ยงแห
+
+[117] สมัครเจ้าของหอ: ปุ่ม "สมัครด้วย Gmail" กรอกชื่อ/อีเมลให้อัตโนมัติแล้วไปหน้า OTP เลย (13/08/2026)
+เดิม: ปุ่มยิงไป /auth/google?intent=owner = ล็อกอินฝั่งเจ้าของหอ ซึ่งยังไม่มีบัญชี -> เด้งกลับ partner-login พร้อม error (ปุ่มใช้ไม่ได้จริง)
+API
+- auth.service: googleProfiles map + createGoogleProfileCode / exchangeGoogleProfileCode
+  โค้ดใช้ครั้งเดียว หมดอายุ 2 นาที ผูก binding cookie เหมือน flow ล็อกอิน -> ชื่อ/อีเมลไม่โผล่ใน URL
+- auth.controller: intent ใหม่ owner_register (whitelist intent เป็น owner|owner_register|tenant)
+  callback: intent = owner_register -> ไม่ล็อกอิน ไม่แตะบัญชี ส่งโค้ดกลับ /partner-register?gcode=
+  POST /auth/google/profile-exchange แลกโค้ดเป็น { name, email, emailVerified }
+  error redirect กลับ /partner-register ด้วย (เดิมมีแค่ partner-login / login)
+WEB
+- partner-register: goGmail ใช้ intent=owner_register
+  useEffect อ่าน ?gcode= -> แลกโปรไฟล์ -> setName/setEmail -> ล้าง query ทิ้งทันที
+  อีก effect รอ state ลงครบค่อยเรียก startApplication() = สร้างใบสมัคร + ส่ง OTP + เด้งไปขั้นตอนที่ 2 อัตโนมัติ
+  บัญชี Google ไม่มีอีเมล / แลกโค้ดไม่ผ่าน = ขึ้นข้อความให้กรอกเอง ไม่ค้าง
+tsc api+web ผ่าน · POST profile-exchange ด้วยโค้ดมั่ว = 401 ตามคาด
+
+[118] ล็อกอิน: ใส่รหัสผิดครบ 10 ครั้ง พาไปหน้าตั้งรหัสใหม่ + แจ้งชัดตอนสมัครซ้ำ (13/08/2026)
+API
+- auth.service.verifyCredentials: เดิมโยน "Invalid credentials" เฉยๆ
+  เปลี่ยนเป็นตอบ { message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง', code: invalid_credentials | too_many_attempts }
+  นับพลาดใน memory ต่อคีย์ role+อีเมล MAX_LOGIN_FAILURES = 10 ภายใน 30 นาที เข้าสำเร็จแล้วล้างตัวนับ
+  นับแม้อีเมลไม่มีในระบบ — ถ้านับเฉพาะบัญชีจริง การเด้งไปหน้าเปลี่ยนรหัสจะกลายเป็นตัวชี้ว่าอีเมลไหนมีอยู่ (user enumeration)
+  ข้อความเหมือนเดิมทุกครั้ง ไม่บอกจำนวนครั้งที่เหลือ/ที่ผิดไปแล้ว
+  เก็บใน memory ไม่ใช่ DB: เป็นตัวช่วยผู้ใช้ ไม่ใช่ rate limit หลัก (RateLimitGuard 10/นาที คุมอยู่แล้ว) และไม่ต้องเขียน DB ทุกครั้งที่มีคนเดารหัส
+WEB
+- lib/api-client: แนบ body.code ใส่ error object ให้ผู้เรียกแยกเคสได้โดยไม่ต้องจับข้อความ
+- login + partner-login: เจอ code = too_many_attempts -> เก็บอีเมลลง sessionStorage แล้วพาไป /forgot-password (ฝั่งเจ้าของหอต่อ ?role=owner)
+  ไม่ส่งอีเมลผ่าน URL ตามหลักเดิมของหน้าลืมรหัสผ่าน
+- forgot-password: อ่าน sessionStorage hopak_reset_email มาเติมช่องอีเมลแล้วลบทิ้งทันที
+- partner-register ขั้นที่ 1: อีเมลมีบัญชีเจ้าของหอแล้ว เปลี่ยนจากข้อความแดงบรรทัดเดียว เป็นกล่องเตือนชัดเจน
+  "อีเมลนี้มีบัญชีเจ้าของหออยู่แล้ว" + ปุ่มเข้าสู่ระบบ + ปุ่มลืมรหัสผ่าน · ล้างสถานะทุกครั้งที่กดส่งใหม่
+ทดสอบจริง: ยิง partner-login รหัสผิด 10 ครั้ง -> ครั้งที่ 1-9 = invalid_credentials, ครั้งที่ 10 = too_many_attempts ข้อความเหมือนกันเป๊ะ
+  อีเมลที่ไม่มีในระบบ ครั้งที่ 10 ก็ได้ too_many_attempts เหมือนกัน (ไม่รั่วว่าอีเมลไหนมีจริง)
+  ครั้งที่ 11 ติด RateLimitGuard 429 ตามเดิม
+tsc api+web ผ่าน
+
+[119] codex security round 2 — แก้ 4 ข้อ (13/08/2026)
+[H1] Xendit webhook fail-open — webhooks.controller.ts
+  เดิม: XENDIT_WEBHOOK_TOKEN ว่าง = ปล่อยผ่านทุก callback -> ยิง POST เองยืนยันการจองได้โดยไม่จ่ายเงิน
+  แก้: ไม่มี token ตั้งไว้ = ปฏิเสธทั้งหมด (fail-closed) + log error ระดับ error
+       เทียบ token ด้วย timingSafeEqual บน sha256 ของทั้งสองฝั่ง (ความยาวเท่ากันเสมอ) กัน timing attack
+  ทดสอบ: ยิง webhook ตอน env ว่าง -> 403 "webhook not configured" ทั้งกรณีไม่ใส่ token และใส่ token มั่ว
+  หมายเหตุ deploy: prod ต้องตั้ง XENDIT_WEBHOOK_TOKEN ก่อน ไม่งั้น webhook จริงจาก Xendit จะโดนปฏิเสธหมด
+[H2] socket ที่เชื่อมค้างอยู่ยังรับ PII หลังถูก revoke — realtime.gateway.ts
+  เดิม: ตรวจ session/role ตอน handleConnection ครั้งเดียว WebSocket เปิดยาว -> logout/ระงับ/ลดสิทธิ์แล้วยังค้างในห้อง role:admin
+  แก้: แยก validateToken() ออกมาใช้ซ้ำ + เก็บ token ของ socket ที่ผ่านแล้วไว้ใน Map
+       ตั้ง interval ตรวจซ้ำทุก 60 วิ เจอ session revoked / ผู้ใช้ถูกระงับ / role เปลี่ยน = disconnect ทันที
+       handleDisconnect ลบออกจาก Map, onModuleDestroy เคลียร์ timer, timer.unref() ไม่กัน process ปิด
+[M3] รู้แค่อีเมลก็ล้างใบสมัครเปิดหอที่ค้างอยู่ได้ — owner-applications.service.ts
+  เดิม: start() ด้วยอีเมลเดิม = ล้าง draft/ไฟล์ทั้งหมด + หมุน secret ใหม่ -> targeted DoS
+  แก้: เพิ่ม hasProgress() (status ไม่ใช่ DRAFT หรือมี dormName/address/province/images/documents แล้ว)
+       ถ้ามีความคืบหน้า: ไม่ล้าง ไม่หมุน secret ส่ง OTP ไปอีเมลนั้นแล้วคืน { id, status, email, requiresOtp } ไม่คืน secret
+       ใบสมัครเปล่าที่ยังไม่กรอกอะไร ยังเริ่มใหม่ทับได้ (ไม่มีอะไรให้เสีย)
+       verifyOtp: เรียกได้โดยไม่ต้องมี secret (กรอก OTP ถูก = หลักฐานความเป็นเจ้าของอีเมล หนักแน่นกว่า secret)
+         ยืนยันผ่านแบบไม่มี secret จะออก secret ใหม่ให้ = ตัวเก่าใช้ไม่ได้ทันที -> เจ้าตัวเปลี่ยนเครื่อง/ปิดแท็บแล้วกลับมาทำต่อได้
+       web partner-register: เจอ requiresOtp -> ข้ามไปหน้า OTP, รับ secret ใหม่จาก verify-otp มาเก็บ
+  ทดสอบ: เหยื่อสร้างใบสมัคร+กรอกชื่อหอ -> คนร้ายยิง start ด้วยอีเมลเดียวกัน ได้ requiresOtp ไม่ได้ secret
+          ข้อมูลเหยื่อยังอยู่ครบ (dormName = หอเหยื่อ) secret เดิมยังใช้ได้
+[M4] เปลี่ยนรหัสผ่านแล้ว session เดิมไม่ถูก revoke — users.service.ts
+  แก้: changePassword revoke ทุก session ของ user นั้นในทรานแซกชันเดียวกับการอัปเดตรหัส
+  หมายเหตุสำคัญ: ตอนแรกทำเป็น "เว้นเซสชันปัจจุบันไว้" แต่ผิด — ระบบนี้ sign() revoke เซสชันเก่าทุกครั้งที่ล็อกอิน (ล็อกอินได้ทีละเครื่อง)
+    เคสที่ต้องกันคือ token ถูกขโมยโดยคนร้ายไม่ได้ล็อกอินใหม่ = คนร้ายถือ jti ตัวเดียวกับเจ้าตัว การเว้นเซสชันปัจจุบัน = เว้น token ที่ถูกขโมย
+    จึง revoke ทั้งหมดรวมเครื่องตัวเอง แล้วให้หน้าเว็บ clearToken + พาไปล็อกอินใหม่ (?error=password_changed ทั้ง /login และ /partner-login)
+  ทดสอบ: login -> /users/me = 200 -> เปลี่ยนรหัส { success, signedOut: true } -> token เดิม = 401
+tsc api+web ผ่าน

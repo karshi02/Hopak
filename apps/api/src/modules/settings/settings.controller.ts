@@ -11,7 +11,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor, FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -80,25 +80,42 @@ export class SettingsController {
   @Post('admin/settings/area-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
+  // รับได้ทั้งช่อง 'file' (ของเดิม ไฟล์เดียว) และ 'files' (หลายไฟล์) — เพิ่มต่อท้ายรูปเดิมของจังหวัดนั้น
   @UseInterceptors(
-    FileInterceptor('file', {
+    FileFieldsInterceptor([{ name: 'file', maxCount: 8 }, { name: 'files', maxCount: 8 }], {
       storage: posterStorage,
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: imageFileFilter,
     }),
   )
-  async uploadAreaImage(@UploadedFile() file: Express.Multer.File, @Body('province') province: string) {
-    if (!file) throw new BadRequestException('ไม่พบไฟล์');
+  async uploadAreaImage(
+    @UploadedFiles() uploaded: { file?: Express.Multer.File[]; files?: Express.Multer.File[] },
+    @Body('province') province: string,
+  ) {
+    const files = [...(uploaded?.file ?? []), ...(uploaded?.files ?? [])];
+    if (!files.length) throw new BadRequestException('ไม่พบไฟล์');
     if (!province) throw new BadRequestException('ไม่พบจังหวัด');
     const apiUrl = process.env.API_URL || 'http://localhost:4000';
-    return this.settingsService.setAreaImage(province, `${apiUrl}/uploads/${file.filename}`);
+    return this.settingsService.addAreaImages(
+      province,
+      files.map((f) => `${apiUrl}/uploads/${f.filename}`),
+    );
   }
 
+  // ลบทั้งจังหวัด
   @Delete('admin/settings/area-image/:province')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   removeAreaImage(@Param('province') province: string) {
     return this.settingsService.removeAreaImage(decodeURIComponent(province));
+  }
+
+  // ลบเฉพาะรูปที่ index นั้นของจังหวัด
+  @Delete('admin/settings/area-image/:province/:index')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  removeAreaImageAt(@Param('province') province: string, @Param('index') index: string) {
+    return this.settingsService.removeAreaImage(decodeURIComponent(province), Number(index));
   }
 
   @Post('admin/settings/promos')

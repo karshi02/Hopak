@@ -35,6 +35,7 @@ const TEXT = {
     fillRequired: 'กรุณากรอกอีเมลและรหัสผ่าน',
     genericError: 'เข้าสู่ระบบไม่สำเร็จ',
     sessionExpired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+    passwordChanged: 'เปลี่ยนรหัสผ่านเรียบร้อย กรุณาเข้าสู่ระบบใหม่ด้วยรหัสใหม่',
     googleFailed: 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
     accountSuspended: 'บัญชีนี้ถูกระงับการใช้งาน',
     submitting: 'กำลังเข้าสู่ระบบ...',
@@ -66,6 +67,7 @@ const TEXT = {
     fillRequired: 'Please enter your email and password',
     genericError: 'Log in failed',
     sessionExpired: 'Your session expired — please log in again',
+    passwordChanged: 'Password changed — please log in again with your new password',
     googleFailed: 'Google log in failed — please try again',
     accountSuspended: 'This account has been suspended',
     submitting: 'Logging in...',
@@ -107,6 +109,7 @@ export default function LoginPage() {
     // แปลง "โค้ด" จาก query เป็นข้อความเท่านั้น — ไม่เอาค่าดิบจาก URL มาแสดงตรงๆ
     const ERRORS: Record<string, string> = {
       session_expired: t.sessionExpired,
+      password_changed: t.passwordChanged,
       google_login_failed: t.googleFailed,
       account_suspended: t.accountSuspended,
     };
@@ -138,6 +141,13 @@ export default function LoginPage() {
       else forgetLogin();
       router.push('/');
     } catch (err) {
+      // ผิดครบเพดานแล้ว → พาไปตั้งรหัสใหม่เลย (ไม่บอกผู้ใช้ว่าผิดมากี่ครั้ง)
+      // ส่งอีเมลผ่าน sessionStorage ไม่ใช่ URL ตามหลักเดิมของหน้าลืมรหัสผ่าน
+      if ((err as { code?: string }).code === 'too_many_attempts') {
+        sessionStorage.setItem('hopak_reset_email', email.trim());
+        window.location.href = '/forgot-password';
+        return;
+      }
       setError(err instanceof Error ? err.message : t.genericError);
     } finally {
       setLoading(false);

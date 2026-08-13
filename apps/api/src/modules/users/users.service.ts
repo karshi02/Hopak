@@ -93,6 +93,14 @@ export class UsersService {
     return { revoked: true };
   }
 
+  /**
+   * เปลี่ยนรหัสผ่าน แล้วเตะ "ทุกเซสชัน" ออกรวมทั้งเครื่องที่กำลังเปลี่ยนอยู่
+   *
+   * ทำไมไม่เว้นเซสชันปัจจุบันไว้: ระบบนี้ล็อกอินได้ทีละเครื่อง (sign() revoke เซสชันเก่าทุกครั้งที่ล็อกอิน)
+   * เคสที่ต้องกันคือ token ถูกขโมยไปโดยที่คนร้ายไม่ได้ล็อกอินใหม่ = คนร้ายถือ jti "ตัวเดียวกัน" กับเจ้าตัว
+   * ถ้าเว้นเซสชันปัจจุบันไว้ ก็เท่ากับเว้น token ที่คนร้ายถืออยู่ ปิดช่องไม่ได้จริง
+   * ผลคือหลังเปลี่ยนรหัสต้องล็อกอินใหม่ (หน้าเว็บพาไปหน้า login ให้)
+   */
   async changePassword(id: string, currentPassword: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
@@ -102,8 +110,15 @@ export class UsersService {
     if (!valid) throw new UnauthorizedException('รหัสผ่านปัจจุบันไม่ถูกต้อง');
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.prisma.user.update({ where: { id }, data: { password: passwordHash } });
-    return { success: true };
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id }, data: { password: passwordHash } }),
+      this.prisma.session.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    // signedOut = หน้าเว็บต้องล้าง token แล้วพาไปล็อกอินใหม่
+    return { success: true, signedOut: true };
   }
 
   async requestOwner(

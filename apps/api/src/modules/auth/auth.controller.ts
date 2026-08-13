@@ -75,12 +75,24 @@ export class AuthController {
     return this.authService.exchangeGoogleCode(body.code, consumeGoogleOAuthExchangeBinding(req, res));
   }
 
+  // หน้าสมัครเจ้าของหอเอาโค้ดมาแลกเป็น "ชื่อ + อีเมล" ของบัญชี Google เพื่อกรอกฟอร์มให้ (ยังไม่ล็อกอิน)
+  @Post('google/profile-exchange')
+  @RateLimit(20, 60_000)
+  googleProfileExchange(
+    @Body() body: { code: string },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.authService.exchangeGoogleProfileCode(body.code, consumeGoogleOAuthExchangeBinding(req, res));
+  }
+
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   googleAuth(@Query('intent') intent: string | undefined, @Res({ passthrough: true }) res: Response) {
-    // จำไว้ว่าเข้ามาจากฝั่งไหน (ผู้เช่า/เจ้าของหอ) เพื่อให้ callback หยิบบัญชีให้ถูกฝั่ง
+    // จำไว้ว่าเข้ามาจากฝั่งไหน (ผู้เช่า/เจ้าของหอ/สมัครเปิดหอ) เพื่อให้ callback ทำงานให้ถูกทาง
     // ใช้ cookie แยกจาก OAuth state (state ใช้กัน CSRF อยู่แล้ว ไม่ยุ่งกัน)
-    res.cookie('hopak_oauth_intent', intent === 'owner' ? 'owner' : 'tenant', {
+    const allowed = ['owner', 'owner_register', 'tenant'];
+    res.cookie('hopak_oauth_intent', allowed.includes(intent ?? '') ? intent! : 'tenant', {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
@@ -91,18 +103,29 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleCallbackGuard)
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
+    // อ่าน cookie จาก header ตรงๆ — โปรเจกต์นี้ไม่ได้ใช้ cookie-parser (req.cookies จะเป็น undefined)
+    // อ่านนอก try เพราะตอน error ต้องรู้ว่าจะเด้งกลับหน้าล็อกอินฝั่งไหน
+    const intent = (req.headers.cookie ?? '')
+      .split(';')
+      .map((part: string) => part.trim())
+      .find((part: string) => part.startsWith('hopak_oauth_intent='))
+      ?.slice('hopak_oauth_intent='.length);
+    res.clearCookie('hopak_oauth_intent');
+    const isOwner = intent === 'owner';
     try {
-      // อ่าน cookie จาก header ตรงๆ — โปรเจกต์นี้ไม่ได้ใช้ cookie-parser (req.cookies จะเป็น undefined)
-      const intent = (req.headers.cookie ?? '')
-        .split(';')
-        .map((part: string) => part.trim())
-        .find((part: string) => part.startsWith('hopak_oauth_intent='))
-        ?.slice('hopak_oauth_intent='.length);
-      res.clearCookie('hopak_oauth_intent');
+      // สมัครเปิดหอพัก: ไม่ล็อกอิน ไม่แตะบัญชี แค่ส่งชื่อ/อีเมลกลับไปกรอกฟอร์มขั้นตอนที่ 1 ให้
+      if (intent === 'owner_register') {
+        const binding = issueGoogleOAuthExchangeBinding(res);
+        const code = this.authService.createGoogleProfileCode(req.user, binding);
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.redirect(`${FRONTEND_URL}/partner-register?gcode=${code}`);
+        return;
+      }
       const { accessToken } = await this.authService.loginWithGoogle(
         req.user,
         deviceFromReq(req),
-        intent === 'owner' ? 'OWNER' : 'TENANT',
+        isOwner ? 'OWNER' : 'TENANT',
       );
       // ส่ง "โค้ดแลก token" ชั่วคราวผ่าน query (?code=) ไม่ใช่ JWT ตรงๆ — query รอด redirect ข้าม origin
       // (fragment # หายตอน 302) โค้ดใช้ครั้งเดียว/หมดอายุ 2 นาที หลุด log ก็ไร้ค่า ต่างจาก JWT 7 วัน
@@ -114,8 +137,17 @@ export class AuthController {
     } catch (err) {
       // ส่งเป็น "โค้ด" คงที่เท่านั้น ไม่ส่งข้อความ error ดิบออก URL (กันข้อมูลภายในรั่วเข้า history/log/Referer)
       const raw = err instanceof Error ? err.message : '';
-      const code = raw.includes('ระงับ') ? 'account_suspended' : 'google_login_failed';
-      res.redirect(`${FRONTEND_URL}/login?error=${code}`);
+      const code = raw.includes('ระงับ')
+        ? 'account_suspended'
+        : raw.includes('ยังไม่มีบัญชีเจ้าของหอ')
+          ? 'no_owner_account'
+          : raw.includes('มีบัญชีอยู่แล้ว')
+            ? 'use_password_login'
+            : 'google_login_failed';
+      // เด้งกลับหน้าเดียวกับที่กดมา ไม่งั้นเจ้าของหอโดนโยนไปหน้าผู้เช่า
+      const back =
+        intent === 'owner_register' ? '/partner-register' : isOwner ? '/partner-login' : '/login';
+      res.redirect(`${FRONTEND_URL}${back}?error=${code}`);
     }
   }
 }

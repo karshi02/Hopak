@@ -27,6 +27,24 @@ export interface HomeContent {
   trust?: HomeTrustCard[];
 }
 
+// สูงสุดต่อจังหวัด — การ์ดทำเลยอดนิยมเลื่อนดูได้ ไม่ควรยาวเกินจนคนเลื่อนไม่จบ
+const MAX_AREA_IMAGES = 8;
+
+/**
+ * ข้อมูลเก่าเก็บจังหวัดละ 1 รูป (string) ตอนนี้เก็บได้หลายรูป (string[])
+ * แปลงค่าเก่าให้เป็น array ตอนอ่าน — ไม่ต้อง migrate ข้อมูลใน DB
+ */
+function normalizeAreaImages(raw: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [province, value] of Object.entries((raw as Record<string, unknown>) ?? {})) {
+    const urls = (Array.isArray(value) ? value : [value]).filter(
+      (u): u is string => typeof u === 'string' && u.length > 0,
+    );
+    if (urls.length) out[province] = urls.slice(0, MAX_AREA_IMAGES);
+  }
+  return out;
+}
+
 @Injectable()
 export class SettingsService {
   constructor(private prisma: PrismaService) {}
@@ -36,7 +54,7 @@ export class SettingsService {
     return {
       heroImageUrl: settings?.heroImageUrl ?? null,
       posterUrls: settings?.posterUrls ?? [],
-      areaImages: (settings?.areaImages as Record<string, string>) ?? {},
+      areaImages: normalizeAreaImages(settings?.areaImages),
       promoCards: (settings?.promoCards as unknown as PromoCard[]) ?? [],
       homeContent: (settings?.homeContent as unknown as HomeContent) ?? {},
     };
@@ -124,23 +142,34 @@ export class SettingsService {
     return { posterUrls: settings.posterUrls };
   }
 
-  // รูปพื้นหลังการ์ด "ทำเลยอดนิยม" หน้าแรก — ผูกกับชื่อจังหวัดตรงๆ ตั้งได้ทีละจังหวัด
-  async setAreaImage(province: string, url: string) {
+  // รูปการ์ด "ทำเลยอดนิยม" หน้าแรก — ผูกกับชื่อจังหวัดตรงๆ เพิ่มได้หลายรูป (หน้าแรกเลื่อนดูทีละรูป)
+  async addAreaImages(province: string, urls: string[]) {
     const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
-    const areaImages = { ...((existing?.areaImages as Record<string, string>) ?? {}), [province]: url };
+    const current = normalizeAreaImages(existing?.areaImages);
+    const areaImages = {
+      ...current,
+      [province]: [...(current[province] ?? []), ...urls].slice(0, MAX_AREA_IMAGES),
+    };
     const settings = await this.prisma.siteSettings.upsert({
       where: { id: SETTINGS_ID },
       create: { id: SETTINGS_ID, areaImages },
       update: { areaImages },
     });
-    return { areaImages: settings.areaImages as Record<string, string> };
+    return { areaImages: normalizeAreaImages(settings.areaImages) };
   }
 
-  async removeAreaImage(province: string) {
+  // ไม่ส่ง index = ลบรูปของจังหวัดนั้นทั้งหมด · ส่ง index = ลบเฉพาะรูปนั้น
+  async removeAreaImage(province: string, index?: number) {
     const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
-    const areaImages = { ...((existing?.areaImages as Record<string, string>) ?? {}) };
-    delete areaImages[province];
+    const areaImages = normalizeAreaImages(existing?.areaImages);
+    if (index === undefined || Number.isNaN(index)) {
+      delete areaImages[province];
+    } else {
+      const rest = (areaImages[province] ?? []).filter((_, i) => i !== index);
+      if (rest.length) areaImages[province] = rest;
+      else delete areaImages[province];
+    }
     const settings = await this.prisma.siteSettings.update({ where: { id: SETTINGS_ID }, data: { areaImages } });
-    return { areaImages: settings.areaImages as Record<string, string> };
+    return { areaImages: normalizeAreaImages(settings.areaImages) };
   }
 }

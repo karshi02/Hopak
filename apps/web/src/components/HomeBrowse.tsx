@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { PROVINCES } from '@hopak/shared';
+import { PROVINCES, MSK_PROVINCE, MSK_DISTRICTS, addressInDistrict, findDistrict } from '@hopak/shared';
 import { useDormSearch } from '@/hooks/useDormSearch';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -101,6 +101,8 @@ const TEXT = {
     ],
     zonesTitle: 'ทำเลยอดนิยม',
     zonesSub: 'เลือกจังหวัดที่ใช่ แล้วดูหอพักทั้งหมดในจังหวัดนั้น',
+    mskZonesTitle: 'ทำเลย่อยในมหาสารคาม',
+    mskZonesSub: 'เลือกอำเภอที่ใช่',
     viewAllZones: 'ดูทั้งหมด →',
     selectProvince: 'เลือกจังหวัด',
     zoneCount: (n: number) => `${n} หอพัก`,
@@ -163,6 +165,8 @@ const TEXT = {
     ],
     zonesTitle: 'Popular Areas',
     zonesSub: 'Pick a province to see all its dorms',
+    mskZonesTitle: 'Areas in Maha Sarakham',
+    mskZonesSub: 'Pick a district',
     viewAllZones: 'View all →',
     selectProvince: 'Select province',
     zoneCount: (n: number) => `${n} dorms`,
@@ -199,6 +203,109 @@ const TEXT = {
   },
 } satisfies Record<Lang, Record<string, unknown>>;
 
+/**
+ * การ์ดทำเลยอดนิยม — แอดมินใส่ได้หลายรูปต่อจังหวัด เลื่อนดูได้เอง (ลูกศร/จุด) และเลื่อนอัตโนมัติทุก 4 วิ
+ * ทั้งการ์ดเป็นลิงก์ไปหน้าค้นหา ปุ่มเลื่อนเลยต้อง preventDefault กันหลุดไปหน้าอื่น
+ */
+function ZoneCard({
+  href,
+  images,
+  fallbackClass,
+  title,
+  subtitle,
+}: {
+  href: string;
+  images: string[];
+  fallbackClass: string;
+  title: string;
+  subtitle: string;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const many = images.length > 1;
+
+  useEffect(() => {
+    if (!many || paused) return;
+    const timer = setInterval(() => setIdx((i) => (i + 1) % images.length), 4000);
+    return () => clearInterval(timer);
+  }, [many, paused, images.length]);
+
+  const step = (e: React.MouseEvent, dir: 1 | -1) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIdx((i) => (i + dir + images.length) % images.length);
+  };
+
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      className={`group relative block h-[200px] overflow-hidden rounded-[18px] shadow-[0_4px_14px_rgba(16,24,40,0.1)] transition-transform hover:-translate-y-1 ${
+        images.length ? 'bg-[#0B0D12]' : fallbackClass
+      }`}
+    >
+      {images.map((src, i) => (
+        <div
+          key={src}
+          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-500 ${
+            i === idx ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{ backgroundImage: `url('${src}')` }}
+        />
+      ))}
+      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.78)] via-transparent to-transparent" />
+
+      {many && (
+        <>
+          <button
+            type="button"
+            aria-label="prev"
+            onClick={(e) => step(e, -1)}
+            className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-0 backdrop-blur transition group-hover:opacity-100"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M15 6l-6 6 6 6" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="next"
+            onClick={(e) => step(e, 1)}
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-0 backdrop-blur transition group-hover:opacity-100"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M9 6l6 6-6 6" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div className="absolute right-3 top-3 flex gap-1.5">
+            {images.map((src, i) => (
+              <button
+                key={src}
+                type="button"
+                aria-label={`photo ${i + 1}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIdx(i);
+                }}
+                className={`h-[6px] rounded-full transition-all ${
+                  i === idx ? 'w-[16px] bg-white' : 'w-[6px] bg-white/55'
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="absolute bottom-4 left-4 right-3">
+        <div className="text-lg font-bold text-white">{title}</div>
+        <div className="mt-0.5 text-[12.5px] text-white/82">{subtitle}</div>
+      </div>
+    </Link>
+  );
+}
+
 export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const router = useRouter();
   const { user, loading: userLoading } = useCurrentUser();
@@ -234,7 +341,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [q, setQ] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<{ lat: number; lng: number; name: string } | null>(null);
-  const [areaImages, setAreaImages] = useState<Record<string, string>>({});
+  // จังหวัดละหลายรูปได้ — การ์ดทำเลยอดนิยมเลื่อนดูทีละรูป
+  const [areaImages, setAreaImages] = useState<Record<string, string[]>>({});
   const [promoCards, setPromoCards] = useState<PromoCardData[]>([]);
   const [homeContent, setHomeContent] = useState<HomeContent>({});
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
@@ -246,7 +354,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     apiClient
       .get<{
         heroImageUrl: string | null;
-        areaImages: Record<string, string>;
+        areaImages: Record<string, string[]>;
         promoCards: PromoCardData[];
         homeContent: HomeContent;
       }>('/settings/hero')
@@ -312,10 +420,6 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const heroSubtitle = (isTh && homeContent.heroSubtitleTh) || t.heroSubtitle;
   const zonesTitle = (isTh && homeContent.zonesTitleTh) || t.zonesTitle;
   const zonesSub = (isTh && homeContent.zonesSubTh) || t.zonesSub;
-  const trustCards = t.trust.map((tr, i) => {
-    const o = isTh ? homeContent.trust?.[i] : undefined;
-    return { title: (o?.titleTh || tr.title) as string, desc: (o?.subTh || tr.desc) as string };
-  });
   const topSearchPlaceholder = useTypewriter(t.topSearchPhrases);
   const roomTypeOptions = ROOM_TYPE_OPTIONS[lang];
   const priceRangeOptions = PRICE_RANGE_OPTIONS[lang];
@@ -383,6 +487,20 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 4);
   }, [byProvince]);
+
+  // การ์ดย่อยรายอำเภอ — ทำเฉพาะมหาสารคาม (จังหวัดหลักของแพลตฟอร์ม) จังหวัดอื่นยังไม่มีข้อมูลมากพอ
+  // ระบบไม่มีฟิลด์อำเภอ จับจากข้อความ address ของหอตรงๆ นับเฉพาะอำเภอที่มีหอจริง
+  const mskDistricts = useMemo(() => {
+    const list = byProvince.get(MSK_PROVINCE) ?? [];
+    if (!list.length) return [];
+    return MSK_DISTRICTS.map(({ name }) => {
+      const inDistrict = list.filter((d) => addressInDistrict(d.address, name));
+      return { district: name, count: inDistrict.length, cheapest: cheapestOf(inDistrict) };
+    })
+      .filter((z) => z.count > 0)
+      .sort((a, b) => b.count - a.count);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byProvince, dailyMode]);
 
   // หอพักแนะนำ = คะแนนรีวิวจริงสูงสุดทั้งระบบ (ไม่มี concept "โปรโมท/บูสต์" โชว์บนหน้าแรกในตอนนี้ ไม่ใส่ badge ที่พิสูจน์ไม่ได้)
   const topDorms = useMemo(() => {
@@ -757,31 +875,63 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {topProvinces.map((z, i) => {
-              const areaImage = areaImages[z.province];
-              return (
-              <Link
+            {topProvinces.map((z, i) => (
+              <ZoneCard
                 key={z.province}
                 href={`/search?province=${encodeURIComponent(z.province)}`}
-                className={`group relative block h-[200px] overflow-hidden rounded-[18px] bg-cover bg-center shadow-[0_4px_14px_rgba(16,24,40,0.1)] transition-transform hover:-translate-y-1 ${
-                  areaImage
-                    ? ''
-                    : ['bg-gradient-to-br from-[#3E5C8A] to-[#1E4FB0]', 'bg-gradient-to-br from-[#2E7D5B] to-[#178F5A]', 'bg-gradient-to-br from-[#6B4EA0] to-[#7C4DE0]', 'bg-gradient-to-br from-[#8A6D3B] to-[#C79A4B]'][i % 4]
+                images={areaImages[z.province] ?? []}
+                fallbackClass={
+                  [
+                    'bg-gradient-to-br from-[#3E5C8A] to-[#1E4FB0]',
+                    'bg-gradient-to-br from-[#2E7D5B] to-[#178F5A]',
+                    'bg-gradient-to-br from-[#6B4EA0] to-[#7C4DE0]',
+                    'bg-gradient-to-br from-[#8A6D3B] to-[#C79A4B]',
+                  ][i % 4]
+                }
+                title={provinceLabel(z.province)}
+                subtitle={`${t.zoneCount(z.count)}${
+                  z.cheapest != null ? ` · ${t.zoneFrom(`฿${z.cheapest.toLocaleString()}`)}` : ''
                 }`}
-                style={areaImage ? { backgroundImage: `url('${areaImage}')` } : undefined}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.78)] via-transparent to-transparent" />
-                <div className="absolute bottom-4 left-4 right-3">
-                  <div className="text-lg font-bold text-white">{provinceLabel(z.province)}</div>
-                  <div className="mt-0.5 text-[12.5px] text-white/82">
-                    {t.zoneCount(z.count)}
-                    {z.cheapest != null && ` · ${t.zoneFrom(`฿${z.cheapest.toLocaleString()}`)}`}
-                  </div>
-                </div>
-              </Link>
-              );
-            })}
+              />
+            ))}
           </div>
+
+          {/* การ์ดย่อยรายอำเภอ — เฉพาะมหาสารคาม */}
+          {mskDistricts.length > 0 && (
+            <div className="mt-5 rounded-[18px] border border-[#EAEDF2] bg-white p-4 shadow-[0_2px_8px_rgba(16,24,40,0.05)] sm:p-5">
+              <div className="mb-3 flex flex-wrap items-baseline gap-2">
+                <div className="text-[15.5px] font-bold text-ink-strong">{t.mskZonesTitle}</div>
+                <div className="text-[12.5px] text-[#8A909F]">{t.mskZonesSub}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                {mskDistricts.map((z) => (
+                  <Link
+                    key={z.district}
+                    href={`/search?province=${encodeURIComponent(MSK_PROVINCE)}&district=${encodeURIComponent(z.district)}`}
+                    className="group flex items-center justify-between gap-2 rounded-[13px] border border-[#EDF0F4] bg-[#F7F9FC] px-3.5 py-3 transition hover:border-tenant hover:bg-white"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-[13.5px] font-bold text-ink-strong">{z.district}</div>
+                      <div className="mt-0.5 truncate text-[11.5px] text-[#8A909F]">
+                        {t.zoneCount(z.count)}
+                        {z.cheapest != null && ` · ${t.zoneFrom(`฿${z.cheapest.toLocaleString()}`)}`}
+                      </div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                      <path
+                        d="M9 6l6 6-6 6"
+                        stroke="#B4BAC6"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="group-hover:stroke-tenant"
+                      />
+                    </svg>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -815,7 +965,17 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                       <StarRating rating={d.avgRating} count={d.reviewCount} />
                     </div>
                     <div className="truncate text-[15px] font-bold tracking-tight">{d.name}</div>
-                    <div className="mt-1 truncate text-xs text-[#8A909F]">{d.university ?? provinceLabel(d.province)}</div>
+                    {d.university && <div className="mt-1 truncate text-xs text-[#8A909F]">{d.university}</div>}
+                    {/* ทำเล — อำเภอ (จับจาก address) + จังหวัด */}
+                    <div className="mt-1 flex items-center gap-1 text-xs text-[#8A909F]">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                        <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#9AA0AB" strokeWidth="2" />
+                        <circle cx="12" cy="10" r="3" stroke="#9AA0AB" strokeWidth="2" />
+                      </svg>
+                      <span className="truncate">
+                        {[findDistrict(d.address), provinceLabel(d.province)].filter(Boolean).join(' · ')}
+                      </span>
+                    </div>
                     <div className="mt-2.5 border-t border-[#F0F2F6] pt-2.5">
                       {cheapest != null ? (
                         <>
@@ -966,42 +1126,6 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         )}
       </div>
 
-      {/* ===== TRUST BADGES ===== */}
-      <div className="mx-auto max-w-[1240px] px-6 pt-12">
-        <div className="grid grid-cols-1 gap-6 rounded-[20px] border border-[#EAEDF2] bg-white p-7 shadow-[0_2px_8px_rgba(16,24,40,0.05)] sm:grid-cols-2 lg:grid-cols-4">
-          {trustCards.map((tr, i) => (
-            <div key={i} className={`flex items-start gap-3.5 ${i < 3 ? 'sm:border-r sm:border-[#EEF1F6] sm:pr-5' : ''}`}>
-              <div
-                className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] ${
-                  ['bg-[#EAF1FF]', 'bg-[#E7F7EF]', 'bg-[#F3ECFF]', 'bg-[#FFF1EC]'][i % 4]
-                }`}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d={
-                      [
-                        'M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6',
-                        'M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z',
-                        'M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8',
-                        'M20 12a8 8 0 11-16 0 8 8 0 0116 0zM9 9l6 6M15 9l-6 6',
-                      ][i % 4]
-                    }
-                    stroke={['#2F6FE0', '#178F5A', '#7C4DE0', '#E0692F'][i % 4]}
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div>
-                <div className="text-[15px] font-bold">{tr.title}</div>
-                <div className="mt-0.5 text-[12.5px] leading-relaxed text-[#8A909F]">{tr.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* ===== FOOTER ===== */}
       <div className="mt-14 border-t border-[#E4E7EC] bg-white pt-11">
         <div className="mx-auto max-w-[1240px] px-6">
@@ -1057,11 +1181,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
             </div>
           </div>
 
-          <div className="mt-9 flex flex-wrap items-center gap-4 border-t border-[#EDEFF3] py-7">
-            <span className="text-[13px] text-[#8A909B]">{t.sponsoredBy}</span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/yec-mahasarakham.png" alt="YEC Mahasarakham" className="h-14 w-auto" />
-          </div>
+          <div className="mt-9 border-t border-[#EDEFF3] pt-7" />
         </div>
 
         {/* dark bottom bar */}
