@@ -15,6 +15,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { LandmarksModule } from './modules/landmarks/landmarks.module';
 import { OwnerApplicationsModule } from './modules/owner-applications/owner-applications.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { OwnerApplicationsModule } from './modules/owner-applications/owner-appl
     ReviewsModule,
     FavoritesModule,
     SettingsModule,
+    LandmarksModule,
     OwnerApplicationsModule,
   ],
 })

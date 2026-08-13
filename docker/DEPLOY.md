@@ -74,6 +74,26 @@ A record ทั้ง 4 ชี้ VPS แล้ว: `@` · `www` · `app` · `ap
 พอ KYC ผ่านต้องเปลี่ยนพร้อมกัน 3 ตัวใน `apps/api/.env.production`:
 secret key, public key และ **webhook verification token ของ live mode** (คนละตัวกับ test)
 
+## สถานที่สำคัญหน้าแรก (Google Places)
+
+การ์ด "ใกล้สถานที่สำคัญ" บนหน้าแรกอ่านจากตาราง `Landmark` ใน DB ของเราเอง ไม่ได้ยิง Google ตอนมีคนเปิดหน้า
+(Places คิดเงินต่อการเรียก หน้าแรกมีคนเข้าตลอด ยิงสดไม่ไหว) รูปก็โหลดมาเก็บเป็นไฟล์ของเราตอน sync ครั้งเดียว
+
+ต้องมี **คีย์ฝั่งเซิร์ฟเวอร์แยกต่างหาก** — คนละตัวกับ `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` ที่จำกัดด้วย referrer
+
+1. Google Cloud Console → Credentials → Create API key
+2. เปิด API: **Places API** (และ Places Photo มาพร้อมกัน)
+3. Restrict key → Application restrictions = **IP addresses** → ใส่ `203.170.190.188`
+4. ใส่ใน `/opt/hopak/apps/api/.env.production`:
+   ```
+   GOOGLE_PLACES_API_KEY=...
+   ```
+5. `docker compose -f docker-compose.prod.yml up -d --force-recreate api`
+6. เข้า `/admin/website` → การ์ด "สถานที่สำคัญหน้าแรก" → กด **ดึงข้อมูลจาก Google Places**
+   (กดครั้งเดียวพอ ข้อมูลอยู่ใน DB แล้ว ไม่ต้องกดซ้ำจนกว่าจะอยากอัปเดต)
+
+ยังไม่ตั้งคีย์ = หน้าแรกไม่โชว์ส่วนนี้เฉยๆ ไม่พัง
+
 ## สคริปต์ดูแลข้อมูล
 
 ```bash

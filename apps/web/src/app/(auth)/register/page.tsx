@@ -251,9 +251,16 @@ export default function RegisterPage() {
       </div>
 
       {/* RIGHT · form */}
-      <div className="flex flex-1 items-center justify-center bg-white px-5 py-10 sm:px-14">
+      <div className="flex flex-1 items-center justify-center bg-white px-5 pb-10 pt-9 sm:px-14 lg:py-10">
         <div className="w-full max-w-[520px]">
-          {/* topbar */}
+          {/* topbar — จอเล็กไม่มีแผงแบรนด์ฝั่งซ้าย ใส่โลโก้ไว้ตรงนี้ กดกลับหน้าแรกได้ */}
+          <Link href="/" aria-label="Hoprak" className="mb-6 inline-flex items-center gap-2.5 lg:hidden">
+            <HopakIcon size={34} />
+            <span className="text-[17px] font-bold tracking-tight text-[#161A22]">
+              Hoprak<span className="text-[#2F6FE0]">.com</span>
+            </span>
+          </Link>
+
           <div className="flex items-center justify-between gap-3">
             <span className="text-[14.5px] text-[#7A808B]">{t.stepOf(step)}</span>
             <Link

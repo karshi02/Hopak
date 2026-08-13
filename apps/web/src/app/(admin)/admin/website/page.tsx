@@ -34,6 +34,13 @@ const TEXT = {
     areaDesc: 'ใส่ได้หลายรูปต่อจังหวัด (สูงสุด 8) การ์ดหน้าแรกจะเลื่อนสไลด์ให้เอง — ไม่ใส่รูป = ใช้สีไล่ระดับเริ่มต้น',
     areaChoose: 'เพิ่มรูป (เลือกได้หลายไฟล์)',
     areaRemove: 'ลบรูปทั้งหมด',
+    landmarkLabel: 'สถานที่สำคัญหน้าแรก (Google Places)',
+    landmarkDesc: 'ดึงสถานที่ท่องเที่ยว/สถานที่สำคัญรายอำเภอมาเก็บไว้ หน้าแรกจะโชว์เฉพาะอำเภอที่มีหอพักจริง กดแล้วผู้ใช้ไปเห็นหอในอำเภอนั้น',
+    landmarkSync: 'ดึงข้อมูลจาก Google Places',
+    landmarkBusy: 'กำลังดึง...',
+    landmarkConfirm: 'ดึงข้อมูลจาก Google Places? (มีค่าใช้จ่ายต่อการเรียก ไม่ต้องกดบ่อย)',
+    landmarkDone: (saved: number, skipped: number) =>
+      `บันทึก ${saved} แห่ง${skipped ? ` · ข้าม ${skipped} อำเภอ (ไม่พบ/เรียกไม่สำเร็จ)` : ''}`,
     areaPhotoCount: (n: number) => `${n} รูป`,
     areaUploading: 'กำลังอัปโหลด...',
 
@@ -75,6 +82,13 @@ const TEXT = {
     areaDesc: 'Add multiple images per province (up to 8) — the homepage card cycles through them. No image = default gradient.',
     areaChoose: 'Add images (multi-select)',
     areaRemove: 'Remove all',
+    landmarkLabel: 'Homepage landmarks (Google Places)',
+    landmarkDesc: 'Pull attractions per district. The homepage only shows districts that actually have dorms; tapping one shows those dorms.',
+    landmarkSync: 'Fetch from Google Places',
+    landmarkBusy: 'Fetching...',
+    landmarkConfirm: 'Fetch from Google Places? (billed per request — no need to run often)',
+    landmarkDone: (saved: number, skipped: number) =>
+      `Saved ${saved}${skipped ? ` · skipped ${skipped} districts` : ''}`,
     areaPhotoCount: (n: number) => `${n} photos`,
     areaUploading: 'Uploading...',
 
@@ -127,6 +141,9 @@ export default function AdminWebsiteSettingsPage() {
 
   // จังหวัดละหลายรูปได้ — หน้าแรกเลื่อนดูทีละรูป
   const [areaImages, setAreaImages] = useState<Record<string, string[]>>({});
+  const [landmarks, setLandmarks] = useState<{ id: string; name: string; district: string }[]>([]);
+  const [landmarkBusy, setLandmarkBusy] = useState(false);
+  const [landmarkMsg, setLandmarkMsg] = useState<string | null>(null);
   const [uploadingArea, setUploadingArea] = useState<string | null>(null);
 
   // การ์ดจุดขาย 3 ใบ — เก็บ 3 ช่องเสมอเพื่อให้ฟอร์มมีครบทุกใบแม้ backend ยังไม่มีข้อมูล
@@ -275,6 +292,46 @@ export default function AdminWebsiteSettingsPage() {
   }
 
   // เลือกได้หลายไฟล์ต่อครั้ง — ต่อท้ายรูปเดิมของจังหวัดนั้น (API ตัดที่ 8 รูป)
+  // สถานที่สำคัญหน้าแรก — ดึงจาก Google Places มาเก็บใน DB ครั้งเดียว (Places คิดเงินต่อการเรียก)
+  useEffect(() => {
+    apiClient
+      .get<{ id: string; name: string; district: string }[]>(
+        '/landmarks?province=' + encodeURIComponent('มหาสารคาม'),
+      )
+      .then(setLandmarks)
+      .catch(() => setLandmarks([]));
+  }, []);
+
+  async function handleSyncLandmarks() {
+    if (!window.confirm(t.landmarkConfirm)) return;
+    setLandmarkBusy(true);
+    setLandmarkMsg(null);
+    try {
+      const res = await apiClient.post<{ saved: number; skipped: string[] }>('/admin/landmarks/sync', {
+        province: 'มหาสารคาม',
+      });
+      setLandmarkMsg(t.landmarkDone(res.saved, res.skipped.length));
+      const list = await apiClient.get<{ id: string; name: string; district: string }[]>(
+        '/landmarks?province=' + encodeURIComponent('มหาสารคาม'),
+      );
+      setLandmarks(list);
+    } catch (err) {
+      setLandmarkMsg(err instanceof Error ? err.message : t.error);
+    } finally {
+      setLandmarkBusy(false);
+    }
+  }
+
+  async function handleRemoveLandmark(id: string) {
+    if (!window.confirm(t.removeConfirm)) return;
+    try {
+      await apiClient.delete(`/admin/landmarks/${id}`);
+      setLandmarks((prev) => prev.filter((l) => l.id !== id));
+    } catch {
+      setLandmarkMsg(t.error);
+    }
+  }
+
   async function handleAreaImageChange(province: string, e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -464,6 +521,39 @@ export default function AdminWebsiteSettingsPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ===== LANDMARKS ===== */}
+      <div className="mt-6 rounded-card-lg border border-card-border bg-white p-4 shadow-card sm:p-6">
+        <h2 className="font-semibold text-ink-strong">{t.landmarkLabel}</h2>
+        <p className="mt-1 text-sm text-ink-subtitle">{t.landmarkDesc}</p>
+
+        <button
+          onClick={handleSyncLandmarks}
+          disabled={landmarkBusy}
+          className="mt-4 rounded-btn bg-tenant px-4 py-2 text-sm font-medium text-white hover:bg-tenant-dark disabled:opacity-50"
+        >
+          {landmarkBusy ? t.landmarkBusy : t.landmarkSync}
+        </button>
+        {landmarkMsg && <p className="mt-3 text-sm text-ink-body">{landmarkMsg}</p>}
+
+        <div className="mt-4 flex flex-col gap-2">
+          {landmarks.map((l) => (
+            <div
+              key={l.id}
+              className="flex items-center justify-between gap-3 rounded-btn border border-card-border px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-ink-strong">{l.name}</div>
+                <div className="truncate text-xs text-ink-faint">{l.district}</div>
+              </div>
+              <button onClick={() => handleRemoveLandmark(l.id)} className="text-xs font-semibold text-danger">
+                {t.areaRemove}
+              </button>
+            </div>
+          ))}
+          {landmarks.length === 0 && <p className="text-sm text-ink-faint">{t.none}</p>}
         </div>
       </div>
 

@@ -21,6 +21,14 @@ interface PromoCardData {
   subEn: string;
 }
 
+interface Landmark {
+  id: string;
+  name: string;
+  district: string;
+  province: string;
+  imageUrl: string | null;
+}
+
 interface HomeContent {
   heroTitleTh?: string;
   heroSubtitleTh?: string;
@@ -38,6 +46,7 @@ import { StarRating } from '@/components/StarRating';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { LangSwitch } from '@/components/LangSwitch';
 import { HopakIcon } from '@/components/HopakIcon';
+import { MobileHomeChrome, MobileMenuButton } from '@/components/home/MobileHomeChrome';
 
 const PROVINCE_LABEL: Record<Lang, Record<string, string>> = {
   th: { มหาสารคาม: 'มหาสารคาม', ขอนแก่น: 'ขอนแก่น', เชียงใหม่: 'เชียงใหม่' },
@@ -101,6 +110,8 @@ const TEXT = {
     ],
     zonesTitle: 'ทำเลยอดนิยม',
     zonesSub: 'เลือกจังหวัดที่ใช่ แล้วดูหอพักทั้งหมดในจังหวัดนั้น',
+    landmarkTitle: 'ใกล้สถานที่สำคัญ',
+    landmarkSub: 'เลือกสถานที่ แล้วดูหอพักในอำเภอเดียวกัน',
     mskZonesTitle: 'ทำเลย่อยในมหาสารคาม',
     mskZonesSub: 'เลือกอำเภอที่ใช่',
     viewAllZones: 'ดูทั้งหมด →',
@@ -165,6 +176,8 @@ const TEXT = {
     ],
     zonesTitle: 'Popular Areas',
     zonesSub: 'Pick a province to see all its dorms',
+    landmarkTitle: 'Near landmarks',
+    landmarkSub: 'Pick a place, see dorms in the same district',
     mskZonesTitle: 'Areas in Maha Sarakham',
     mskZonesSub: 'Pick a district',
     viewAllZones: 'View all →',
@@ -334,6 +347,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   }, [isTenant]);
 
   const { lang, setLang } = useLang();
+  // เมนูแฮมเบอร์เกอร์ของมือถือ — จอเล็กใส่ปุ่มบนหัวไม่พอ ย้ายไปไว้ในลิ้นชักแทน
+  const [menuOpen, setMenuOpen] = useState(false);
   const [province, setProvince] = useState<string>(PROVINCES[0]);
   const [open, setOpen] = useState(false);
   const [roomType, setRoomType] = useState('all');
@@ -343,6 +358,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const [selectedPlace, setSelectedPlace] = useState<{ lat: number; lng: number; name: string } | null>(null);
   // จังหวัดละหลายรูปได้ — การ์ดทำเลยอดนิยมเลื่อนดูทีละรูป
   const [areaImages, setAreaImages] = useState<Record<string, string[]>>({});
+  // สถานที่สำคัญรายอำเภอ (ดึงจาก Google Places ไว้แล้ว เก็บใน DB ฝั่งเรา) — ไม่มีก็ไม่พัง แค่ไม่โชว์
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [promoCards, setPromoCards] = useState<PromoCardData[]>([]);
   const [homeContent, setHomeContent] = useState<HomeContent>({});
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
@@ -370,6 +387,15 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         setPromoCards([]);
         setHomeContent({});
       });
+  }, []);
+
+  // สถานที่สำคัญรายอำเภอ — อ่านจาก DB ของเราเอง (แอดมิน sync จาก Google Places ไว้แล้ว)
+  // ไม่มีข้อมูล = ไม่โชว์ส่วนนี้ ไม่กระทบอย่างอื่น
+  useEffect(() => {
+    apiClient
+      .get<Landmark[]>(`/landmarks?province=${encodeURIComponent(MSK_PROVINCE)}`)
+      .then(setLandmarks)
+      .catch(() => setLandmarks([]));
   }, []);
 
   // ขอตำแหน่งจริงของผู้ใช้ (ต้องกดอนุญาตเอง) — ไม่ได้ก็แค่ไม่โชว์ระยะทาง ไม่เดา/ไม่ใช้ค่า fallback ปลอม
@@ -502,6 +528,15 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byProvince, dailyMode]);
 
+  // สถานที่สำคัญที่ "มีหอพักในอำเภอเดียวกัน" เท่านั้น — โชว์ที่ที่กดแล้วไม่เจอหอเลยไม่มีประโยชน์
+  const landmarkCards = useMemo(() => {
+    const countByDistrict = new Map(mskDistricts.map((d) => [d.district, d]));
+    return landmarks
+      .map((l) => ({ ...l, zone: countByDistrict.get(l.district) }))
+      .filter((l) => l.zone && l.zone.count > 0)
+      .slice(0, 8);
+  }, [landmarks, mskDistricts]);
+
   // หอพักแนะนำ = คะแนนรีวิวจริงสูงสุดทั้งระบบ (ไม่มี concept "โปรโมท/บูสต์" โชว์บนหน้าแรกในตอนนี้ ไม่ใส่ badge ที่พิสูจน์ไม่ได้)
   const topDorms = useMemo(() => {
     return [...catDorms]
@@ -541,7 +576,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   }
 
   return (
-    <div className="overflow-x-hidden bg-[#F2F4F8] text-[#161A22]">
+    <div className="overflow-x-hidden bg-[#F2F4F8] pb-[76px] text-[#161A22] sm:pb-0">
       {/* ===== TOP HEADER ===== */}
       <div className="bg-gradient-to-b from-[#0E1220] to-[#151C30]">
         <div className="mx-auto flex h-auto min-h-[58px] max-w-[1240px] items-center gap-x-2.5 px-3 py-2 sm:min-h-[62px] sm:gap-x-5 sm:px-6 sm:py-2.5">
@@ -573,7 +608,10 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           </form>
 
           <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-5">
-            <LangSwitch lang={lang} onChange={setLang} dark />
+            {/* จอเล็ก: ทุกอย่างยกไปอยู่ในเมนูแฮมเบอร์เกอร์ (เหลือแค่กระดิ่งแจ้งเตือน) */}
+            <div className="hidden sm:block">
+              <LangSwitch lang={lang} onChange={setLang} dark />
+            </div>
 
             <Link
               href="/partner-register"
@@ -614,7 +652,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                   <Link
                     href="/profile"
                     title={user.name}
-                    className="flex min-w-0 items-center gap-2 text-[13.5px] font-semibold text-white hover:underline"
+                    className="hidden min-w-0 items-center gap-2 text-[13.5px] font-semibold text-white hover:underline sm:flex"
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-xs font-bold text-white sm:h-7 sm:w-7">
                       {user.avatarUrl ? (
@@ -633,7 +671,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                     onClick={handleLogout}
                     title={t.logout}
                     aria-label={t.logout}
-                    className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-pill bg-[#F0604D]/15 px-2 text-[13px] font-semibold text-[#FF9382] transition hover:bg-[#F0604D]/25 hover:text-white sm:h-9 sm:px-3.5"
+                    className="hidden h-9 shrink-0 items-center justify-center gap-1.5 rounded-pill bg-[#F0604D]/15 px-3.5 text-[13px] font-semibold text-[#FF9382] transition hover:bg-[#F0604D]/25 hover:text-white sm:flex"
                   >
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
                       <path
@@ -651,18 +689,20 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                 <>
                   <Link
                     href="/register"
-                    className="flex h-8 shrink-0 items-center rounded-lg border border-white/28 px-3 text-[12.5px] font-semibold text-white sm:h-9 sm:px-4 sm:text-[13.5px]"
+                    className="hidden h-9 shrink-0 items-center rounded-lg border border-white/28 px-4 text-[13.5px] font-semibold text-white sm:flex"
                   >
                     {t.register}
                   </Link>
                   <Link
                     href="/login"
-                    className="flex h-8 shrink-0 items-center rounded-lg bg-tenant px-3.5 text-[12.5px] font-semibold text-white sm:h-9 sm:px-[17px] sm:text-[13.5px]"
+                    className="hidden h-9 shrink-0 items-center rounded-lg bg-tenant px-[17px] text-[13.5px] font-semibold text-white sm:flex"
                   >
                     {t.login}
                   </Link>
                 </>
               ))}
+
+            <MobileMenuButton onClick={() => setMenuOpen(true)} label={lang === 'th' ? 'เมนู' : 'Menu'} />
           </div>
         </div>
       </div>
@@ -895,6 +935,51 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               />
             ))}
           </div>
+
+          {/* สถานที่สำคัญรายอำเภอ — กดแล้วไปดูหอในอำเภอเดียวกันนั้น */}
+          {landmarkCards.length > 0 && (
+            <div className="mt-5">
+              <div className="mb-3 flex flex-wrap items-baseline gap-2">
+                <div className="text-[17px] font-bold tracking-tight text-ink-strong">{t.landmarkTitle}</div>
+                <div className="text-[12.5px] text-[#8A909F]">{t.landmarkSub}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {landmarkCards.map((l, i) => (
+                  <Link
+                    key={l.id}
+                    href={`/search?province=${encodeURIComponent(l.province)}&district=${encodeURIComponent(l.district)}`}
+                    className={`group relative block h-[132px] overflow-hidden rounded-[15px] shadow-[0_4px_14px_rgba(16,24,40,0.1)] transition-transform hover:-translate-y-1 ${
+                      l.imageUrl
+                        ? 'bg-[#0B0D12]'
+                        : [
+                            'bg-gradient-to-br from-[#3E5C8A] to-[#1E4FB0]',
+                            'bg-gradient-to-br from-[#2E7D5B] to-[#178F5A]',
+                            'bg-gradient-to-br from-[#6B4EA0] to-[#7C4DE0]',
+                            'bg-gradient-to-br from-[#8A6D3B] to-[#C79A4B]',
+                          ][i % 4]
+                    }`}
+                  >
+                    {l.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={l.imageUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.82)] via-transparent to-transparent" />
+                    <div className="absolute bottom-3 left-3.5 right-3">
+                      <div className="truncate text-[14.5px] font-bold text-white">{l.name}</div>
+                      <div className="mt-0.5 truncate text-[11.5px] text-white/85">
+                        {l.district} · {t.zoneCount(l.zone!.count)}
+                        {l.zone!.cheapest != null && ` · ${t.zoneFrom(`฿${l.zone!.cheapest.toLocaleString()}`)}`}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* การ์ดย่อยรายอำเภอ — เฉพาะมหาสารคาม */}
           {mskDistricts.length > 0 && (
@@ -1183,6 +1268,16 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
           <div className="mt-9 border-t border-[#EDEFF3] pt-7" />
         </div>
+
+        {/* แถบล่าง + ลิ้นชักเมนู (เฉพาะมือถือ) */}
+        <MobileHomeChrome
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          lang={lang}
+          setLang={setLang}
+          user={user ? { name: user.name, avatarUrl: user.avatarUrl } : null}
+          onLogout={handleLogout}
+        />
 
         {/* dark bottom bar */}
         <div className="bg-[#14171C] px-6 py-6">

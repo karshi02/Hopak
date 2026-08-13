@@ -422,3 +422,28 @@ model ApprovalLog {
   note       String?
   createdAt  DateTime @default(now())
 }
+
+/// สถานที่สำคัญ/ท่องเที่ยว ที่ดึงมาจาก Google Places แล้วเก็บไว้ใช้ซ้ำ
+/// เก็บลง DB เพราะ Places คิดเงินต่อครั้งที่เรียก — หน้าแรกมีคนเข้าตลอด ยิงสดทุกครั้งไม่ไหว
+/// รูปก็โหลดมาเก็บเป็นไฟล์ของเราเองตอน sync ครั้งเดียว ไม่ proxy ไปหา Google ทุกครั้งที่มีคนเปิดหน้า
+model Landmark {
+  id        String   @id @default(cuid())
+  /// place_id ของ Google — กันเก็บซ้ำเวลา sync รอบใหม่
+  placeId   String   @unique
+  name      String
+  province  String
+  /// อำเภอที่จับได้จากที่อยู่ — ใช้ผูกกับหอพักในอำเภอเดียวกัน
+  district  String
+  address   String?
+  lat       Float
+  lng       Float
+  /// URL รูปที่เราเก็บเอง (โหลดจาก Places Photo ตอน sync)
+  imageUrl  String?
+  rating    Float?
+  /// อันดับการโชว์ — เรียงจากคะแนน/จำนวนรีวิวตอน sync
+  sortOrder Int      @default(0)
+  syncedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([province, district])
+}
