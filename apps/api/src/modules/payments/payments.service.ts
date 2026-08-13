@@ -114,7 +114,21 @@ export class PaymentsService {
     if (booking.status !== 'PENDING') throw new BadRequestException('ชำระเงินได้เฉพาะการจองที่รอชำระเงินเท่านั้น');
 
     const now = new Date();
-    const deadline = new Date(now.getTime() + PaymentsService.HOLD_MS);
+
+    // QR เดิมที่ยังไม่หมดอายุ = ใช้ต่อ ห้ามออกใหม่
+    // เดิมโหลดหน้าชำระเงินทีไรก็สร้าง QR ใหม่ + เลื่อน deadline ไปอีก 10 นาทีทุกครั้ง
+    // = รีเฟรชรัวๆ ก็ยึดห้องไว้ได้ไม่มีวันหมดอายุ (คนอื่นจองไม่ได้) และยิงสร้าง QR ถล่ม gateway ฟรีๆ
+    const reusable =
+      booking.payment?.status === 'PENDING' &&
+      booking.payment.gatewayChargeId &&
+      booking.payment.gatewayQrString &&
+      booking.paymentDeadline &&
+      booking.paymentDeadline.getTime() > now.getTime()
+        ? booking.payment
+        : null;
+
+    // ใช้ QR เดิม = คงเส้นตายเดิมไว้ ไม่ต่อเวลาให้
+    const deadline = reusable ? booking.paymentDeadline! : new Date(now.getTime() + PaymentsService.HOLD_MS);
 
     // จองห้องชั่วคราว (hold) ระหว่างชำระเงิน — เฉพาะรายเดือน (รายวันกันจองซ้ำด้วย overlap ตอนสร้าง booking แล้ว)
     // ล็อกแบบ atomic ด้วย updateMany: สำเร็จเฉพาะห้องที่ว่าง + ยังไม่ถูก hold (หรือ hold หมดเวลา/เป็นของ booking นี้เอง)
@@ -134,9 +148,23 @@ export class PaymentsService {
       }
     }
 
-    // ถ้ามี Payment ค้างอยู่แล้ว: SETTLED = จ่ายไปแล้ว (กันซ้ำ), PENDING = ออก QR ใหม่ทับของเดิม (QR เดิมอาจหมดอายุ)
+    // จ่ายไปแล้ว = ห้ามออก QR ซ้ำ
+    if (booking.payment && booking.payment.status !== 'PENDING') {
+      throw new BadRequestException('การจองนี้ชำระเงินแล้ว');
+    }
+
+    // QR เดิมยังใช้ได้ — คืนตัวเดิมพร้อมเวลาที่เหลือจริง (ห้อง hold ถึงเส้นตายเดิมเท่านั้น)
+    if (reusable) {
+      return {
+        chargeId: reusable.gatewayChargeId!,
+        qrString: reusable.gatewayQrString!,
+        amount: booking.amount,
+        paymentDeadline: deadline,
+      };
+    }
+
+    // หมดอายุแล้ว (หรือยังไม่เคยมี) ค่อยออกใหม่ทับของเดิม
     if (booking.payment) {
-      if (booking.payment.status !== 'PENDING') throw new BadRequestException('การจองนี้ชำระเงินแล้ว');
       await this.prisma.payment.delete({ where: { id: booking.payment.id } });
     }
 
@@ -161,6 +189,7 @@ export class PaymentsService {
         method: 'xendit_promptpay',
         status: 'PENDING',
         gatewayChargeId: charge.chargeId,
+        gatewayQrString: charge.qrString,
       },
     });
 

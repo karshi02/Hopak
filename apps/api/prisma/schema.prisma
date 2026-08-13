@@ -269,6 +269,9 @@ model Payment {
   slipTransRef  String?       @unique
   // id ของ charge/QR ฝั่ง payment gateway (Xendit) — ใช้ผูก webhook กลับมาหา payment นี้
   gatewayChargeId String?     @unique
+  // payload EMV ของ QR — เก็บไว้คืน QR "ตัวเดิม" ตอนผู้ใช้รีเฟรชหน้าชำระเงิน
+  // ไม่งั้นต้องยิงสร้าง QR ใหม่ทุกครั้ง = ต่ออายุ hold ห้องไปเรื่อยๆ + ถล่ม API ของ gateway
+  gatewayQrString String?
   settledAt     DateTime?
   createdAt     DateTime      @default(now())
 

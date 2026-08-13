@@ -1956,3 +1956,20 @@ SSL: certbot --nginx ออกครบ 4 โดเมน · http -> 301 https �
   ไฟล์บนเซิร์ฟเวอร์ไม่ตรงกับรีโปแล้ว (certbot เติม block 443 เอง) ก๊อปทับตรงๆ = SSL หาย สำรองไว้ที่ /root/hoprak.com.with-ssl.bak
 ผลตรวจสุดท้าย: https://app.hoprak.com = 200 · https://api.hoprak.com/dorms = JSON · /bank-icons/KBANK.png = 200
 เขียน docker/DEPLOY.md เก็บขั้นตอน+กับดักทั้งหมดไว้แล้ว
+
+[123] บั๊ก: รีเฟรชหน้าชำระเงินแล้วนับถอยหลังรีเซ็ตเป็น 10 นาทีใหม่ทุกครั้ง (13/08/2026)
+อาการ: หน้า QR ขั้นที่ 2 นับถอยหลัง 10 นาที กด F5 แล้วกลับไป 10:00 ใหม่ วนได้ไม่จำกัด
+สาเหตุ: payments.service.createCharge เรียกทีไรก็ทำงานเต็มชุดเสมอ —
+  ลบ payment เดิม -> ยิง Xendit สร้าง QR ใหม่ -> ตั้ง booking.paymentDeadline = now + 10 นาที
+  ผลกระทบจริงหนักกว่าที่เห็น:
+   1) hold ห้องต่ออายุไปเรื่อยๆ (room.heldUntil = deadline ใหม่) = ยึดห้องไว้ตลอดกาล คนอื่นจองไม่ได้
+   2) ยิงสร้าง QR ที่ Xendit ทุกครั้งที่โหลดหน้า = ถล่ม API เขาได้ฟรี (ไม่มี rate limit ฝั่งนี้)
+แก้:
+- schema + migration 20260813100000_payment_qr_string: Payment.gatewayQrString
+  (เดิมเก็บแค่ chargeId เลยคืน QR ตัวเดิมไม่ได้ ต้องสร้างใหม่ทุกครั้ง)
+- createCharge: ถ้ามี payment PENDING + มี chargeId/qrString + booking.paymentDeadline ยังไม่ถึง
+  = คืน QR ตัวเดิม + เส้นตายเดิม ไม่ยิง Xendit ไม่ต่อเวลา (hold ห้องก็ถึงเส้นตายเดิมเท่านั้น)
+  หมดอายุแล้วค่อยลบของเดิมแล้วออกใหม่เหมือนเดิม
+- จ่ายแล้ว (ไม่ใช่ PENDING) = โยน error เหมือนเดิม กันออก QR ซ้ำ
+ฝั่งเว็บไม่ต้องแก้ — pay page ใช้ paymentDeadline จาก response อยู่แล้ว
+tsc api ผ่าน · migrate deploy local ผ่าน
