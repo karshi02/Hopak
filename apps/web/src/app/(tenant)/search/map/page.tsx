@@ -88,7 +88,6 @@ function MapSearchInner() {
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const cardsRef = useRef<HTMLDivElement>(null);
   // เส้นโยงจากตำแหน่งเราไปหอที่เลือก + หมุดตำแหน่งเรา (เก็บ ref ไว้ลบ/วาดใหม่ ไม่งั้นซ้อนกันทุกครั้งที่เลือกใหม่)
-  const routeRef = useRef<google.maps.Polyline | null>(null);
   const meMarkerRef = useRef<google.maps.Marker | null>(null);
   // เส้นทางตามถนนจริง — ยิง Directions เฉพาะตอนกดปุ่มนำทาง (คิดเงินต่อการเรียก ห้ามยิงอัตโนมัติทุกครั้งที่เลือกหอ)
   const directionsRef = useRef<google.maps.DirectionsRenderer | null>(null);
@@ -198,38 +197,8 @@ function MapSearchInner() {
     });
   }, [myLocation]);
 
-  /**
-   * เส้นโยงจากตำแหน่งเราไปหอที่เลือก
-   * เป็นเส้นตรงจงใจ ไม่ใช่เส้นทางตามถนน — Directions API คิดเงินต่อการเรียก
-   * และหน้านี้ผู้ใช้กดเลือกหอสลับไปมาได้เรื่อยๆ ถ้ายิงทุกครั้งค่าใช้จ่ายบานแน่
-   * อยากได้เส้นทางจริงมีปุ่ม "นำทาง" เปิด Google Maps ให้แทน (ฟรี ไม่ผ่าน API)
-   */
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || typeof google === 'undefined') return;
-
-    routeRef.current?.setMap(null);
-    routeRef.current = null;
-
-    const target = pinned.find((x) => x.dorm.id === selectedId);
-    // มีเส้นทางตามถนนอยู่แล้วไม่ต้องวาดเส้นตรงซ้อน
-    if (!selectedId || !myLocation || !target || routeDormId === selectedId) return;
-
-    routeRef.current = new google.maps.Polyline({
-      map,
-      path: [myLocation, { lat: target.dorm.lat, lng: target.dorm.lng }],
-      strokeOpacity: 0,
-      // เส้นประ — วาดด้วยจุดวงกลมเรียงกัน (Polyline ธรรมดาไม่มี dash)
-      icons: [
-        {
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 3.2, fillColor: '#2F6FE0', fillOpacity: 1, strokeWeight: 0 },
-          offset: '0',
-          repeat: '13px',
-        },
-      ],
-      zIndex: 400,
-    });
-  }, [selectedId, myLocation, pinned, routeDormId]);
+  // เดิมมีเส้นประลากตรงจากตำแหน่งเราไปหอที่เลือก — เอาออกแล้ว
+  // มันไม่ใช่เส้นทางจริง (ลากทะลุแม่น้ำ/ตึก) อ่านแล้วสับสน เหลือเส้นทางตามถนนตอนกดเลือกโหมดอย่างเดียว
 
   // ---------- หมุดราคา ----------
   useEffect(() => {
@@ -354,10 +323,6 @@ function MapSearchInner() {
       } else {
         result = await service.route(request(google.maps.TravelMode.DRIVING));
       }
-
-      // เส้นตรงเดิมออกไป ใช้เส้นทางจริงแทน
-      routeRef.current?.setMap(null);
-      routeRef.current = null;
 
       if (!directionsRef.current) {
         directionsRef.current = new google.maps.DirectionsRenderer({
