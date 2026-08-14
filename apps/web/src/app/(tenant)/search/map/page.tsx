@@ -34,6 +34,11 @@ const TEXT = {
     tapAgain: 'แตะอีกครั้งเพื่อดูรายละเอียดหอ',
     needLocation: 'เปิดตำแหน่งเพื่อดูระยะทาง',
     navigate: 'นำทาง',
+    routing: 'กำลังหาเส้นทาง...',
+    clearRoute: 'ปิดเส้นทาง',
+    routeFailed: 'หาเส้นทางไม่สำเร็จ',
+    openInMaps: 'เปิดใน Google Maps',
+    byCar: 'ขับรถ',
   },
   en: {
     searchHere: 'Search this area',
@@ -51,6 +56,11 @@ const TEXT = {
     tapAgain: 'Tap again to open the dorm',
     needLocation: 'Turn on location to see distance',
     navigate: 'Directions',
+    routing: 'Finding route...',
+    clearRoute: 'Hide route',
+    routeFailed: 'Could not find a route',
+    openInMaps: 'Open in Google Maps',
+    byCar: 'Driving',
   },
 };
 
@@ -72,6 +82,12 @@ function MapSearchInner() {
   // เส้นโยงจากตำแหน่งเราไปหอที่เลือก + หมุดตำแหน่งเรา (เก็บ ref ไว้ลบ/วาดใหม่ ไม่งั้นซ้อนกันทุกครั้งที่เลือกใหม่)
   const routeRef = useRef<google.maps.Polyline | null>(null);
   const meMarkerRef = useRef<google.maps.Marker | null>(null);
+  // เส้นทางตามถนนจริง — ยิง Directions เฉพาะตอนกดปุ่มนำทาง (คิดเงินต่อการเรียก ห้ามยิงอัตโนมัติทุกครั้งที่เลือกหอ)
+  const directionsRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const [routeDormId, setRouteDormId] = useState<string | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
+  const [routeBusy, setRouteBusy] = useState(false);
+  const [routeError, setRouteError] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // กรอบพื้นที่ที่ผู้ใช้กด "ค้นหาในพื้นที่นี้" — null = ไม่จำกัดพื้นที่
@@ -183,7 +199,8 @@ function MapSearchInner() {
     routeRef.current = null;
 
     const target = pinned.find((x) => x.dorm.id === selectedId);
-    if (!selectedId || !myLocation || !target) return;
+    // มีเส้นทางตามถนนอยู่แล้วไม่ต้องวาดเส้นตรงซ้อน
+    if (!selectedId || !myLocation || !target || routeDormId === selectedId) return;
 
     routeRef.current = new google.maps.Polyline({
       map,
@@ -199,7 +216,7 @@ function MapSearchInner() {
       ],
       zIndex: 400,
     });
-  }, [selectedId, myLocation, pinned]);
+  }, [selectedId, myLocation, pinned, routeDormId]);
 
   // ---------- หมุดราคา ----------
   useEffect(() => {
@@ -273,6 +290,56 @@ function MapSearchInner() {
     const sw = b.getSouthWest();
     setBounds({ north: ne.lat(), east: ne.lng(), south: sw.lat(), west: sw.lng() });
     setMoved(false);
+  }
+
+  /** ขอเส้นทางตามถนนจาก Google แล้ววาดลงแผนที่ของเราเอง */
+  async function showRoute(dorm: { id: string; lat: number; lng: number }) {
+    if (!mapRef.current || !myLocation || typeof google === 'undefined') return;
+    setRouteBusy(true);
+    setRouteError(false);
+    try {
+      const service = new google.maps.DirectionsService();
+      const result = await service.route({
+        origin: myLocation,
+        destination: { lat: dorm.lat, lng: dorm.lng },
+        travelMode: google.maps.TravelMode.DRIVING,
+      });
+
+      // เส้นตรงเดิมออกไป ใช้เส้นทางจริงแทน
+      routeRef.current?.setMap(null);
+      routeRef.current = null;
+
+      if (!directionsRef.current) {
+        directionsRef.current = new google.maps.DirectionsRenderer({
+          map: mapRef.current,
+          // หมุดของเราเองมีอยู่แล้ว (ตำแหน่งเรา + หมุดราคา) ไม่ต้องให้ Google วาดหมุด A/B ทับ
+          suppressMarkers: true,
+          preserveViewport: false,
+          polylineOptions: { strokeColor: '#2F6FE0', strokeWeight: 5, strokeOpacity: 0.9 },
+        });
+      }
+      directionsRef.current.setMap(mapRef.current);
+      directionsRef.current.setDirections(result);
+
+      const leg = result.routes[0]?.legs[0];
+      setRouteInfo(
+        leg ? { distance: leg.distance?.text ?? '', duration: leg.duration?.text ?? '' } : null,
+      );
+      setRouteDormId(dorm.id);
+      setMoved(false);
+    } catch {
+      // ปกติเป็นเพราะยังไม่ได้เปิด Directions API กับคีย์ที่ใช้อยู่ — ให้ปุ่มสำรองเปิด Google Maps แทน
+      setRouteError(true);
+    } finally {
+      setRouteBusy(false);
+    }
+  }
+
+  function clearRoute() {
+    directionsRef.current?.setMap(null);
+    setRouteDormId(null);
+    setRouteInfo(null);
+    setRouteError(false);
   }
 
   function locateMe() {
@@ -357,6 +424,25 @@ function MapSearchInner() {
           </button>
         )}
 
+        {/* สรุปเส้นทางที่กำลังโชว์ */}
+        {routeInfo && (
+          <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2.5 rounded-[13px] bg-white px-3.5 py-2 shadow-[0_8px_22px_rgba(16,24,40,0.2)]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#EAF1FF]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M5 17h2l1-3h8l1 3h2M6 14l1.5-5h9L18 14M7.5 17.5h.01M16.5 17.5h.01" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div>
+              <div className="font-sans text-[15px] font-extrabold leading-tight text-ink-strong">
+                {routeInfo.duration}
+              </div>
+              <div className="text-[11.5px] text-ink-faint">
+                {routeInfo.distance} · {t.byCar}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ปุ่มควบคุมขวา */}
         <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-2">
           <button
@@ -412,7 +498,10 @@ function MapSearchInner() {
                 // แตะซ้ำที่ใบเดิม = เข้าหน้ารายละเอียดหอ — กันกดพลาดตอนเลื่อนการ์ดผ่านๆ
                 onClick={() => {
                   if (active) router.push(`/dorms/${dorm.id}${dailyMode ? '?rental=daily' : ''}`);
-                  else setSelectedId(dorm.id);
+                  else {
+                    if (routeDormId && routeDormId !== dorm.id) clearRoute();
+                    setSelectedId(dorm.id);
+                  }
                 }}
                 className={`flex w-[290px] shrink-0 snap-center gap-3 rounded-[15px] border bg-white p-2.5 text-left shadow-[0_8px_24px_rgba(16,24,40,0.14)] ${
                   active ? 'border-tenant' : 'border-card-border'
@@ -442,20 +531,50 @@ function MapSearchInner() {
                       {km != null ? `${t.away(km)} · ${t.tapAgain}` : t.needLocation}
                     </div>
                   )}
-                  {/* เส้นทางจริงตามถนน — เปิดใน Google Maps ไม่ต้องเรียก Directions API (ฟรี) */}
+                  {/* เส้นทางตามถนนจริง — ยิง Directions ตอนกดเท่านั้น */}
                   {active && myLocation && (
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}&destination=${dorm.lat},${dorm.lng}&travelmode=driving`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1.5 inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0]"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2l9 20-9-5-9 5 9-20z" stroke="#1E4FB0" strokeWidth="1.9" strokeLinejoin="round" />
-                      </svg>
-                      {t.navigate}
-                    </a>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {routeDormId === dorm.id ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearRoute();
+                          }}
+                          className="inline-flex h-7 items-center rounded-pill bg-[#F4F6FA] px-3 text-[11.5px] font-bold text-[#5B616C]"
+                        >
+                          {t.clearRoute}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={routeBusy}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void showRoute(dorm);
+                          }}
+                          className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0] disabled:opacity-60"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 2l9 20-9-5-9 5 9-20z" stroke="#1E4FB0" strokeWidth="1.9" strokeLinejoin="round" />
+                          </svg>
+                          {routeBusy ? t.routing : t.navigate}
+                        </button>
+                      )}
+
+                      {/* เรียก Directions ไม่ผ่าน (คีย์ยังไม่ได้เปิด API) — ยังไปต่อได้ด้วยแอป Google Maps */}
+                      {routeError && (
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}&destination=${dorm.lat},${dorm.lng}&travelmode=driving`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex h-7 items-center rounded-pill bg-[#FFF3E0] px-3 text-[11.5px] font-bold text-[#C77B14]"
+                        >
+                          {t.openInMaps}
+                        </a>
+                      )}
+                    </div>
                   )}
                   <div className="mt-1.5">
                     {cheapest != null ? (
