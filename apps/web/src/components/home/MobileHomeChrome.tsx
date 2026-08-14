@@ -16,7 +16,7 @@ import type { Lang } from '@/hooks/useLang';
 type MenuUser = { name: string; avatarUrl?: string | null } | null;
 
 /** ระยะเวลาสไลด์ลิ้นชัก — ต้องตรงกับ duration ใน className ด้านล่าง ไม่งั้นถอดออกก่อนสไลด์จบ */
-const DRAWER_MS = 460;
+const DRAWER_MS = 620;
 /** โค้งแบบ iOS: ออกตัวเร็วแล้วค่อยๆ หยุด (ease-out) ให้รู้สึกลื่นกว่า ease ปกติ */
 const DRAWER_EASE = 'cubic-bezier(.32,.72,0,1)';
 
@@ -94,7 +94,7 @@ export function MobileMenuButton({
   open?: boolean;
 }) {
   // easing ใส่เป็น inline style ไม่ใช่คลาส — Tailwind อ่านคลาสจากซอร์ส สร้างจากตัวแปรตอนรันไม่ทัน
-  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-[420ms] motion-reduce:transition-none ${
+  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-[560ms] motion-reduce:transition-none ${
     variant === 'onDark' ? 'bg-white' : 'bg-ink-strong dark:bg-white'
   }`;
   const ease = { transitionTimingFunction: DRAWER_EASE };
@@ -111,7 +111,7 @@ export function MobileMenuButton({
       <span className={bar} style={{ ...ease, transform: open ? 'rotate(45deg)' : 'translateY(-6px)' }} />
       <span
         className={`${bar} transition-opacity`}
-        style={{ ...ease, opacity: open ? 0 : 1, transitionDuration: '220ms' }}
+        style={{ ...ease, opacity: open ? 0 : 1, transitionDuration: '300ms' }}
       />
       <span className={bar} style={{ ...ease, transform: open ? 'rotate(-45deg)' : 'translateY(6px)' }} />
     </button>
@@ -324,8 +324,8 @@ export function MobileHomeChrome({
                   onClick={onClose}
                   /* ไล่เข้าทีละอัน — ตอนปิดไม่หน่วง ทุกอันจางพร้อมกันตามลิ้นชัก */
                   style={{
-                    transitionDuration: '340ms',
-                    transitionDelay: shown ? `${70 + i * 30}ms` : '0ms',
+                    transitionDuration: '440ms',
+                    transitionDelay: shown ? `${90 + i * 40}ms` : '0ms',
                   }}
                   className={`flex h-12 items-center gap-3.5 rounded-[11px] px-3.5 transition-[opacity,transform] ease-out motion-reduce:transition-none active:bg-surface-canvas ${
                     shown ? 'translate-x-0 opacity-100' : 'translate-x-3 opacity-0'
