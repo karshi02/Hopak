@@ -1,0 +1,63 @@
+หัวข้อ: Xendit payout อาจโอนเงินซ้ำจาก race condition
+วันที่: 2026-08-14
+สถานะ: พบช่องโหว่ — ยังไม่ได้แก้โค้ด
+ความรุนแรง: Medium
+
+ตำแหน่งที่เกี่ยวข้อง
+- apps/api/src/modules/admin/finance/finance.service.ts:37-75
+- apps/api/src/modules/admin/finance/finance.controller.ts:75-89
+- apps/api/src/modules/payments/gateway/disbursement.gateway.ts:48-86
+
+สาเหตุ
+เมื่อเรียก POST /admin/finance/payouts/dorm/:dormId/transfer-xendit ระบบจะอ่าน payment
+ที่มีสถานะ SETTLED ก่อน จากนั้นจึงเรียก Xendit เพื่อสั่งโอนเงินจริง และค่อยเปลี่ยน
+payment เหล่านั้นเป็น TRANSFERRED ภายหลัง
+
+ถ้ามี request สองรายการเข้ามาพร้อมกัน ทั้งสองรายการอาจอ่าน SETTLED payment ชุดเดียวกัน
+ได้ก่อนที่ request ใด request หนึ่งจะอัปเดตสถานะ ส่งผลให้ทั้งสองรายการเรียก Xendit
+เพื่อโอนยอดเดิมได้
+
+Idempotency key ของ Xendit ยังไม่ป้องกันกรณีนี้ เพราะระบบสร้าง payout reference ใหม่แบบสุ่ม
+ในทุก request ทำให้ request พร้อมกันมี idempotency key คนละค่า
+
+ผู้ที่ทำให้เกิดเหตุการณ์ได้
+- ผู้ใช้ที่ผ่านการยืนยันตัวตนและมีสิทธิ์ FINANCE หรือ SUPER_ADMIN
+- อาจเกิดโดยไม่เจตนา เช่น กดปุ่มโอนซ้ำ, หน้าเว็บ retry, หรือ request ซ้ำพร้อมกัน
+
+ผลกระทบ
+- เจ้าของหออาจได้รับเงินโอนซ้ำสำหรับ payment ชุดเดิม
+- แพลตฟอร์มสูญเสียเงินจริง และต้องติดตามเรียกคืนเงินภายหลัง
+- ข้อมูล payoutId และ payoutRef บน payment อาจถูก request หลังเขียนทับ
+  ทำให้การกระทบยอดและตรวจสอบ transfer แรกยากขึ้น
+- ถึงแม้ route จะจำกัดเฉพาะบทบาทการเงิน แต่เป็นความเสี่ยงทางการเงินเมื่อเปิดใช้
+  Xendit production key
+
+แนวทางแก้ไขที่แนะนำ
+1. สร้าง payout batch ในฐานข้อมูลก่อนเรียก Xendit
+   - เก็บ payment IDs, ยอดรวม, สถานะ PROCESSING และ reference ที่คงที่
+
+2. Claim payment แบบ atomic ใน transaction
+   - อัปเดตเฉพาะ payment ที่ยังเป็น SETTLED ไปเป็น PROCESSING
+   - ใช้เงื่อนไข status: SETTLED และตรวจจำนวนแถวที่อัปเดต
+   - หากจำนวนที่ claim ได้ไม่ตรงกับที่ต้องโอน ให้ยกเลิกคำสั่งนั้นก่อนเรียก Xendit
+
+3. ใช้ payout batch reference เดิมเป็น Xendit idempotency key
+   - ห้ามสร้าง reference ใหม่หากเป็น retry ของ batch เดิม
+   - ทำให้ retry ซ้ำได้รับผลลัพธ์ของ transfer เดิม แทนที่จะโอนเงินใหม่
+
+4. จัดการความล้มเหลวอย่างปลอดภัย
+   - หากยังไม่ได้ส่งคำขอไป Xendit และเกิดข้อผิดพลาด ให้คืนเฉพาะ payment ใน batch นั้น
+     กลับเป็น SETTLED
+   - หากส่งคำขอออกไปแล้วแต่รอผล ให้คงสถานะ PROCESSING และตรวจสอบจาก webhook/
+     gateway ก่อนตัดสินใจ retry
+
+5. เพิ่มการป้องกันฝั่งหน้าเว็บเป็นชั้นเสริม
+   - ปิดปุ่มโอนทันทีหลังเริ่มส่งคำขอ
+   - แสดงสถานะกำลังโอน
+   - แต่ห้ามพึ่ง frontend เป็นการป้องกันหลัก ต้องแก้ที่ transaction/database ด้วย
+
+กรณีทดสอบที่ควรเพิ่มหลังแก้
+- ส่งคำขอโอนพร้อมกัน 2 request สำหรับ dorm เดียวกัน แล้วต้องสร้าง Xendit payout ได้เพียง 1 รายการ
+- retry request ของ payout batch เดิม แล้วต้องใช้ idempotency key เดิม
+- จำลอง Xendit timeout หลังรับคำขอ แล้วต้องไม่สามารถส่งเงินซ้ำเมื่อ retry
+- ตรวจว่าจำนวน payment ที่ claim ได้ต้องตรงก่อนส่งคำสั่งโอน

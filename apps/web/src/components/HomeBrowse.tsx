@@ -142,6 +142,7 @@ const TEXT = {
     footerOwner: 'สำหรับเจ้าของหอ',
     listDorm: 'ลงประกาศหอพัก',
     ownerLogin: 'เข้าสู่ระบบเจ้าของหอ',
+    ownerLearnMore: 'เรียนรู้เพิ่มเติม',
     ownerLinksExtra: ['ค่าบริการ & ค่าคอมมิชชัน', 'คู่มือเจ้าของหอ'],
     footerPolicy: 'ข้อกำหนด & นโยบาย',
     policyLinks: ['ข้อกำหนดการใช้งาน', 'นโยบายความเป็นส่วนตัว', 'นโยบายคุกกี้'],
@@ -208,6 +209,7 @@ const TEXT = {
     footerOwner: 'For Dorm Owners',
     listDorm: 'List your dorm',
     ownerLogin: 'Owner login',
+    ownerLearnMore: 'Learn more',
     ownerLinksExtra: ['Fees & commission', 'Owner guide'],
     footerPolicy: 'Terms & Policies',
     policyLinks: ['Terms of use', 'Privacy policy', 'Cookie policy'],
@@ -1266,6 +1268,10 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                 </Link>
                 <Link href="/partner-login" className="hover:text-tenant">
                   {t.ownerLogin}
+                </Link>
+                {/* หน้าขายของสำหรับเจ้าของหอ — ค่าบริการ วิธีใช้งาน คำถามที่พบบ่อย */}
+                <Link href="/owners" className="hover:text-tenant">
+                  {t.ownerLearnMore}
                 </Link>
                 {t.ownerLinksExtra.map((s) => (
                   <span key={s}>{s}</span>

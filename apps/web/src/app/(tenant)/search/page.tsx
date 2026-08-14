@@ -89,6 +89,11 @@ const TEXT = {
     recommended: '★ แนะนำ',
     available: (n: number) => `ว่าง ${n} ห้อง`,
     notFound: 'ไม่พบหอพัก',
+    ownerCtaTitle: (p: string) => `เป็นเจ้าของหอพัก${p ? 'ใน' + p : ''}?`,
+    ownerCtaSub: 'ลงประกาศฟรี จ่ายค่าบริการเฉพาะเมื่อมีคนจองสำเร็จ',
+    ownerCtaPrimary: 'ลงประกาศหอพัก',
+    ownerCtaSecondary: 'เรียนรู้เพิ่มเติม',
+    mapView: 'ดูแผนที่',
     priceRanges: [
       { value: 'all', label: 'ราคาทั้งหมด' },
       { value: 'under3000', label: 'ต่ำกว่า 3,000' },
@@ -144,6 +149,11 @@ const TEXT = {
     recommended: '★ Top rated',
     available: (n: number) => `${n} available`,
     notFound: 'No dorms found',
+    ownerCtaTitle: (p: string) => `Own a dorm${p ? ' in ' + p : ''}?`,
+    ownerCtaSub: 'List for free — pay only when a booking goes through',
+    ownerCtaPrimary: 'List your dorm',
+    ownerCtaSecondary: 'Learn more',
+    mapView: 'Map view',
     priceRanges: [
       { value: 'all', label: 'Any price' },
       { value: 'under3000', label: 'Under 3,000' },
@@ -346,7 +356,7 @@ export default function SearchPage() {
     'w-full appearance-none bg-transparent text-[14px] font-semibold text-[#2A303C] outline-none';
 
   return (
-    <main className="mx-auto max-w-[1360px] px-4 py-6 sm:px-6">
+    <main className="mx-auto max-w-[1360px] px-4 py-6 pb-[92px] sm:px-6 sm:pb-6">
       {/* ===== HERO BAND ===== */}
       <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(135deg,#1E4FB0_0%,#2F6FE0_55%,#173A87_120%)] p-8 shadow-[0_16px_40px_rgba(30,79,176,0.28)]">
         <div className="pointer-events-none absolute -top-12 right-28 h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.28),transparent_66%)] blur-lg" />
@@ -727,6 +737,44 @@ export default function SearchPage() {
           </div>
         </>
       )}
+
+      {/* ปุ่มลอยไปหน้าแผนที่ — มือถือเท่านั้น (จอใหญ่ยังไม่มีแผนที่ในหน้านี้) */}
+      <Link
+        href={`/search/map?${params.toString()}`}
+        className="fixed bottom-5 left-1/2 z-40 flex h-[46px] -translate-x-1/2 items-center gap-2 rounded-pill bg-[#0E1220] px-5 text-[13.5px] font-bold text-white shadow-[0_12px_28px_rgba(8,12,24,0.4)] sm:hidden"
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+          <path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M9 4v14M15 6v14" stroke="#fff" strokeWidth="1.8" />
+        </svg>
+        {t.mapView}
+      </Link>
+
+      {/* ชวนเจ้าของหอลงประกาศ — คนที่หาหอในจังหวัดนี้ไม่เจอ อาจเป็นเจ้าของหอเองก็ได้ */}
+      <div className="mt-10 overflow-hidden rounded-[20px] bg-[linear-gradient(120deg,#0E1220,#16233F)] p-6 sm:p-9">
+        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-[19px] font-extrabold tracking-tight text-white sm:text-[22px]">
+              {t.ownerCtaTitle(province ? provinceLabel(province) : '')}
+            </div>
+            <div className="mt-1.5 text-[14px] text-[#C6D3EA]">{t.ownerCtaSub}</div>
+          </div>
+          <div className="flex w-full shrink-0 gap-2.5 sm:w-auto">
+            <Link
+              href="/partner-register"
+              className="flex h-[46px] flex-1 items-center justify-center rounded-xl bg-tenant px-5 text-[14.5px] font-bold text-white sm:flex-none"
+            >
+              {t.ownerCtaPrimary}
+            </Link>
+            <Link
+              href="/owners"
+              className="flex h-[46px] flex-1 items-center justify-center rounded-xl border border-white/30 px-5 text-[14.5px] font-semibold text-white sm:flex-none"
+            >
+              {t.ownerCtaSecondary}
+            </Link>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }
