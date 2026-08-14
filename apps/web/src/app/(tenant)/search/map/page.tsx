@@ -371,18 +371,13 @@ function MapSearchInner() {
     }
   }
 
-  /** เลือกโหมดแล้วไปเลย — วาดเส้นทางบนแผนที่เรา + เปิด Google Maps โหมดนำทางสด */
+  /**
+   * เลือกโหมด = ดูเส้นทางบนแผนที่ของเราก่อน ยังไม่เด้งออกไปไหน
+   * ออกไป Google Maps เฉพาะตอนกด "เริ่มนำทาง" บนแถบสรุป — คนส่วนใหญ่อยากเห็นเส้นทางก่อนตัดสินใจ
+   */
   function goNavigate(dorm: { id: string; lat: number; lng: number }, mode: 'car' | 'bike') {
     if (!myLocation) return;
     void showRoute(dorm, mode);
-    // อยู่ใน click handler โดยตรง ไม่โดน popup blocker
-    window.open(
-      `https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}` +
-        `&destination=${dorm.lat},${dorm.lng}` +
-        `&travelmode=${mode === 'bike' ? 'two-wheeler' : 'driving'}&dir_action=navigate`,
-      '_blank',
-      'noopener',
-    );
   }
 
   function clearRoute() {
