@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PROVINCES, addressInDistrict, findDistrict } from '@hopak/shared';
+import { amenityLabel } from '@/lib/amenities';
 import type { Campaign, Dorm, Room } from '@hopak/shared';
 
 type SponsoredCampaign = Campaign & { dorm: Dorm & { rooms: Room[] } };
@@ -609,7 +610,7 @@ export default function SearchPage() {
               <option value="all">{t.amenity}</option>
               {amenityOptions.map((a) => (
                 <option key={a} value={a}>
-                  {a}
+                  {amenityLabel(a, lang)}
                 </option>
               ))}
             </select>
@@ -763,7 +764,7 @@ export default function SearchPage() {
                                 : 'border-[#EDF0F4] bg-[#F4F6FA] text-[#5B616C]'
                             }`}
                           >
-                            {a}
+                            {amenityLabel(a, lang)}
                           </button>
                         );
                       })}
@@ -928,7 +929,7 @@ export default function SearchPage() {
                             key={a}
                             className="rounded-lg border border-[#EDF0F4] bg-[#F4F6FA] px-2.5 py-1 text-[11.5px] font-medium text-[#5B616C]"
                           >
-                            {a}
+                            {amenityLabel(a, lang)}
                           </span>
                         ))}
                       </div>

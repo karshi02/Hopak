@@ -7,6 +7,7 @@ import { addressInDistrict } from '@hopak/shared';
 import { useDormSearch } from '@/hooks/useDormSearch';
 import { useLang } from '@/hooks/useLang';
 import { loadGoogleMaps } from '@/lib/googleMaps';
+import { haversineKm } from '@/lib/geo';
 import { PageLoader } from '@/components/PageLoader';
 
 /**
@@ -29,6 +30,9 @@ const TEXT = {
     counted: (n: number) => `${n} หอพัก`,
     clearArea: 'ล้างพื้นที่',
     noCoords: 'หอนี้ยังไม่ได้ปักหมุดพิกัด',
+    away: (km: number) => (km < 1 ? `ห่างคุณ ${Math.round(km * 1000)} ม.` : `ห่างคุณ ${km.toFixed(1)} กม.`),
+    tapAgain: 'แตะอีกครั้งเพื่อดูรายละเอียดหอ',
+    needLocation: 'เปิดตำแหน่งเพื่อดูระยะทาง',
   },
   en: {
     searchHere: 'Search this area',
@@ -42,6 +46,9 @@ const TEXT = {
     counted: (n: number) => `${n} dorms`,
     clearArea: 'Clear area',
     noCoords: 'This dorm has no pin yet',
+    away: (km: number) => (km < 1 ? `${Math.round(km * 1000)} m from you` : `${km.toFixed(1)} km from you`),
+    tapAgain: 'Tap again to open the dorm',
+    needLocation: 'Turn on location to see distance',
   },
 };
 
@@ -65,6 +72,8 @@ function MapSearchInner() {
   // กรอบพื้นที่ที่ผู้ใช้กด "ค้นหาในพื้นที่นี้" — null = ไม่จำกัดพื้นที่
   const [bounds, setBounds] = useState<google.maps.LatLngBoundsLiteral | null>(null);
   const [moved, setMoved] = useState(false);
+  // ตำแหน่งผู้ใช้ — ใช้คิดระยะทางไปแต่ละหอ (ขอครั้งเดียวตอนเข้าหน้า ไม่ได้ก็แค่ไม่โชว์ระยะ)
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const roomOk = useCallback(
     (r: (typeof dorms)[number]['rooms'][number]) =>
@@ -97,6 +106,15 @@ function MapSearchInner() {
         x.dorm.lng <= bounds.east,
     );
   }, [pinned, bounds]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setMyLocation(null),
+      { enableHighAccuracy: false, timeout: 8000 },
+    );
+  }, []);
 
   // ---------- สร้างแผนที่ ----------
   useEffect(() => {
@@ -202,6 +220,7 @@ function MapSearchInner() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMyLocation(here);
         mapRef.current?.setCenter(here);
         mapRef.current?.setZoom(15);
         new google.maps.Marker({
@@ -333,14 +352,22 @@ function MapSearchInner() {
           </div>
         ) : (
           <div ref={cardsRef} className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-2 pt-3">
-            {visible.map(({ dorm, rooms, cheapest }) => (
-              <Link
+            {visible.map(({ dorm, rooms, cheapest }) => {
+              const active = dorm.id === selectedId;
+              const km = myLocation ? haversineKm(myLocation.lat, myLocation.lng, dorm.lat, dorm.lng) : null;
+              return (
+              <button
                 key={dorm.id}
+                type="button"
                 data-dorm={dorm.id}
-                href={`/dorms/${dorm.id}${dailyMode ? '?rental=daily' : ''}`}
-                onMouseEnter={() => setSelectedId(dorm.id)}
-                className={`flex w-[290px] shrink-0 snap-center gap-3 rounded-[15px] border bg-white p-2.5 shadow-[0_8px_24px_rgba(16,24,40,0.14)] ${
-                  dorm.id === selectedId ? 'border-tenant' : 'border-card-border'
+                // แตะครั้งแรก = เลือกหอ (หมุดไฮไลต์ + โชว์ระยะจากตำแหน่งเรา)
+                // แตะซ้ำที่ใบเดิม = เข้าหน้ารายละเอียดหอ — กันกดพลาดตอนเลื่อนการ์ดผ่านๆ
+                onClick={() => {
+                  if (active) router.push(`/dorms/${dorm.id}${dailyMode ? '?rental=daily' : ''}`);
+                  else setSelectedId(dorm.id);
+                }}
+                className={`flex w-[290px] shrink-0 snap-center gap-3 rounded-[15px] border bg-white p-2.5 text-left shadow-[0_8px_24px_rgba(16,24,40,0.14)] ${
+                  active ? 'border-tenant' : 'border-card-border'
                 }`}
               >
                 <div className="h-[86px] w-[92px] shrink-0 overflow-hidden rounded-[11px] bg-surface-canvas">
@@ -357,6 +384,16 @@ function MapSearchInner() {
                   <div className="mt-1 text-[11.5px] font-semibold text-[#12704A]">
                     {rooms.length > 0 ? t.available(rooms.length) : t.full}
                   </div>
+                  {/* ระยะทางโผล่เฉพาะใบที่เลือก — แตะซ้ำถึงจะเข้าหน้าหอ */}
+                  {active && (
+                    <div className="mt-1 flex items-center gap-1 text-[11.5px] font-semibold text-tenant">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                        <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#2F6FE0" strokeWidth="2" />
+                        <circle cx="12" cy="10" r="3" stroke="#2F6FE0" strokeWidth="2" />
+                      </svg>
+                      {km != null ? `${t.away(km)} · ${t.tapAgain}` : t.needLocation}
+                    </div>
+                  )}
                   <div className="mt-1.5">
                     {cheapest != null ? (
                       <>
@@ -370,8 +407,9 @@ function MapSearchInner() {
                     )}
                   </div>
                 </div>
-              </Link>
-            ))}
+              </button>
+              );
+            })}
           </div>
         )}
       </div>
