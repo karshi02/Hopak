@@ -39,6 +39,11 @@ const TEXT = {
     routeFailed: 'หาเส้นทางไม่สำเร็จ',
     openInMaps: 'เปิดใน Google Maps',
     byCar: 'ขับรถ',
+    byBike: 'มอเตอร์ไซค์',
+    chooseMode: 'ไปด้วยอะไร?',
+    startNav: 'เริ่มนำทาง',
+    steps: 'เส้นทางทีละขั้น',
+    bikeFallback: 'พื้นที่นี้ยังไม่รองรับเส้นทางมอเตอร์ไซค์ — ใช้เส้นทางรถยนต์แทน',
   },
   en: {
     searchHere: 'Search this area',
@@ -61,6 +66,11 @@ const TEXT = {
     routeFailed: 'Could not find a route',
     openInMaps: 'Open in Google Maps',
     byCar: 'Driving',
+    byBike: 'Motorcycle',
+    chooseMode: 'How are you going?',
+    startNav: 'Start navigation',
+    steps: 'Step by step',
+    bikeFallback: 'Motorcycle routing is not available here — showing the driving route',
   },
 };
 
@@ -88,6 +98,12 @@ function MapSearchInner() {
   const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeError, setRouteError] = useState(false);
+  // โหมดเดินทางที่เลือก + ขั้นตอนการเลี้ยว (สรุปจาก legs[0].steps)
+  const [travelMode, setTravelMode] = useState<'car' | 'bike'>('car');
+  const [modePickerFor, setModePickerFor] = useState<string | null>(null);
+  const [routeSteps, setRouteSteps] = useState<{ text: string; distance: string }[]>([]);
+  const [bikeFellBack, setBikeFellBack] = useState(false);
+  const [showSteps, setShowSteps] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // กรอบพื้นที่ที่ผู้ใช้กด "ค้นหาในพื้นที่นี้" — null = ไม่จำกัดพื้นที่
@@ -293,17 +309,33 @@ function MapSearchInner() {
   }
 
   /** ขอเส้นทางตามถนนจาก Google แล้ววาดลงแผนที่ของเราเอง */
-  async function showRoute(dorm: { id: string; lat: number; lng: number }) {
+  async function showRoute(dorm: { id: string; lat: number; lng: number }, mode: 'car' | 'bike') {
     if (!mapRef.current || !myLocation || typeof google === 'undefined') return;
     setRouteBusy(true);
     setRouteError(false);
+    setBikeFellBack(false);
+    setTravelMode(mode);
+    setModePickerFor(null);
     try {
       const service = new google.maps.DirectionsService();
-      const result = await service.route({
+      const request = (m: google.maps.TravelMode) => ({
         origin: myLocation,
         destination: { lat: dorm.lat, lng: dorm.lng },
-        travelMode: google.maps.TravelMode.DRIVING,
+        travelMode: m,
       });
+
+      // โหมดมอเตอร์ไซค์ Google รองรับเฉพาะบางประเทศ ขอไม่ผ่านให้ตกไปใช้เส้นทางรถยนต์
+      let result: google.maps.DirectionsResult;
+      if (mode === 'bike') {
+        try {
+          result = await service.route(request(google.maps.TravelMode.TWO_WHEELER));
+        } catch {
+          setBikeFellBack(true);
+          result = await service.route(request(google.maps.TravelMode.DRIVING));
+        }
+      } else {
+        result = await service.route(request(google.maps.TravelMode.DRIVING));
+      }
 
       // เส้นตรงเดิมออกไป ใช้เส้นทางจริงแทน
       routeRef.current?.setMap(null);
@@ -325,6 +357,14 @@ function MapSearchInner() {
       setRouteInfo(
         leg ? { distance: leg.distance?.text ?? '', duration: leg.duration?.text ?? '' } : null,
       );
+      setRouteSteps(
+        (leg?.steps ?? []).map((st) => ({
+          // instructions เป็น HTML จาก Google — ถอดแท็กออกก่อนเอาไปแสดงเป็นข้อความ
+          text: (st.instructions ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+          distance: st.distance?.text ?? '',
+        })),
+      );
+      setShowSteps(false);
       setRouteDormId(dorm.id);
       setMoved(false);
     } catch {
@@ -340,6 +380,10 @@ function MapSearchInner() {
     setRouteDormId(null);
     setRouteInfo(null);
     setRouteError(false);
+    setRouteSteps([]);
+    setShowSteps(false);
+    setBikeFellBack(false);
+    setModePickerFor(null);
   }
 
   function locateMe() {
@@ -432,14 +476,75 @@ function MapSearchInner() {
                 <path d="M5 17h2l1-3h8l1 3h2M6 14l1.5-5h9L18 14M7.5 17.5h.01M16.5 17.5h.01" stroke="#2F6FE0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="font-sans text-[15px] font-extrabold leading-tight text-ink-strong">
                 {routeInfo.duration}
               </div>
               <div className="text-[11.5px] text-ink-faint">
-                {routeInfo.distance} · {t.byCar}
+                {routeInfo.distance} · {travelMode === 'bike' ? t.byBike : t.byCar}
               </div>
             </div>
+
+            {routeSteps.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSteps((v) => !v)}
+                aria-label={t.steps}
+                className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-surface-canvas"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 6h16M4 12h16M4 18h10" stroke="#5B616C" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+
+            {/* นำทางสดแบบเลี้ยวทีละช่วง + เสียงพูด เป็นของแอป Google Maps — เว็บทำเองไม่ได้ ส่งต่อไปให้แทน */}
+            {myLocation && routeDormId && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}&destination=${
+                  pinned.find((x) => x.dorm.id === routeDormId)?.dorm.lat ?? ''
+                },${pinned.find((x) => x.dorm.id === routeDormId)?.dorm.lng ?? ''}&travelmode=${
+                  travelMode === 'bike' ? 'two-wheeler' : 'driving'
+                }&dir_action=navigate`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex h-8 items-center rounded-[9px] bg-tenant px-3 text-[12px] font-bold text-white"
+              >
+                {t.startNav}
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* เส้นทางมอเตอร์ไซค์ขอไม่ผ่าน ตกมาใช้ของรถยนต์ — บอกให้รู้ ไม่ให้เข้าใจผิดว่าเป็นเส้นมอไซค์ */}
+        {bikeFellBack && (
+          <div className="absolute inset-x-3 top-16 z-10 rounded-[11px] bg-[#FFF3E0] px-3 py-2 text-center text-[11.5px] font-semibold text-[#C77B14]">
+            {t.bikeFallback}
+          </div>
+        )}
+
+        {/* รายการเลี้ยวทีละขั้น */}
+        {showSteps && routeSteps.length > 0 && (
+          <div className="absolute inset-x-3 bottom-3 z-20 max-h-[46%] overflow-y-auto rounded-[15px] bg-white p-3 shadow-[0_12px_30px_rgba(16,24,40,0.25)]">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[13px] font-extrabold text-ink-strong">{t.steps}</span>
+              <button type="button" onClick={() => setShowSteps(false)} aria-label={t.clearRoute} className="text-ink-faint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 6l12 12M18 6L6 18" stroke="#9AA0AB" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <ol className="flex flex-col gap-2">
+              {routeSteps.map((st, i) => (
+                <li key={i} className="flex gap-2.5 text-[12.5px] leading-snug text-ink-body">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#EAF1FF] font-sans text-[11px] font-bold text-[#1E4FB0]">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">{st.text}</span>
+                  <span className="shrink-0 font-sans text-[11.5px] text-ink-faint">{st.distance}</span>
+                </li>
+              ))}
+            </ol>
           </div>
         )}
 
@@ -545,13 +650,48 @@ function MapSearchInner() {
                         >
                           {t.clearRoute}
                         </button>
+                      ) : modePickerFor === dorm.id ? (
+                        /* เลือกก่อนว่าจะไปด้วยอะไร — เส้นทางมอเตอร์ไซค์กับรถยนต์คนละเส้น */
+                        <>
+                          <span className="text-[11.5px] font-semibold text-ink-faint">{t.chooseMode}</span>
+                          <button
+                            type="button"
+                            disabled={routeBusy}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void showRoute(dorm, 'car');
+                            }}
+                            className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0] disabled:opacity-60"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                              <path d="M5 17h2l1-3h8l1 3h2M6 14l1.5-5h9L18 14M7.5 17.5h.01M16.5 17.5h.01" stroke="#1E4FB0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            {t.byCar}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={routeBusy}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void showRoute(dorm, 'bike');
+                            }}
+                            className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#E7F7EF] px-3 text-[11.5px] font-bold text-[#12704A] disabled:opacity-60"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                              <circle cx="5.5" cy="17" r="2.5" stroke="#12704A" strokeWidth="1.8" />
+                              <circle cx="18.5" cy="17" r="2.5" stroke="#12704A" strokeWidth="1.8" />
+                              <path d="M8 17h7l-2-6h3l-1-3M6 11h4" stroke="#12704A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            {t.byBike}
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"
                           disabled={routeBusy}
                           onClick={(e) => {
                             e.stopPropagation();
-                            void showRoute(dorm);
+                            setModePickerFor(dorm.id);
                           }}
                           className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0] disabled:opacity-60"
                         >
