@@ -322,10 +322,10 @@ export function MobileHomeChrome({
                   key={item.label}
                   href={item.href}
                   onClick={onClose}
-                  /* ไล่เข้าทีละอัน — ตอนปิดไม่หน่วง ทุกอันจางพร้อมกันตามลิ้นชัก */
+                  /* ไล่ทีละอันเท่ากันทั้งขาเข้าและขาออก — ขาออกไล่ย้อนจากอันล่างขึ้นบน */
                   style={{
                     transitionDuration: '440ms',
-                    transitionDelay: shown ? `${90 + i * 40}ms` : '0ms',
+                    transitionDelay: `${90 + (shown ? i : menuItems.length - 1 - i) * 40}ms`,
                   }}
                   className={`flex h-12 items-center gap-3.5 rounded-[11px] px-3.5 transition-[opacity,transform] ease-out motion-reduce:transition-none active:bg-surface-canvas ${
                     shown ? 'translate-x-0 opacity-100' : 'translate-x-3 opacity-0'
