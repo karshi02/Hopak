@@ -245,7 +245,8 @@ export function Navbar() {
 
           <MobileMenuButton
             variant="onLight"
-            onClick={() => setMenuOpen(true)}
+            open={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
             label={lang === 'th' ? 'เมนู' : 'Menu'}
           />
         </nav>

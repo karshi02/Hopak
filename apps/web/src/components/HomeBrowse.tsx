@@ -716,7 +716,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                 </>
               ))}
 
-            <MobileMenuButton onClick={() => setMenuOpen(true)} label={lang === 'th' ? 'เมนู' : 'Menu'} />
+            <MobileMenuButton open={menuOpen} onClick={() => setMenuOpen((v) => !v)} label={lang === 'th' ? 'เมนู' : 'Menu'} />
           </div>
         </div>
       </div>

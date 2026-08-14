@@ -15,6 +15,11 @@ import type { Lang } from '@/hooks/useLang';
 
 type MenuUser = { name: string; avatarUrl?: string | null } | null;
 
+/** ระยะเวลาสไลด์ลิ้นชัก — ต้องตรงกับ duration ใน className ด้านล่าง ไม่งั้นถอดออกก่อนสไลด์จบ */
+const DRAWER_MS = 320;
+/** โค้งแบบ iOS: ออกตัวเร็วแล้วค่อยๆ หยุด (ease-out) ให้รู้สึกลื่นกว่า ease ปกติ */
+const DRAWER_EASE = 'cubic-bezier(.32,.72,0,1)';
+
 const TEXT = {
   th: {
     login: 'เข้าสู่ระบบ',
@@ -80,27 +85,35 @@ export function MobileMenuButton({
   onClick,
   label,
   variant = 'onDark',
+  open = false,
 }: {
   onClick: () => void;
   label: string;
   variant?: 'onDark' | 'onLight';
+  /** เปิดอยู่ = ขีดสามเส้นบิดเป็นกากบาท ให้เห็นว่าปุ่มเดียวกันใช้ปิดได้ */
+  open?: boolean;
 }) {
-  const bar =
-    variant === 'onDark'
-      ? 'h-[2px] w-[17px] rounded-sm bg-white'
-      : 'h-[2px] w-[17px] rounded-sm bg-ink-strong dark:bg-white';
+  // easing ใส่เป็น inline style ไม่ใช่คลาส — Tailwind อ่านคลาสจากซอร์ส สร้างจากตัวแปรตอนรันไม่ทัน
+  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-300 motion-reduce:transition-none ${
+    variant === 'onDark' ? 'bg-white' : 'bg-ink-strong dark:bg-white'
+  }`;
+  const ease = { transitionTimingFunction: DRAWER_EASE };
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`flex h-9 w-9 shrink-0 flex-col items-center justify-center gap-[4px] rounded-[10px] sm:hidden ${
+      aria-expanded={open}
+      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] transition-transform active:scale-95 sm:hidden ${
         variant === 'onDark' ? 'bg-white/15' : 'bg-black/[0.05] dark:bg-white/10'
       }`}
     >
-      <span className={bar} />
-      <span className={bar} />
-      <span className={bar} />
+      <span className={bar} style={{ ...ease, transform: open ? 'rotate(45deg)' : 'translateY(-6px)' }} />
+      <span
+        className={`${bar} transition-opacity`}
+        style={{ ...ease, opacity: open ? 0 : 1, transitionDuration: '160ms' }}
+      />
+      <span className={bar} style={{ ...ease, transform: open ? 'rotate(-45deg)' : 'translateY(6px)' }} />
     </button>
   );
 }
@@ -140,6 +153,21 @@ export function MobileHomeChrome({
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // ลิ้นชักต้องอยู่ใน DOM ต่ออีกแป๊บตอนปิด ไม่งั้นถอดทิ้งทันทีจนไม่เห็นจังหวะสไลด์ออก
+  // render = ยังวาดอยู่ไหม, shown = อยู่ในตำแหน่งเปิดแล้วหรือยัง (ติ๊กถัดไปค่อยเปลี่ยนคลาสเพื่อให้ transition ทำงาน)
+  const [render, setRender] = useState(open);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setRender(true);
+      const id = requestAnimationFrame(() => setShown(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setShown(false);
+    const id = setTimeout(() => setRender(false), DRAWER_MS);
+    return () => clearTimeout(id);
+  }, [open]);
 
   // เปิดลิ้นชักแล้วล็อกไม่ให้หน้าหลังเลื่อนตาม
   useEffect(() => {
@@ -194,10 +222,21 @@ export function MobileHomeChrome({
       )}
 
       {/* ===== ลิ้นชักเมนู (เลื่อนออกจากขวา) ===== */}
-      {open && (
+      {render && (
         <>
-          <div onClick={onClose} className="fixed inset-0 z-[80] bg-[rgba(11,13,18,0.5)] sm:hidden" />
-          <div className="fixed bottom-0 right-0 top-0 z-[81] flex w-[286px] max-w-[86vw] flex-col bg-white shadow-[-8px_0_40px_rgba(8,12,24,0.35)] sm:hidden">
+          <div
+            onClick={onClose}
+            style={{ transitionDuration: `${DRAWER_MS}ms` }}
+            className={`fixed inset-0 z-[80] bg-[rgba(11,13,18,0.5)] transition-opacity ease-out motion-reduce:transition-none sm:hidden ${
+              shown ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+          <div
+            style={{ transitionDuration: `${DRAWER_MS}ms`, transitionTimingFunction: DRAWER_EASE }}
+            className={`fixed bottom-0 right-0 top-0 z-[81] flex w-[286px] max-w-[86vw] flex-col bg-white shadow-[-8px_0_40px_rgba(8,12,24,0.35)] transition-transform will-change-transform motion-reduce:transition-none sm:hidden ${
+              shown ? 'translate-x-0' : 'translate-x-full'
+            }`}
+          >
             <div className="bg-[linear-gradient(150deg,#1E4FB0,#122C63)] px-5 pb-5 pt-[max(env(safe-area-inset-top),18px)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -278,12 +317,19 @@ export function MobileHomeChrome({
             </div>
 
             <div className="flex-1 overflow-y-auto p-2">
-              {menuItems.map((item) => (
+              {menuItems.map((item, i) => (
                 <Link
                   key={item.label}
                   href={item.href}
                   onClick={onClose}
-                  className="flex h-12 items-center gap-3.5 rounded-[11px] px-3.5 active:bg-surface-canvas"
+                  /* ไล่เข้าทีละอัน — ตอนปิดไม่หน่วง ทุกอันจางพร้อมกันตามลิ้นชัก */
+                  style={{
+                    transitionDuration: '260ms',
+                    transitionDelay: shown ? `${60 + i * 26}ms` : '0ms',
+                  }}
+                  className={`flex h-12 items-center gap-3.5 rounded-[11px] px-3.5 transition-[opacity,transform] ease-out motion-reduce:transition-none active:bg-surface-canvas ${
+                    shown ? 'translate-x-0 opacity-100' : 'translate-x-3 opacity-0'
+                  }`}
                 >
                   <span
                     className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px]"
