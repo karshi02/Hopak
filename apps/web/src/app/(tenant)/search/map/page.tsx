@@ -100,7 +100,6 @@ function MapSearchInner() {
   const [routeError, setRouteError] = useState(false);
   // โหมดเดินทางที่เลือก + ขั้นตอนการเลี้ยว (สรุปจาก legs[0].steps)
   const [travelMode, setTravelMode] = useState<'car' | 'bike'>('car');
-  const [modePickerFor, setModePickerFor] = useState<string | null>(null);
   const [routeSteps, setRouteSteps] = useState<{ text: string; distance: string }[]>([]);
   const [bikeFellBack, setBikeFellBack] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
@@ -315,7 +314,6 @@ function MapSearchInner() {
     setRouteError(false);
     setBikeFellBack(false);
     setTravelMode(mode);
-    setModePickerFor(null);
     try {
       const service = new google.maps.DirectionsService();
       const request = (m: google.maps.TravelMode) => ({
@@ -383,7 +381,6 @@ function MapSearchInner() {
     setRouteSteps([]);
     setShowSteps(false);
     setBikeFellBack(false);
-    setModePickerFor(null);
   }
 
   function locateMe() {
@@ -650,8 +647,8 @@ function MapSearchInner() {
                         >
                           {t.clearRoute}
                         </button>
-                      ) : modePickerFor === dorm.id ? (
-                        /* เลือกก่อนว่าจะไปด้วยอะไร — เส้นทางมอเตอร์ไซค์กับรถยนต์คนละเส้น */
+                      ) : (
+                        /* เลือกหอแล้วโชว์โหมดเดินทางเลย — เส้นทางมอเตอร์ไซค์กับรถยนต์คนละเส้น กดทีเดียวได้เส้นทาง */
                         <>
                           <span className="text-[11.5px] font-semibold text-ink-faint">{t.chooseMode}</span>
                           <button
@@ -685,21 +682,6 @@ function MapSearchInner() {
                             {t.byBike}
                           </button>
                         </>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={routeBusy}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModePickerFor(dorm.id);
-                          }}
-                          className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0] disabled:opacity-60"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2l9 20-9-5-9 5 9-20z" stroke="#1E4FB0" strokeWidth="1.9" strokeLinejoin="round" />
-                          </svg>
-                          {routeBusy ? t.routing : t.navigate}
-                        </button>
                       )}
 
                       {/* เรียก Directions ไม่ผ่าน (คีย์ยังไม่ได้เปิด API) — ยังไปต่อได้ด้วยแอป Google Maps */}
