@@ -41,6 +41,13 @@ const TEXT = {
     byCar: 'ขับรถ',
     byBike: 'มอเตอร์ไซค์',
     startNav: 'เริ่มนำทาง',
+    layers: 'ชั้นแผนที่',
+    typeRoad: 'แผนที่',
+    typeSatellite: 'ดาวเทียม',
+    typeTerrain: 'ภูมิประเทศ',
+    layerTraffic: 'การจราจร',
+    layerTransit: 'ขนส่งสาธารณะ',
+    layerBike: 'เส้นทางจักรยาน',
     steps: 'เส้นทางทีละขั้น',
     bikeFallback: 'พื้นที่นี้ยังไม่รองรับเส้นทางมอเตอร์ไซค์ — ใช้เส้นทางรถยนต์แทน',
   },
@@ -67,6 +74,13 @@ const TEXT = {
     byCar: 'Driving',
     byBike: 'Motorcycle',
     startNav: 'Start navigation',
+    layers: 'Map layers',
+    typeRoad: 'Map',
+    typeSatellite: 'Satellite',
+    typeTerrain: 'Terrain',
+    layerTraffic: 'Traffic',
+    layerTransit: 'Transit',
+    layerBike: 'Cycling',
     steps: 'Step by step',
     bikeFallback: 'Motorcycle routing is not available here — showing the driving route',
   },
@@ -100,6 +114,13 @@ function MapSearchInner() {
   const [routeSteps, setRouteSteps] = useState<{ text: string; distance: string }[]>([]);
   const [bikeFellBack, setBikeFellBack] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  // ชั้นแผนที่ — ชนิดพื้นหลัง + เลเยอร์ทับ (จราจร/ขนส่ง/จักรยาน) แบบเดียวกับ Google Maps
+  const [showLayers, setShowLayers] = useState(false);
+  const [mapType, setMapType] = useState<'roadmap' | 'hybrid' | 'terrain'>('roadmap');
+  const [overlays, setOverlays] = useState({ traffic: false, transit: false, bicycling: false });
+  const trafficRef = useRef<google.maps.TrafficLayer | null>(null);
+  const transitRef = useRef<google.maps.TransitLayer | null>(null);
+  const bikeRef = useRef<google.maps.BicyclingLayer | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // กรอบพื้นที่ที่ผู้ใช้กด "ค้นหาในพื้นที่นี้" — null = ไม่จำกัดพื้นที่
@@ -199,6 +220,26 @@ function MapSearchInner() {
 
   // เดิมมีเส้นประลากตรงจากตำแหน่งเราไปหอที่เลือก — เอาออกแล้ว
   // มันไม่ใช่เส้นทางจริง (ลากทะลุแม่น้ำ/ตึก) อ่านแล้วสับสน เหลือเส้นทางตามถนนตอนกดเลือกโหมดอย่างเดียว
+
+  // ชนิดแผนที่ + เลเยอร์ทับ — สร้างเลเยอร์ครั้งเดียวแล้วเปิด/ปิดด้วย setMap
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || typeof google === 'undefined') return;
+    map.setMapTypeId(mapType);
+  }, [mapType]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || typeof google === 'undefined') return;
+
+    if (overlays.traffic && !trafficRef.current) trafficRef.current = new google.maps.TrafficLayer();
+    if (overlays.transit && !transitRef.current) transitRef.current = new google.maps.TransitLayer();
+    if (overlays.bicycling && !bikeRef.current) bikeRef.current = new google.maps.BicyclingLayer();
+
+    trafficRef.current?.setMap(overlays.traffic ? map : null);
+    transitRef.current?.setMap(overlays.transit ? map : null);
+    bikeRef.current?.setMap(overlays.bicycling ? map : null);
+  }, [overlays]);
 
   // ---------- หมุดราคา ----------
   useEffect(() => {
@@ -539,8 +580,75 @@ function MapSearchInner() {
           </div>
         )}
 
+        {/* แผงเลือกชั้นแผนที่ */}
+        {showLayers && (
+          <>
+            <div onClick={() => setShowLayers(false)} className="absolute inset-0 z-20" />
+            <div className="absolute bottom-3 right-3 z-30 w-[210px] rounded-[15px] bg-white p-3 shadow-[0_12px_30px_rgba(16,24,40,0.25)]">
+              <div className="mb-2 text-[12.5px] font-extrabold text-ink-strong">{t.layers}</div>
+              <div className="mb-2.5 flex gap-1.5">
+                {(
+                  [
+                    ['roadmap', t.typeRoad],
+                    ['hybrid', t.typeSatellite],
+                    ['terrain', t.typeTerrain],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMapType(id)}
+                    className={`flex-1 rounded-[9px] px-1.5 py-2 text-[11px] font-bold ${
+                      mapType === id ? 'bg-tenant text-white' : 'bg-surface-canvas text-ink-body'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="h-px bg-card-border" />
+              {(
+                [
+                  ['traffic', t.layerTraffic],
+                  ['transit', t.layerTransit],
+                  ['bicycling', t.layerBike],
+                ] as const
+              ).map(([id, label]) => (
+                <label key={id} className="flex cursor-pointer items-center gap-2.5 py-2">
+                  <input
+                    type="checkbox"
+                    checked={overlays[id]}
+                    onChange={(e) => setOverlays((prev) => ({ ...prev, [id]: e.target.checked }))}
+                    className="h-4 w-4 accent-[#2F6FE0]"
+                  />
+                  <span className="text-[12.5px] text-ink-body">{label}</span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* ปุ่มควบคุมขวา */}
         <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setShowLayers((v) => !v)}
+            aria-label={t.layers}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-[0_6px_16px_rgba(16,24,40,0.18)] ${
+              showLayers || mapType !== 'roadmap' || Object.values(overlays).some(Boolean)
+                ? 'bg-tenant text-white'
+                : 'bg-white'
+            }`}
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17l9 5 9-5"
+                stroke={showLayers || mapType !== 'roadmap' || Object.values(overlays).some(Boolean) ? '#fff' : '#2F6FE0'}
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={locateMe}
