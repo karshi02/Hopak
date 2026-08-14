@@ -40,7 +40,8 @@ const TEXT = {
     openInMaps: 'เปิดใน Google Maps',
     byCar: 'ขับรถ',
     byBike: 'มอเตอร์ไซค์',
-    chooseMode: 'ไปด้วยอะไร?',
+    chooseMode: 'ไปยังหอนี้ด้วยอะไร?',
+    cancel: 'ยกเลิก',
     startNav: 'เริ่มนำทาง',
     steps: 'เส้นทางทีละขั้น',
     bikeFallback: 'พื้นที่นี้ยังไม่รองรับเส้นทางมอเตอร์ไซค์ — ใช้เส้นทางรถยนต์แทน',
@@ -67,7 +68,8 @@ const TEXT = {
     openInMaps: 'Open in Google Maps',
     byCar: 'Driving',
     byBike: 'Motorcycle',
-    chooseMode: 'How are you going?',
+    chooseMode: 'How are you getting there?',
+    cancel: 'Cancel',
     startNav: 'Start navigation',
     steps: 'Step by step',
     bikeFallback: 'Motorcycle routing is not available here — showing the driving route',
@@ -103,6 +105,8 @@ function MapSearchInner() {
   const [routeSteps, setRouteSteps] = useState<{ text: string; distance: string }[]>([]);
   const [bikeFellBack, setBikeFellBack] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  // ชีตเลือกโหมดเดินทาง — เด้งขึ้นเหนือการ์ดเมื่อแตะหอ (ปุ่มเล็กในการ์ดกดยากบนมือถือ)
+  const [navSheetFor, setNavSheetFor] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // กรอบพื้นที่ที่ผู้ใช้กด "ค้นหาในพื้นที่นี้" — null = ไม่จำกัดพื้นที่
@@ -269,7 +273,10 @@ function MapSearchInner() {
         continue;
       }
       const marker = new google.maps.Marker({ position: { lat: x.dorm.lat, lng: x.dorm.lng }, map, icon, zIndex: 1 });
-      marker.addListener('click', () => setSelectedId(x.dorm.id));
+      marker.addListener('click', () => {
+        setSelectedId(x.dorm.id);
+        setNavSheetFor(x.dorm.id);
+      });
       markersRef.current.set(x.dorm.id, marker);
     }
   }, [pinned, selectedId, t.full]);
@@ -580,6 +587,75 @@ function MapSearchInner() {
         </div>
       </div>
 
+      {/* ===== ชีตเลือกโหมดเดินทาง — เด้งเหนือการ์ด ===== */}
+      {navSheetFor && myLocation && (
+        <>
+          <div onClick={() => setNavSheetFor(null)} className="absolute inset-0 z-30 bg-[rgba(11,13,18,0.35)]" />
+          {(() => {
+            const target = pinned.find((x) => x.dorm.id === navSheetFor);
+            if (!target) return null;
+            const km = haversineKm(myLocation.lat, myLocation.lng, target.dorm.lat, target.dorm.lng);
+            const go = (mode: 'car' | 'bike') => {
+              // วาดเส้นทางบนแผนที่เรา แล้วส่งต่อให้ Google Maps นำทางสดทันที (เว็บทำนำทางสดเองไม่ได้)
+              void showRoute(target.dorm, mode);
+              setNavSheetFor(null);
+              window.open(
+                `https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}` +
+                  `&destination=${target.dorm.lat},${target.dorm.lng}` +
+                  `&travelmode=${mode === 'bike' ? 'two-wheeler' : 'driving'}&dir_action=navigate`,
+                '_blank',
+                'noopener',
+              );
+            };
+            return (
+              <div className="absolute inset-x-3 bottom-3 z-40 rounded-[18px] bg-white p-4 shadow-[0_-8px_40px_rgba(8,12,24,0.35)]">
+                <div className="mb-1 truncate text-[15px] font-extrabold text-ink-strong">{target.dorm.name}</div>
+                <div className="mb-3.5 text-[12.5px] text-ink-faint">
+                  {t.away(km)} · {t.chooseMode}
+                </div>
+                <div className="flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => go('car')}
+                    className="flex flex-1 flex-col items-center gap-1.5 rounded-[14px] border border-[#D5E4FF] bg-[#EAF1FF] py-3.5"
+                  >
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M5 17h2l1-3h8l1 3h2M6 14l1.5-5h9L18 14M7.5 17.5h.01M16.5 17.5h.01"
+                        stroke="#1E4FB0"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="text-[13.5px] font-bold text-[#1E4FB0]">{t.byCar}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => go('bike')}
+                    className="flex flex-1 flex-col items-center gap-1.5 rounded-[14px] border border-[#C6EDD8] bg-[#E7F7EF] py-3.5"
+                  >
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                      <circle cx="5.5" cy="17" r="2.5" stroke="#12704A" strokeWidth="1.8" />
+                      <circle cx="18.5" cy="17" r="2.5" stroke="#12704A" strokeWidth="1.8" />
+                      <path d="M8 17h7l-2-6h3l-1-3M6 11h4" stroke="#12704A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="text-[13.5px] font-bold text-[#12704A]">{t.byBike}</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNavSheetFor(null)}
+                  className="mt-2.5 h-9 w-full rounded-[12px] text-[13px] font-semibold text-ink-faint"
+                >
+                  {t.cancel}
+                </button>
+              </div>
+            );
+          })()}
+        </>
+      )}
+
       {/* ===== การ์ดล่าง เลื่อนแนวนอน ===== */}
       <div className="z-20 bg-transparent pb-[max(env(safe-area-inset-bottom),12px)]">
         {loading && pinned.length === 0 ? null : visible.length === 0 ? (
@@ -603,6 +679,7 @@ function MapSearchInner() {
                   else {
                     if (routeDormId && routeDormId !== dorm.id) clearRoute();
                     setSelectedId(dorm.id);
+                    if (myLocation) setNavSheetFor(dorm.id);
                   }
                 }}
                 className={`flex w-[290px] shrink-0 snap-center gap-3 rounded-[15px] border bg-white p-2.5 text-left shadow-[0_8px_24px_rgba(16,24,40,0.14)] ${
@@ -633,7 +710,7 @@ function MapSearchInner() {
                       {km != null ? `${t.away(km)} · ${t.tapAgain}` : t.needLocation}
                     </div>
                   )}
-                  {/* เส้นทางตามถนนจริง — ยิง Directions ตอนกดเท่านั้น */}
+                  {/* เส้นทางตามถนนจริง — เลือกโหมดในชีตที่เด้งขึ้นมา */}
                   {active && myLocation && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       {routeDormId === dorm.id ? (
@@ -648,40 +725,20 @@ function MapSearchInner() {
                           {t.clearRoute}
                         </button>
                       ) : (
-                        /* เลือกหอแล้วโชว์โหมดเดินทางเลย — เส้นทางมอเตอร์ไซค์กับรถยนต์คนละเส้น กดทีเดียวได้เส้นทาง */
-                        <>
-                          <span className="text-[11.5px] font-semibold text-ink-faint">{t.chooseMode}</span>
-                          <button
-                            type="button"
-                            disabled={routeBusy}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void showRoute(dorm, 'car');
-                            }}
-                            className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0] disabled:opacity-60"
-                          >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                              <path d="M5 17h2l1-3h8l1 3h2M6 14l1.5-5h9L18 14M7.5 17.5h.01M16.5 17.5h.01" stroke="#1E4FB0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            {t.byCar}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={routeBusy}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void showRoute(dorm, 'bike');
-                            }}
-                            className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#E7F7EF] px-3 text-[11.5px] font-bold text-[#12704A] disabled:opacity-60"
-                          >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                              <circle cx="5.5" cy="17" r="2.5" stroke="#12704A" strokeWidth="1.8" />
-                              <circle cx="18.5" cy="17" r="2.5" stroke="#12704A" strokeWidth="1.8" />
-                              <path d="M8 17h7l-2-6h3l-1-3M6 11h4" stroke="#12704A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            {t.byBike}
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          disabled={routeBusy}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNavSheetFor(dorm.id);
+                          }}
+                          className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0] disabled:opacity-60"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 2l9 20-9-5-9 5 9-20z" stroke="#1E4FB0" strokeWidth="1.9" strokeLinejoin="round" />
+                          </svg>
+                          {routeBusy ? t.routing : t.navigate}
+                        </button>
                       )}
 
                       {/* เรียก Directions ไม่ผ่าน (คีย์ยังไม่ได้เปิด API) — ยังไปต่อได้ด้วยแอป Google Maps */}
@@ -698,18 +755,6 @@ function MapSearchInner() {
                       )}
                     </div>
                   )}
-                  <div className="mt-1.5">
-                    {cheapest != null ? (
-                      <>
-                        <span className="font-sans text-[17px] font-extrabold text-tenant">
-                          ฿{cheapest.toLocaleString()}
-                        </span>
-                        <span className="text-[11px] text-ink-faint">{dailyMode ? t.perNight : t.perMonth}</span>
-                      </>
-                    ) : (
-                      <span className="text-[12px] text-ink-faint">{t.full}</span>
-                    )}
-                  </div>
                 </div>
               </button>
               );
