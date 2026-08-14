@@ -398,16 +398,17 @@ export default function SearchPage() {
   return (
     <main className="mx-auto max-w-[1360px] px-4 py-6 pb-[92px] sm:px-6 sm:pb-6">
       {/* ===== HERO BAND ===== */}
-      <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(120deg,#12224E_0%,#1E4FB0_55%,#2F6FE0_120%)] p-6 shadow-[0_20px_46px_rgba(18,34,78,0.35)] sm:p-9">
+      {/* บนมือถือย่อให้เตี้ยลง — ตัด breadcrumb/ป้ายจังหวัด/ป้ายจุดขายออก เหลือหัวข้อ + ตัวเลข */}
+      <div className="relative overflow-hidden rounded-[18px] bg-[linear-gradient(120deg,#12224E_0%,#1E4FB0_55%,#2F6FE0_120%)] p-4 shadow-[0_20px_46px_rgba(18,34,78,0.35)] sm:rounded-[24px] sm:p-9">
         {/* ลายจุดแผนที่ + วงแสงลอย */}
         <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(255,255,255,0.14)_1.4px,transparent_1.5px)] [background-size:22px_22px]" />
         <div className="pointer-events-none absolute -top-20 right-20 h-[320px] w-[320px] animate-[floaty_7s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgba(91,157,255,0.5),transparent_66%)] blur-[20px]" />
         <div className="pointer-events-none absolute -bottom-24 left-52 h-[240px] w-[240px] animate-[floaty_9s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgba(31,181,110,0.28),transparent_66%)] blur-[22px]" />
 
-        <div className="relative flex flex-col items-start justify-between gap-7 lg:flex-row lg:items-center">
+        <div className="relative flex flex-col items-start justify-between gap-3.5 sm:gap-7 lg:flex-row lg:items-center">
           <div className="min-w-0 flex-1">
             {/* breadcrumb */}
-            <div className="flex items-center gap-2 text-[13px] font-semibold text-[#AFC6F2]">
+            <div className="hidden items-center gap-2 text-[13px] font-semibold text-[#AFC6F2] sm:flex">
               <Link href="/" className="text-[#AFC6F2] hover:text-white">
                 {t.crumbHome}
               </Link>
@@ -425,9 +426,9 @@ export default function SearchPage() {
               )}
             </div>
 
-            <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+            <div className={`flex flex-wrap items-center gap-2.5 sm:mt-3.5 ${district ? 'mt-0.5' : ''}`}>
               {province && (
-                <div className="inline-flex items-center gap-2 rounded-pill border border-white/30 bg-white/[0.16] px-3.5 py-1.5 text-[13px] font-bold text-white">
+                <div className="hidden items-center gap-2 rounded-pill border border-white/30 bg-white/[0.16] px-3.5 py-1.5 text-[13px] font-bold text-white sm:inline-flex">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#fff" strokeWidth="1.8" />
                     <circle cx="12" cy="10" r="3" stroke="#fff" strokeWidth="1.8" />
@@ -449,11 +450,11 @@ export default function SearchPage() {
               )}
             </div>
 
-            <h1 className="mt-4 text-[28px] font-extrabold leading-[1.06] tracking-[-1px] text-white sm:text-[40px]">
+            <h1 className="mt-1 text-[21px] font-extrabold leading-[1.12] tracking-[-0.6px] text-white sm:mt-4 sm:text-[40px] sm:leading-[1.06] sm:tracking-[-1px]">
               {province ? t.heroTitleIn(provinceLabel(province)) : t.heroTitleAll}
             </h1>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <div className="mt-4 hidden flex-wrap items-center gap-2.5 sm:flex">
               {t.heroPills.map((label) => (
                 <div
                   key={label}
@@ -493,17 +494,18 @@ export default function SearchPage() {
             ].map((c) => (
               <div
                 key={c.label}
-                className="flex-1 rounded-2xl border border-white/20 bg-white/10 p-4 text-center backdrop-blur sm:w-[120px] sm:flex-none"
+                className="flex-1 rounded-xl border border-white/20 bg-white/10 p-2.5 text-center backdrop-blur sm:w-[120px] sm:flex-none sm:rounded-2xl sm:p-4"
               >
-                <div className="mx-auto mb-2.5 flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white/[0.16]">
+                {/* ไอคอนกินความสูงเปล่าบนจอเล็ก */}
+                <div className="mx-auto mb-2.5 hidden h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white/[0.16] sm:flex">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                     <path d={c.d} stroke={c.stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <div className="font-sans text-[20px] font-extrabold tracking-[-0.5px] text-white sm:text-[26px]">
+                <div className="font-sans text-[17px] font-extrabold tracking-[-0.5px] text-white sm:text-[26px]">
                   {c.value}
                 </div>
-                <div className="mt-0.5 text-[12px] text-[#BFD1EE]">{c.label}</div>
+                <div className="mt-0.5 text-[11px] leading-tight text-[#BFD1EE] sm:text-[12px]">{c.label}</div>
               </div>
             ))}
           </div>

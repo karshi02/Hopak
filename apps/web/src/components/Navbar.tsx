@@ -10,6 +10,7 @@ import { useLang } from '@/hooks/useLang';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import { HopakIcon } from '@/components/HopakIcon';
 import { LangSwitch } from '@/components/LangSwitch';
+import { MobileHomeChrome, MobileMenuButton } from '@/components/home/MobileHomeChrome';
 import type { User } from '@hopak/shared';
 
 const TEXT = {
@@ -48,6 +49,8 @@ export function Navbar() {
   const [unreadNotif, setUnreadNotif] = useState(0);
   const [bellPulse, setBellPulse] = useState(false);
   const [toast, setToast] = useState<{ title?: string; body?: string } | null>(null);
+  // จอเล็กใส่ปุ่มไม่พอ — เข้าสู่ระบบ/สมัคร/ภาษา ย้ายไปอยู่ในลิ้นชักแฮมเบอร์เกอร์ตัวเดียวกับหน้าแรก
+  const [menuOpen, setMenuOpen] = useState(false);
   const animatedPlaceholder = useTypewriter(t.searchPhrases);
 
   useEffect(() => {
@@ -158,13 +161,16 @@ export function Navbar() {
             {t.saved}
           </Link>
 
-          <LangSwitch lang={lang} onChange={setLang} />
+          {/* ภาษา + รีเฟรช ซ่อนบนมือถือ (ภาษาไปอยู่ในลิ้นชัก) */}
+          <span className="hidden sm:inline-flex">
+            <LangSwitch lang={lang} onChange={setLang} />
+          </span>
 
           <button
             type="button"
             onClick={() => router.refresh()}
             title={t.refresh}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtitle hover:bg-black/[0.04] dark:text-white dark:hover:bg-white/10"
+            className="hidden h-8 w-8 items-center justify-center rounded-full text-ink-subtitle hover:bg-black/[0.04] dark:text-white dark:hover:bg-white/10 sm:flex"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path
@@ -231,13 +237,30 @@ export function Navbar() {
           ) : (
             <Link
               href="/login"
-              className="rounded-btn bg-tenant px-4 py-2 font-medium text-white hover:bg-tenant-dark"
+              className="hidden rounded-btn bg-tenant px-4 py-2 font-medium text-white hover:bg-tenant-dark sm:block"
             >
               {t.login}
             </Link>
           )}
+
+          <MobileMenuButton
+            variant="onLight"
+            onClick={() => setMenuOpen(true)}
+            label={lang === 'th' ? 'เมนู' : 'Menu'}
+          />
         </nav>
       </div>
+
+      {/* ลิ้นชักเมนูมือถือ — ไม่เอาแถบล่าง (หน้าหอพักมีแถบราคาติดล่างอยู่แล้ว) */}
+      <MobileHomeChrome
+        bottomNav={false}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        lang={lang}
+        setLang={setLang}
+        user={user ? { name: user.name, avatarUrl: user.avatarUrl } : null}
+        onLogout={handleLogout}
+      />
 
       {/* toast แจ้งเตือนใหม่เรียลไทม์ — เด้งมุมขวาบน กดไปหน้าแจ้งเตือน หายเองใน 6 วิ */}
       {toast && (

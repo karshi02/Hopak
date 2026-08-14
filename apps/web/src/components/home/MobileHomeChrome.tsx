@@ -70,18 +70,35 @@ function NavIcon({ d, active }: { d: string; active: boolean }) {
   );
 }
 
-/** ปุ่มแฮมเบอร์เกอร์บนหัวหน้าแรก — โชว์เฉพาะจอเล็ก */
-export function MobileMenuButton({ onClick, label }: { onClick: () => void; label: string }) {
+/**
+ * ปุ่มแฮมเบอร์เกอร์ — โชว์เฉพาะจอเล็ก
+ * onDark = หัวหน้าแรก (พื้นเข้ม) / onLight = Navbar หน้าอื่น (พื้นขาว)
+ */
+export function MobileMenuButton({
+  onClick,
+  label,
+  variant = 'onDark',
+}: {
+  onClick: () => void;
+  label: string;
+  variant?: 'onDark' | 'onLight';
+}) {
+  const bar =
+    variant === 'onDark'
+      ? 'h-[2px] w-[17px] rounded-sm bg-white'
+      : 'h-[2px] w-[17px] rounded-sm bg-ink-strong dark:bg-white';
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex h-9 w-9 shrink-0 flex-col items-center justify-center gap-[4px] rounded-[10px] bg-white/15 sm:hidden"
+      className={`flex h-9 w-9 shrink-0 flex-col items-center justify-center gap-[4px] rounded-[10px] sm:hidden ${
+        variant === 'onDark' ? 'bg-white/15' : 'bg-black/[0.05] dark:bg-white/10'
+      }`}
     >
-      <span className="h-[2px] w-[17px] rounded-sm bg-white" />
-      <span className="h-[2px] w-[17px] rounded-sm bg-white" />
-      <span className="h-[2px] w-[17px] rounded-sm bg-white" />
+      <span className={bar} />
+      <span className={bar} />
+      <span className={bar} />
     </button>
   );
 }
@@ -93,6 +110,7 @@ export function MobileHomeChrome({
   setLang,
   user,
   onLogout,
+  bottomNav = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -100,6 +118,8 @@ export function MobileHomeChrome({
   setLang: (l: Lang) => void;
   user: MenuUser;
   onLogout: () => void;
+  /** หน้าอื่นที่ใช้ Navbar เอาแค่ลิ้นชัก ไม่เอาแถบล่าง (ชนกับแถบราคาในหน้าหอพัก) */
+  bottomNav?: boolean;
 }) {
   const t = TEXT[lang];
   const pathname = usePathname();
@@ -148,6 +168,7 @@ export function MobileHomeChrome({
   return (
     <>
       {/* ===== แถบล่าง (มือถือ) ===== */}
+      {bottomNav && (
       <div
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[#EAEDF2] bg-white px-2.5 pb-[max(env(safe-area-inset-bottom),14px)] pt-2.5 shadow-[0_-6px_20px_rgba(16,24,40,0.08)] transition-transform duration-300 ease-[cubic-bezier(.4,0,.2,1)] sm:hidden"
         style={{ transform: navHidden ? 'translateY(110%)' : 'translateY(0)' }}
@@ -167,6 +188,7 @@ export function MobileHomeChrome({
           );
         })}
       </div>
+      )}
 
       {/* ===== ลิ้นชักเมนู (เลื่อนออกจากขวา) ===== */}
       {open && (
