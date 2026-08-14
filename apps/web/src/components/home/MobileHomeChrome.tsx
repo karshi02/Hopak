@@ -30,6 +30,7 @@ const TEXT = {
       saved: 'รายการโปรด',
       bookings: 'การจองของฉัน',
       partner: 'ลงประกาศหอพัก',
+      ownerLearn: 'เรียนรู้เพิ่มเติม (เจ้าของหอ)',
       partnerLogin: 'เข้าสู่ระบบเจ้าของหอ',
     },
     nav: { home: 'หน้าแรก', search: 'ค้นหา', saved: 'รายการโปรด', account: 'บัญชี' },
@@ -48,6 +49,7 @@ const TEXT = {
       saved: 'Favorites',
       bookings: 'My bookings',
       partner: 'List your dorm',
+      ownerLearn: 'Learn more (owners)',
       partnerLogin: 'Owner log in',
     },
     nav: { home: 'Home', search: 'Search', saved: 'Favorites', account: 'Account' },
@@ -155,6 +157,7 @@ export function MobileHomeChrome({
     { href: '/saved', label: t.items.saved, bg: '#FFF1EC', color: '#E0692F', d: 'M12 21s-8-4.5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6.5-8 11-8 11z' },
     { href: '/bookings', label: t.items.bookings, bg: '#F3ECFF', color: '#7C4DE0', d: 'M8 2v3M16 2v3M4 8h16M5 5h14v15H5z' },
     { href: '/partner-register', label: t.items.partner, bg: '#FFF3E0', color: '#C77B14', d: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5' },
+    { href: '/owners', label: t.items.ownerLearn, bg: '#EAF1FF', color: '#1E4FB0', d: 'M12 3l9 5-9 5-9-5 9-5zM12 13v8M8 17h8' },
     { href: '/partner-login', label: t.items.partnerLogin, bg: '#EEF1F6', color: '#5B616C', d: 'M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3' },
   ];
 
