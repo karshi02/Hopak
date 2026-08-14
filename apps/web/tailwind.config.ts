@@ -42,6 +42,13 @@ const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // วงแสงลอยใน hero หน้าค้นหา — ขยับขึ้นลงช้าๆ
+      keyframes: {
+        floaty: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+      },
       fontFamily: {
         thai: ['var(--font-thai)', 'sans-serif'],
         sans: ['var(--font-sans)', 'var(--font-thai)', 'sans-serif'],

@@ -116,6 +116,18 @@ const TEXT = {
     distanceFrom: (place: string) => `ระยะห่างจาก ${place}`,
     kmAway: (km: number) => `${km.toFixed(1)} กม.`,
 
+    crumbHome: 'หน้าแรก',
+    crumbSearch: 'ค้นหาหอพัก',
+    heroPills: ['ราคาโปร่งใส', 'เห็นค่าน้ำค่าไฟ', 'ไม่มีค่าหน้าหอ'],
+    filtersTitle: 'ตัวกรอง',
+    clearFilters: 'ล้าง',
+    priceRangeTitle: 'ช่วงราคา (บาท/เดือน)',
+    roomTypeTitle: 'ประเภทห้อง',
+    amenityTitle: 'สิ่งอำนวยความสะดวก',
+    openMap: 'ดูบนแผนที่',
+    nearbyTitle: 'ไม่เจอที่ถูกใจ? ลองทำเลใกล้เคียง',
+    nearbySub: 'ขยายพื้นที่ค้นหารอบมหาวิทยาลัย เพื่อดูตัวเลือกเพิ่มเติม',
+    dormsUnit: 'หอ',
     heroTitleIn: (p: string) => `หอพักใกล้มหาวิทยาลัยใน${p}`,
     heroTitleAll: 'หอพักใกล้มหาวิทยาลัยทั่วประเทศ',
     heroFound: (n: number) => `พบ ${n} หอพัก`,
@@ -176,6 +188,18 @@ const TEXT = {
     distanceFrom: (place: string) => `Distance from ${place}`,
     kmAway: (km: number) => `${km.toFixed(1)} km`,
 
+    crumbHome: 'Home',
+    crumbSearch: 'Search dorms',
+    heroPills: ['Transparent pricing', 'Utility rates shown', 'No agency fee'],
+    filtersTitle: 'Filters',
+    clearFilters: 'Clear',
+    priceRangeTitle: 'Price range (per month)',
+    roomTypeTitle: 'Room type',
+    amenityTitle: 'Amenities',
+    openMap: 'Open map',
+    nearbyTitle: 'Nothing you like? Try a nearby area',
+    nearbySub: 'Widen the search around the university for more options',
+    dormsUnit: 'dorms',
     heroTitleIn: (p: string) => `Dorms near universities in ${p}`,
     heroTitleAll: 'Dorms near universities nationwide',
     heroFound: (n: number) => `${n} dorms found`,
@@ -317,6 +341,21 @@ export default function SearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [district, dorms, roomType, amenity, priceRange, sortBy, hasPlace, placeLat, placeLng, dailyMode, myLocation]);
 
+  // อำเภออื่นในจังหวัดเดียวกันที่มีหอจริง — ไว้เสนอเมื่อผลไม่ถูกใจ
+  const nearbyDistricts = useMemo(() => {
+    if (!province) return [];
+    const counts = new Map<string, number>();
+    for (const d of dorms) {
+      const dist = findDistrict(d.address);
+      if (!dist || dist === district) continue;
+      counts.set(dist, (counts.get(dist) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([dist, count]) => ({ district: dist, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+  }, [dorms, province, district]);
+
   const heroStats = useMemo(() => {
     let cheapest: number | null = null;
     let ratingSum = 0;
@@ -358,55 +397,114 @@ export default function SearchPage() {
   return (
     <main className="mx-auto max-w-[1360px] px-4 py-6 pb-[92px] sm:px-6 sm:pb-6">
       {/* ===== HERO BAND ===== */}
-      <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(135deg,#1E4FB0_0%,#2F6FE0_55%,#173A87_120%)] p-8 shadow-[0_16px_40px_rgba(30,79,176,0.28)]">
-        <div className="pointer-events-none absolute -top-12 right-28 h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.28),transparent_66%)] blur-lg" />
-        <div className="pointer-events-none absolute -bottom-16 left-64 h-[190px] w-[190px] rounded-full bg-[radial-gradient(circle,rgba(23,143,90,0.4),transparent_66%)] blur-lg" />
+      <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(120deg,#12224E_0%,#1E4FB0_55%,#2F6FE0_120%)] p-6 shadow-[0_20px_46px_rgba(18,34,78,0.35)] sm:p-9">
+        {/* ลายจุดแผนที่ + วงแสงลอย */}
+        <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(255,255,255,0.14)_1.4px,transparent_1.5px)] [background-size:22px_22px]" />
+        <div className="pointer-events-none absolute -top-20 right-20 h-[320px] w-[320px] animate-[floaty_7s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgba(91,157,255,0.5),transparent_66%)] blur-[20px]" />
+        <div className="pointer-events-none absolute -bottom-24 left-52 h-[240px] w-[240px] animate-[floaty_9s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,rgba(31,181,110,0.28),transparent_66%)] blur-[22px]" />
 
-        <div className="relative flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
-          <div>
-            {province && (
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/28 bg-white/16 px-3.5 py-1.5 text-[12.5px] font-semibold text-[#EAF1FF]">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#EAF1FF" strokeWidth="1.8" />
-                  <circle cx="12" cy="10" r="3" stroke="#EAF1FF" strokeWidth="1.8" />
-                </svg>
-                {provinceLabel(province)}
-              </div>
-            )}
-            {/* กรองรายอำเภอมาจากหน้าแรก — กด x เพื่อกลับไปดูทั้งจังหวัด */}
-            {district && (
-              <Link
-                href={`/search?province=${encodeURIComponent(province)}`}
-                className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-white/28 bg-white/16 px-3.5 py-1.5 text-[12.5px] font-semibold text-[#EAF1FF]"
-              >
-                {district}
-                <span className="text-[14px] leading-none text-white/70">&times;</span>
+        <div className="relative flex flex-col items-start justify-between gap-7 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1">
+            {/* breadcrumb */}
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-[#AFC6F2]">
+              <Link href="/" className="text-[#AFC6F2] hover:text-white">
+                {t.crumbHome}
               </Link>
-            )}
-            <div className="mt-3.5 text-[28px] font-bold leading-tight tracking-tight text-white sm:text-[34px]">
-              {province ? t.heroTitleIn(provinceLabel(province)) : t.heroTitleAll}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <path d="M9 6l6 6-6 6" stroke="#7E9BD4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>{t.crumbSearch}</span>
+              {province && (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 6l6 6-6 6" stroke="#7E9BD4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="text-white">{provinceLabel(province)}</span>
+                </>
+              )}
             </div>
-            <div className="mt-2.5 text-[15px] text-[#D3E0F5]">
-              <span className="font-bold text-white">{t.heroFound(heroStats.count)}</span> · {t.heroSub}
+
+            <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+              {province && (
+                <div className="inline-flex items-center gap-2 rounded-pill border border-white/30 bg-white/[0.16] px-3.5 py-1.5 text-[13px] font-bold text-white">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#fff" strokeWidth="1.8" />
+                    <circle cx="12" cy="10" r="3" stroke="#fff" strokeWidth="1.8" />
+                  </svg>
+                  {provinceLabel(province)}
+                </div>
+              )}
+              {/* กรองรายอำเภอมาจากหน้าแรก — กด x เพื่อกลับไปดูทั้งจังหวัด */}
+              {district && (
+                <Link
+                  href={`/search?province=${encodeURIComponent(province)}`}
+                  className="inline-flex items-center gap-2.5 rounded-pill border border-white/[0.28] bg-white/10 px-3.5 py-1.5 text-[13px] font-semibold text-[#EAF1FF]"
+                >
+                  {district}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 6l12 12M18 6L6 18" stroke="#EAF1FF" strokeWidth="2.2" strokeLinecap="round" />
+                  </svg>
+                </Link>
+              )}
+            </div>
+
+            <h1 className="mt-4 text-[28px] font-extrabold leading-[1.06] tracking-[-1px] text-white sm:text-[40px]">
+              {province ? t.heroTitleIn(provinceLabel(province)) : t.heroTitleAll}
+            </h1>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              {t.heroPills.map((label) => (
+                <div
+                  key={label}
+                  className="inline-flex items-center gap-2 rounded-[10px] border border-white/20 bg-white/10 px-3.5 py-1.5 text-[13px] font-semibold text-[#EAF1FF]"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="#8FF0C4" strokeWidth="1.8" />
+                    <path d="M8 12l3 3 5-6" stroke="#8FF0C4" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {label}
+                </div>
+              ))}
             </div>
           </div>
-          <div className="flex gap-6">
-            <div className="text-left sm:text-right">
-              <div className="text-[24px] font-bold tracking-tight text-white">{heroStats.count}</div>
-              <div className="mt-0.5 text-[12.5px] text-[#BFD1EE]">{t.statDorms}</div>
-            </div>
-            <div className="text-left sm:text-right">
-              <div className="text-[24px] font-bold tracking-tight text-white">
-                {heroStats.cheapest != null ? `฿${heroStats.cheapest.toLocaleString()}` : t.noData}
+
+          {/* การ์ดกระจก 3 ใบ */}
+          <div className="flex w-full gap-3 sm:w-auto">
+            {[
+              {
+                value: String(heroStats.count),
+                label: t.statDorms,
+                d: 'M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6',
+                stroke: '#fff',
+              },
+              {
+                value: heroStats.cheapest != null ? `฿${heroStats.cheapest.toLocaleString()}` : t.noData,
+                label: t.statFrom,
+                d: 'M12 3v18M8 7h5a3 3 0 010 6H9a3 3 0 000 6h6',
+                stroke: '#8FF0C4',
+              },
+              {
+                value: heroStats.avgRating != null ? heroStats.avgRating.toFixed(1) : t.noData,
+                label: t.statRating,
+                d: 'M12 2l2.9 6.2 6.8.7-5.1 4.6 1.5 6.7L12 17.8 5.9 20.2l1.5-6.7L2.3 9.9l6.8-.7L12 2z',
+                stroke: '#F5B860',
+              },
+            ].map((c) => (
+              <div
+                key={c.label}
+                className="flex-1 rounded-2xl border border-white/20 bg-white/10 p-4 text-center backdrop-blur sm:w-[120px] sm:flex-none"
+              >
+                <div className="mx-auto mb-2.5 flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white/[0.16]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d={c.d} stroke={c.stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div className="font-sans text-[20px] font-extrabold tracking-[-0.5px] text-white sm:text-[26px]">
+                  {c.value}
+                </div>
+                <div className="mt-0.5 text-[12px] text-[#BFD1EE]">{c.label}</div>
               </div>
-              <div className="mt-0.5 text-[12.5px] text-[#BFD1EE]">{t.statFrom}</div>
-            </div>
-            <div className="text-left sm:text-right">
-              <div className="text-[24px] font-bold tracking-tight text-white">
-                {heroStats.avgRating != null ? heroStats.avgRating.toFixed(1) : t.noData}
-              </div>
-              <div className="mt-0.5 text-[12.5px] text-[#BFD1EE]">{t.statRating}</div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -576,7 +674,132 @@ export default function SearchPage() {
       {loading ? (
         <PageLoader />
       ) : (
-        <>
+        /* จอใหญ่แยกไซด์บาร์ตัวกรองออกมาซ้าย (sticky) — จอเล็กใช้แถบกรองด้านบนเหมือนเดิม */
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[288px_1fr]">
+          <aside className="hidden flex-col gap-4 lg:sticky lg:top-[92px] lg:flex">
+            <div className="overflow-hidden rounded-[18px] border border-card-border bg-white shadow-[0_2px_8px_rgba(16,24,40,0.05)]">
+              <div className="flex items-center justify-between border-b border-[#F0F2F6] px-[18px] py-4">
+                <div className="flex items-center gap-2.5">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 6h16M7 12h10M10 18h4" stroke="#2F6FE0" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <span className="text-[15.5px] font-extrabold">{t.filtersTitle}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setPriceRange('all');
+                    setRoomType('all');
+                    setAmenity('all');
+                  }}
+                  className="text-[12.5px] font-semibold text-tenant"
+                >
+                  {t.clearFilters}
+                </button>
+              </div>
+
+              <div className="p-[18px]">
+                <div className="mb-3 text-[13.5px] font-bold">{t.priceRangeTitle}</div>
+                <div className="flex flex-col gap-1.5">
+                  {t.priceRanges.map((o) => (
+                    <label key={o.value} className="flex cursor-pointer items-center gap-2.5 py-1">
+                      <input
+                        type="radio"
+                        name="price"
+                        checked={priceRange === o.value}
+                        onChange={() => setPriceRange(o.value)}
+                        className="h-[17px] w-[17px] accent-[#2F6FE0]"
+                      />
+                      <span className="text-[13.5px] text-[#3A4050]">{o.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mx-[18px] h-px bg-[#F0F2F6]" />
+
+              <div className="p-[18px]">
+                <div className="mb-3 text-[13.5px] font-bold">{t.roomTypeTitle}</div>
+                <div className="flex flex-col gap-1.5">
+                  {t.roomTypes.map((o) => {
+                    // นับจากผลจริงที่กรองอย่างอื่นไว้แล้ว — ตัวเลขต้องตรงกับที่กดแล้วเห็น
+                    const count =
+                      o.value === 'all'
+                        ? filteredDorms.length
+                        : filteredDorms.filter((x) =>
+                            x.availableRooms.some((r) => r.type.toUpperCase() === o.value.toUpperCase()),
+                          ).length;
+                    return (
+                      <label key={o.value} className="flex cursor-pointer items-center gap-2.5 py-1">
+                        <input
+                          type="radio"
+                          name="roomType"
+                          checked={roomType === o.value}
+                          onChange={() => setRoomType(o.value)}
+                          className="h-[17px] w-[17px] accent-[#2F6FE0]"
+                        />
+                        <span className="flex-1 text-[13.5px] text-[#3A4050]">{o.label}</span>
+                        <span className="font-sans text-[12px] text-ink-faint">{count}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {amenityOptions.length > 0 && (
+                <>
+                  <div className="mx-[18px] h-px bg-[#F0F2F6]" />
+                  <div className="p-[18px]">
+                    <div className="mb-3 text-[13.5px] font-bold">{t.amenityTitle}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {amenityOptions.map((a) => {
+                        const on = amenity === a;
+                        return (
+                          <button
+                            key={a}
+                            onClick={() => setAmenity(on ? 'all' : a)}
+                            className={`rounded-pill border px-3.5 py-1.5 text-[12.5px] font-semibold ${
+                              on
+                                ? 'border-[#D5E4FF] bg-[#EAF1FF] text-[#1E4FB0]'
+                                : 'border-[#EDF0F4] bg-[#F4F6FA] text-[#5B616C]'
+                            }`}
+                          >
+                            {a}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* การ์ดแผนที่ */}
+            <Link
+              href={`/search/map?${params.toString()}`}
+              className="relative block h-[210px] overflow-hidden rounded-[18px] border border-card-border bg-[linear-gradient(135deg,#DCE7F5,#EAF1FF)] shadow-[0_2px_8px_rgba(16,24,40,0.05)]"
+            >
+              <div className="absolute inset-0 [background-image:linear-gradient(rgba(47,111,224,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(47,111,224,0.08)_1px,transparent_1px)] [background-size:26px_26px]" />
+              <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-full">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 21s-7-5.5-7-11a7 7 0 1114 0c0 5.5-7 11-7 11z" fill="#2F6FE0" stroke="#fff" strokeWidth="1.5" />
+                  <circle cx="12" cy="10" r="2.4" fill="#fff" />
+                </svg>
+              </div>
+              <div className="absolute inset-x-3.5 bottom-3.5 flex h-[42px] items-center justify-center gap-2 rounded-[11px] bg-white/95 text-[13.5px] font-bold text-[#1E4FB0] backdrop-blur">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M9 20l-6-3V4l6 3m0 13l6-3m-6 3V7m6 10l6 3V7l-6-3m0 13V4m0 0L9 7"
+                    stroke="#2F6FE0"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {t.openMap}
+              </div>
+            </Link>
+          </aside>
+
+          <div className="min-w-0">
           {sponsored.length > 0 && (
             <div className="mt-8">
               <h2 className="font-semibold text-ink-strong">{t.sponsored}</h2>
@@ -735,7 +958,52 @@ export default function SearchPage() {
             })}
             {filteredDorms.length === 0 && <p className="text-ink-faint">{t.notFound}</p>}
           </div>
-        </>
+
+          {/* ทำเลใกล้เคียง — อำเภออื่นในจังหวัดเดียวกันที่มีหอจริง */}
+          {nearbyDistricts.length > 0 && (
+            <div className="mt-8">
+              <div className="mb-1.5 text-[18px] font-extrabold tracking-[-0.3px]">{t.nearbyTitle}</div>
+              <div className="mb-4 text-[13.5px] text-ink-faint">{t.nearbySub}</div>
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+                {nearbyDistricts.map((n, i) => {
+                  const tone = [
+                    { bg: '#EAF1FF', fg: '#2F6FE0' },
+                    { bg: '#E7F7EF', fg: '#178F5A' },
+                    { bg: '#F3ECFF', fg: '#7C4DE0' },
+                    { bg: '#FFF3E0', fg: '#C77B14' },
+                  ][i % 4];
+                  return (
+                    <Link
+                      key={n.district}
+                      href={`/search?province=${encodeURIComponent(province)}&district=${encodeURIComponent(n.district)}`}
+                      className="flex items-center gap-3.5 rounded-[15px] border border-card-border bg-white px-4 py-3.5 shadow-[0_1px_3px_rgba(16,24,40,0.04)] hover:border-[#B9CEF5]"
+                    >
+                      <span
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                        style={{ background: tone.bg }}
+                      >
+                        <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+                          <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke={tone.fg} strokeWidth="1.8" />
+                          <circle cx="12" cy="10" r="3" stroke={tone.fg} strokeWidth="1.8" />
+                        </svg>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14.5px] font-bold">{n.district}</span>
+                        <span className="mt-0.5 block font-sans text-[12px] text-ink-faint">
+                          {n.count} {t.dormsUnit}
+                        </span>
+                      </span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                        <path d="M9 6l6 6-6 6" stroke="#C9D0DC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          </div>
+        </div>
       )}
 
       {/* ปุ่มลอยไปหน้าแผนที่ — มือถือเท่านั้น (จอใหญ่ยังไม่มีแผนที่ในหน้านี้) */}
