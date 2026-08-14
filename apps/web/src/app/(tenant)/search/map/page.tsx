@@ -33,6 +33,7 @@ const TEXT = {
     away: (km: number) => (km < 1 ? `ห่างคุณ ${Math.round(km * 1000)} ม.` : `ห่างคุณ ${km.toFixed(1)} กม.`),
     tapAgain: 'แตะอีกครั้งเพื่อดูรายละเอียดหอ',
     needLocation: 'เปิดตำแหน่งเพื่อดูระยะทาง',
+    navigate: 'นำทาง',
   },
   en: {
     searchHere: 'Search this area',
@@ -49,6 +50,7 @@ const TEXT = {
     away: (km: number) => (km < 1 ? `${Math.round(km * 1000)} m from you` : `${km.toFixed(1)} km from you`),
     tapAgain: 'Tap again to open the dorm',
     needLocation: 'Turn on location to see distance',
+    navigate: 'Directions',
   },
 };
 
@@ -67,6 +69,9 @@ function MapSearchInner() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const cardsRef = useRef<HTMLDivElement>(null);
+  // เส้นโยงจากตำแหน่งเราไปหอที่เลือก + หมุดตำแหน่งเรา (เก็บ ref ไว้ลบ/วาดใหม่ ไม่งั้นซ้อนกันทุกครั้งที่เลือกใหม่)
+  const routeRef = useRef<google.maps.Polyline | null>(null);
+  const meMarkerRef = useRef<google.maps.Marker | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // กรอบพื้นที่ที่ผู้ใช้กด "ค้นหาในพื้นที่นี้" — null = ไม่จำกัดพื้นที่
@@ -140,6 +145,61 @@ function MapSearchInner() {
       cancelled = true;
     };
   }, []);
+
+  // หมุดตำแหน่งเรา — วาดครั้งเดียว ขยับตามเมื่อได้พิกัดใหม่
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !myLocation || typeof google === 'undefined') return;
+    if (meMarkerRef.current) {
+      meMarkerRef.current.setPosition(myLocation);
+      return;
+    }
+    meMarkerRef.current = new google.maps.Marker({
+      position: myLocation,
+      map,
+      zIndex: 500,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: '#2F6FE0',
+        fillOpacity: 1,
+        strokeColor: '#fff',
+        strokeWeight: 3,
+      },
+    });
+  }, [myLocation]);
+
+  /**
+   * เส้นโยงจากตำแหน่งเราไปหอที่เลือก
+   * เป็นเส้นตรงจงใจ ไม่ใช่เส้นทางตามถนน — Directions API คิดเงินต่อการเรียก
+   * และหน้านี้ผู้ใช้กดเลือกหอสลับไปมาได้เรื่อยๆ ถ้ายิงทุกครั้งค่าใช้จ่ายบานแน่
+   * อยากได้เส้นทางจริงมีปุ่ม "นำทาง" เปิด Google Maps ให้แทน (ฟรี ไม่ผ่าน API)
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || typeof google === 'undefined') return;
+
+    routeRef.current?.setMap(null);
+    routeRef.current = null;
+
+    const target = pinned.find((x) => x.dorm.id === selectedId);
+    if (!selectedId || !myLocation || !target) return;
+
+    routeRef.current = new google.maps.Polyline({
+      map,
+      path: [myLocation, { lat: target.dorm.lat, lng: target.dorm.lng }],
+      strokeOpacity: 0,
+      // เส้นประ — วาดด้วยจุดวงกลมเรียงกัน (Polyline ธรรมดาไม่มี dash)
+      icons: [
+        {
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 3.2, fillColor: '#2F6FE0', fillOpacity: 1, strokeWeight: 0 },
+          offset: '0',
+          repeat: '13px',
+        },
+      ],
+      zIndex: 400,
+    });
+  }, [selectedId, myLocation, pinned]);
 
   // ---------- หมุดราคา ----------
   useEffect(() => {
@@ -223,19 +283,7 @@ function MapSearchInner() {
         setMyLocation(here);
         mapRef.current?.setCenter(here);
         mapRef.current?.setZoom(15);
-        new google.maps.Marker({
-          position: here,
-          map: mapRef.current!,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: '#2F6FE0',
-            fillOpacity: 1,
-            strokeColor: '#fff',
-            strokeWeight: 3,
-          },
-          zIndex: 500,
-        });
+        // หมุดตำแหน่งเราวาดจาก effect ที่ผูกกับ myLocation แล้ว — สร้างซ้ำตรงนี้จะได้หมุดซ้อนกันทุกครั้งที่กด
         setMoved(true);
       },
       () => {},
@@ -393,6 +441,21 @@ function MapSearchInner() {
                       </svg>
                       {km != null ? `${t.away(km)} · ${t.tapAgain}` : t.needLocation}
                     </div>
+                  )}
+                  {/* เส้นทางจริงตามถนน — เปิดใน Google Maps ไม่ต้องเรียก Directions API (ฟรี) */}
+                  {active && myLocation && (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${myLocation.lat},${myLocation.lng}&destination=${dorm.lat},${dorm.lng}&travelmode=driving`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1.5 inline-flex h-7 items-center gap-1.5 rounded-pill bg-[#EAF1FF] px-3 text-[11.5px] font-bold text-[#1E4FB0]"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2l9 20-9-5-9 5 9-20z" stroke="#1E4FB0" strokeWidth="1.9" strokeLinejoin="round" />
+                      </svg>
+                      {t.navigate}
+                    </a>
                   )}
                   <div className="mt-1.5">
                     {cheapest != null ? (
