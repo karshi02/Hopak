@@ -288,6 +288,28 @@ function MapSearchInner() {
     map.fitBounds(b, 64);
   }, [pinned]);
 
+  /**
+   * เลือกหอแล้วซูมไปที่หอนั้น + เด้งหมุดสั้นๆ ให้เห็นว่าคืออันไหน
+   * ไม่ทำตอนมีเส้นทางอยู่ — DirectionsRenderer จัดกรอบให้เห็นทั้งเส้นอยู่แล้ว ซูมทับจะตีกัน
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedId || routeDormId === selectedId || typeof google === 'undefined') return;
+    const target = pinned.find((x) => x.dorm.id === selectedId);
+    if (!target) return;
+
+    map.panTo({ lat: target.dorm.lat, lng: target.dorm.lng });
+    if ((map.getZoom() ?? 13) < 16) map.setZoom(16);
+    // เลื่อนแผนที่เองเป็นการเปลี่ยนวิว ไม่ใช่การเลื่อนของผู้ใช้ — อย่าให้ปุ่ม "ค้นหาในพื้นที่นี้" เด้งขึ้นมา
+    setMoved(false);
+
+    const marker = markersRef.current.get(selectedId);
+    if (!marker) return;
+    marker.setAnimation(google.maps.Animation.BOUNCE);
+    const stop = setTimeout(() => marker.setAnimation(null), 1400);
+    return () => clearTimeout(stop);
+  }, [selectedId, pinned, routeDormId]);
+
   // แตะหมุดแล้วเลื่อนการ์ดล่างไปใบเดียวกัน
   useEffect(() => {
     if (!selectedId || !cardsRef.current) return;
