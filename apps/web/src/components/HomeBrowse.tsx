@@ -119,6 +119,7 @@ const TEXT = {
     zoneCount: (n: number) => `${n} หอพัก`,
     zoneFrom: (p: string) => `เริ่ม ${p}`,
     trendingTitle: 'หอพักแนะนำ',
+    trendingSub: 'คะแนนรีวิวสูงสุดจากผู้เช่าจริง',
     dormsIn: (p: string) => `หอพักใน${p}`,
     nearbyCount: (n: number) => `${n} หอพักใกล้เคียง`,
     distanceAway: (km: number) => (km < 1 ? `ห่างคุณ ${Math.round(km * 1000)} ม.` : `ห่างคุณ ${km.toFixed(1)} กม.`),
@@ -186,6 +187,7 @@ const TEXT = {
     zoneCount: (n: number) => `${n} dorms`,
     zoneFrom: (p: string) => `From ${p}`,
     trendingTitle: 'Recommended dorms',
+    trendingSub: 'Highest rated by real tenants',
     dormsIn: (p: string) => `Dorms in ${p}`,
     nearbyCount: (n: number) => `${n} nearby dorms`,
     distanceAway: (km: number) => (km < 1 ? `${Math.round(km * 1000)} m from you` : `${km.toFixed(1)} km from you`),
@@ -222,6 +224,22 @@ const TEXT = {
  * การ์ดทำเลยอดนิยม — แอดมินใส่ได้หลายรูปต่อจังหวัด เลื่อนดูได้เอง (ลูกศร/จุด) และเลื่อนอัตโนมัติทุก 4 วิ
  * ทั้งการ์ดเป็นลิงก์ไปหน้าค้นหา ปุ่มเลื่อนเลยต้อง preventDefault กันหลุดไปหน้าอื่น
  */
+/**
+ * หัวข้อหมวดของหน้าแรก — เดิมแต่ละหมวดเขียนเอง ขนาดตัวอักษรกับระยะห่างไม่ตรงกันสักอัน
+ * (2xl บ้าง 22px บ้าง 17px บ้าง บางอันคำอธิบายอยู่บรรทัดเดียวกับหัวข้อ) รวมมาไว้ที่เดียว
+ */
+function SectionHead({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
+  return (
+    <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div className="min-w-0">
+        <h2 className="text-[22px] font-bold tracking-tight text-ink-strong sm:text-[26px]">{title}</h2>
+        {sub && <div className="mt-1 text-[13.5px] text-[#8A909F]">{sub}</div>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
 function ZoneCard({
   href,
   images,
@@ -269,7 +287,8 @@ function ZoneCard({
           style={{ backgroundImage: `url('${src}')` }}
         />
       ))}
-      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.78)] via-transparent to-transparent" />
+      {/* ไล่เฉดสูงขึ้นและเข้มขึ้น — ของเดิมจางเกินจนตัวหนังสือขาวจมไปกับรูปสว่าง */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.88)] via-[rgba(11,13,18,0.28)] to-transparent" />
 
       {many && (
         <>
@@ -315,7 +334,7 @@ function ZoneCard({
 
       <div className="absolute bottom-4 left-4 right-3">
         <div className="text-lg font-bold text-white">{title}</div>
-        <div className="mt-0.5 text-[12.5px] text-white/82">{subtitle}</div>
+        <div className="mt-0.5 text-[12.5px] text-white/85">{subtitle}</div>
       </div>
     </Link>
   );
@@ -920,67 +939,78 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
       </div>
 
-      {/* ===== PROVINCE SELECTOR + BROWSE ===== */}
-      <div className="mx-auto mt-11 flex max-w-[1240px] items-center gap-3.5 px-6">
-        <span className="text-sm font-semibold text-ink-body">{t.selectProvince}</span>
-        <div className="relative w-full max-w-[320px]">
-          <div
-            onClick={() => setOpen((v) => !v)}
-            className="flex h-[50px] cursor-pointer items-center gap-2.5 rounded-xl border border-[#D8DCE2] bg-white px-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+      {/* ===== PROVINCE SELECTOR + BROWSE =====
+          ตัวเลือกจังหวัดอยู่ในหัวหมวดเลย ของเดิมลอยเป็นแถวเดี่ยวเหนือหัวข้อ ดูไม่รู้ว่าคุมอะไร */}
+      <div className="mx-auto mt-12 max-w-[1240px] px-6">
+        <SectionHead
+          title={t.dormsIn(provinceLabel(province))}
+          sub={t.nearbyCount(visibleCurrentDorms.length)}
+          action={
+            <div className="flex w-full shrink-0 items-center gap-3 sm:w-auto">
+              {visibleCurrentDorms.length > 4 && (
+                <Link
+                  href={`/search?province=${encodeURIComponent(province)}`}
+                  className="hidden text-sm font-semibold text-tenant sm:inline"
+                >
+                  {t.viewAllZones}
+                </Link>
+              )}
+      <div className="relative w-full sm:w-[230px] sm:shrink-0">
+        <button
+          type="button"
+          aria-label={t.selectProvince}
+          onClick={() => setOpen((v) => !v)}
+          className="flex h-[44px] w-full cursor-pointer items-center gap-2.5 rounded-xl border border-[#D8DCE2] bg-white px-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <path
+              d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z"
+              stroke="#2F6FE0"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <circle cx="12" cy="11" r="2.3" stroke="#2F6FE0" strokeWidth="1.8" />
+          </svg>
+          <span className="flex-1 truncate text-left text-[15px] font-semibold text-ink-strong">{provinceLabel(province)}</span>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <path
-                d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z"
-                stroke="#2F6FE0"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="11" r="2.3" stroke="#2F6FE0" strokeWidth="1.8" />
-            </svg>
-            <span className="flex-1 text-base font-semibold text-ink-strong">{provinceLabel(province)}</span>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
-            >
-              <path d="M6 9l6 6 6-6" stroke="#8A909B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <path d="M6 9l6 6 6-6" stroke="#8A909B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {open && (
+          <div className="absolute right-0 top-12 z-10 w-[260px] rounded-xl border border-card-border bg-white p-1.5 shadow-[0_12px_30px_rgba(20,40,80,0.16)]">
+            {PROVINCES.map((p) => {
+              const selected = p === province;
+              return (
+                <div
+                  key={p}
+                  onClick={() => {
+                    setProvince(p);
+                    setOpen(false);
+                  }}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[15px] hover:bg-[#F1F3F6] ${
+                    selected ? 'bg-tenant-tint text-tenant' : 'text-ink-body'
+                  }`}
+                >
+                  <span className={`flex-1 ${selected ? 'font-bold' : 'font-medium'}`}>{provinceLabel(p)}</span>
+                  <span className="text-[13px] text-ink-muted">
+                    {byProvince.get(p)?.length ?? 0} {t.dormsUnit}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-
-          {open && (
-            <div className="absolute left-0 right-0 top-14 z-10 rounded-xl border border-card-border bg-white p-1.5 shadow-[0_12px_30px_rgba(20,40,80,0.16)]">
-              {PROVINCES.map((p) => {
-                const selected = p === province;
-                return (
-                  <div
-                    key={p}
-                    onClick={() => {
-                      setProvince(p);
-                      setOpen(false);
-                    }}
-                    className={`flex cursor-pointer items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[15px] hover:bg-[#F1F3F6] ${
-                      selected ? 'bg-tenant-tint text-tenant' : 'text-ink-body'
-                    }`}
-                  >
-                    <span className={`flex-1 ${selected ? 'font-bold' : 'font-medium'}`}>{provinceLabel(p)}</span>
-                    <span className="text-[13px] text-ink-muted">
-                      {byProvince.get(p)?.length ?? 0} {t.dormsUnit}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        )}
       </div>
-
-      <div className="mx-auto mt-5 max-w-[1240px] px-6">
-        <div className="mb-3.5 flex items-baseline gap-2.5">
-          <div className="text-[22px] font-bold">{t.dormsIn(provinceLabel(province))}</div>
-          <span className="text-sm text-ink-muted">{t.nearbyCount(visibleCurrentDorms.length)}</span>
-        </div>
+            </div>
+          }
+        />
 
         {visibleCurrentDorms.length === 0 ? (
           <p className="text-ink-faint">{dailyMode ? t.noDailyDorms : t.noDorms}</p>
@@ -996,9 +1026,9 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                 <Link
                   key={d.id}
                   href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
-                  className="block overflow-hidden rounded-card-lg border border-[#E7E9EC] bg-white shadow-card hover:shadow-card-hover"
+                  className="flex h-full flex-col overflow-hidden rounded-card-lg border border-[#E7E9EC] bg-white shadow-card transition-all hover:-translate-y-1 hover:shadow-card-hover"
                 >
-                  <div className="relative h-[150px] bg-surface-canvas">
+                  <div className="relative h-[150px] shrink-0 bg-surface-canvas">
                     {d.images?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={d.images[0]} alt="" className="h-full w-full object-cover" />
@@ -1017,7 +1047,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                     )}
                     <FavoriteButton active={isFavorited} onToggle={() => toggle(d.id)} />
                   </div>
-                  <div className="p-3.5">
+                  <div className="flex flex-1 flex-col p-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="truncate text-[15.5px] font-bold">{d.name}</div>
                       <StarRating rating={d.avgRating} count={d.reviewCount} />
@@ -1028,7 +1058,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                         <span className="text-tenant"> · {t.distanceAway(haversineKm(myLocation.lat, myLocation.lng, d.lat, d.lng))}</span>
                       )}
                     </div>
-                    <div className="mt-2.5 flex items-baseline justify-between gap-2 text-sm">
+                    <div className="mt-auto flex items-baseline justify-between gap-2 pt-2.5 text-sm">
                       {startingRoom ? (
                         <span>
                           <b className="font-sans text-lg">฿{roomPrice(startingRoom).toLocaleString()}</b>
@@ -1053,16 +1083,16 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
       {/* ===== POPULAR ZONES (จังหวัดจริง) ===== */}
       {topProvinces.length > 0 && (
-        <div className="mx-auto max-w-[1240px] px-6 pt-10">
-          <div className="mb-4 flex items-end justify-between">
-            <div>
-              <div className="text-2xl font-bold tracking-tight">{zonesTitle}</div>
-              <div className="mt-1 text-sm text-[#8A909F]">{zonesSub}</div>
-            </div>
-            <Link href="/search" className="text-sm font-semibold text-tenant">
-              {t.viewAllZones}
-            </Link>
-          </div>
+        <div className="mx-auto max-w-[1240px] px-6 pt-12">
+          <SectionHead
+            title={zonesTitle}
+            sub={zonesSub}
+            action={
+              <Link href="/search" className="shrink-0 text-sm font-semibold text-tenant">
+                {t.viewAllZones}
+              </Link>
+            }
+          />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {topProvinces.map((z, i) => (
               <ZoneCard
@@ -1087,11 +1117,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
           {/* สถานที่สำคัญรายอำเภอ — กดแล้วไปดูหอในอำเภอเดียวกันนั้น */}
           {landmarkCards.length > 0 && (
-            <div className="mt-5">
-              <div className="mb-3 flex flex-wrap items-baseline gap-2">
-                <div className="text-[17px] font-bold tracking-tight text-ink-strong">{t.landmarkTitle}</div>
-                <div className="text-[12.5px] text-[#8A909F]">{t.landmarkSub}</div>
-              </div>
+            <div className="mt-10">
+              <SectionHead title={t.landmarkTitle} sub={t.landmarkSub} />
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {landmarkCards.map((l, i) => (
                   <Link
@@ -1132,11 +1159,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
           {/* การ์ดย่อยรายอำเภอ — เฉพาะมหาสารคาม */}
           {mskDistricts.length > 0 && (
-            <div className="mt-5 rounded-[18px] border border-[#EAEDF2] bg-white p-4 shadow-[0_2px_8px_rgba(16,24,40,0.05)] sm:p-5">
-              <div className="mb-3 flex flex-wrap items-baseline gap-2">
-                <div className="text-[15.5px] font-bold text-ink-strong">{t.mskZonesTitle}</div>
-                <div className="text-[12.5px] text-[#8A909F]">{t.mskZonesSub}</div>
-              </div>
+            <div className="mt-10">
+              <SectionHead title={t.mskZonesTitle} sub={t.mskZonesSub} />
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {mskDistricts.map((z) => (
                   <Link
@@ -1171,8 +1195,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
       {/* ===== RECOMMENDED DORMS (คะแนนรีวิวจริงสูงสุด) ===== */}
       {topDorms.length > 0 && (
-        <div className="mx-auto max-w-[1240px] px-6 pt-11">
-          <div className="mb-4 text-2xl font-bold tracking-tight">{t.trendingTitle}</div>
+        <div className="mx-auto max-w-[1240px] px-6 pt-12">
+          <SectionHead title={t.trendingTitle} sub={t.trendingSub} />
           <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
             {topDorms.map((d) => {
               const isFavorited = favoriteIds.has(d.id);
@@ -1181,9 +1205,9 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                 <Link
                   key={d.id}
                   href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
-                  className="block overflow-hidden rounded-2xl border border-[#EAEDF2] bg-white shadow-[0_2px_6px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(16,24,40,0.14)]"
+                  className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#EAEDF2] bg-white shadow-[0_2px_6px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(16,24,40,0.14)]"
                 >
-                  <div className="relative h-[150px] bg-surface-canvas">
+                  <div className="relative h-[150px] shrink-0 bg-surface-canvas">
                     {d.images?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={d.images[0]} alt="" className="h-full w-full object-cover" />
@@ -1194,7 +1218,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                     )}
                     <FavoriteButton active={isFavorited} onToggle={() => toggle(d.id)} />
                   </div>
-                  <div className="p-3.5">
+                  <div className="flex flex-1 flex-col p-3.5">
                     <div className="mb-1 flex items-center gap-1.5">
                       <StarRating rating={d.avgRating} count={d.reviewCount} />
                     </div>
@@ -1210,7 +1234,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                         {[findDistrict(d.address), provinceLabel(d.province)].filter(Boolean).join(' · ')}
                       </span>
                     </div>
-                    <div className="mt-2.5 border-t border-[#F0F2F6] pt-2.5">
+                    <div className="mt-auto border-t border-[#F0F2F6] pt-2.5">
                       {cheapest != null ? (
                         <>
                           <span className="text-[11px] text-[#9AA0AB]">{lang === 'th' ? 'เริ่มต้น ' : 'From '}</span>
