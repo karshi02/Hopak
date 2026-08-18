@@ -15,3 +15,7 @@ apps/api/private-uploads/*
 
 .pnpm-store
 *.tsbuildinfo
+
+# symlink ของ skills ที่ npx skills add สร้างให้ — ชี้ด้วย absolute path ของเครื่องที่ลง
+# ตัว skill จริงอยู่ใน .agents/skills/ ซึ่ง commit ไว้แล้ว ใครโคลนไปรัน `npx skills add` เองจะได้ symlink ของตัวเอง
+.claude/skills/
