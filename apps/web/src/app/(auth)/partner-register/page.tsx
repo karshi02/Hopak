@@ -298,6 +298,12 @@ export default function PartnerRegisterPage() {
           setError(`${file.name} ใหญ่เกิน 10MB`);
           continue;
         }
+        // .heic/.heif จากไอโฟนผ่าน accept="image/*" มาได้ แต่ฝั่งเซิร์ฟเวอร์ไม่รับ
+        // (เบราว์เซอร์ส่วนใหญ่เปิดไม่ขึ้น แอดมินจะตรวจเอกสารไม่ได้) บอกตรงนี้เลยจะได้ไม่ต้องรอ error จากเซิร์ฟเวอร์
+        if (/\.(heic|heif)$/i.test(file.name)) {
+          setError(`${file.name} เป็นไฟล์ HEIC ยังไม่รองรับ — ถ่ายใหม่เป็น JPEG หรือแปลงไฟล์ก่อน`);
+          continue;
+        }
         const form = new FormData();
         form.append('file', file);
         const res = await fetch(`${API_URL}/owner-applications/${appId}/documents`, {
@@ -306,8 +312,12 @@ export default function PartnerRegisterPage() {
           headers: appSecret ? { 'x-application-secret': appSecret } : undefined,
         });
         if (!res.ok) {
+          // 413/502 มาจาก nginx เป็น HTML ไม่ใช่ JSON — .json() จะพังแล้วเหลือข้อความกลางๆ ที่บอกอะไรไม่ได้
           const detail = await res.json().catch(() => null);
-          throw new Error(detail?.message ?? 'อัปโหลดเอกสารไม่สำเร็จ');
+          if (detail?.message) throw new Error(detail.message);
+          if (res.status === 413) throw new Error(`${file.name} ใหญ่เกินกว่าที่เซิร์ฟเวอร์รับได้ ลองย่อรูปก่อน`);
+          if (res.status === 429) throw new Error('อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่');
+          throw new Error(`อัปโหลด ${file.name} ไม่สำเร็จ (ข้อผิดพลาด ${res.status})`);
         }
         setDocs((prev) => [...prev, { name: file.name, size: file.size }]);
       }

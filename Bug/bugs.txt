@@ -2320,3 +2320,30 @@ tsc web ผ่าน · /search ตอบ 200
 - ลิ้นชักหน้านี้เดิมเปิดปิดแบบตัดภาพ ยกชุดอนิเมชันจาก MobileHomeChrome มาใช้ให้เหมือนกัน
   (render/shown, สไลด์ 620ms, ไล่รายการทีละอัน, แฮมเบอร์เกอร์บิดเป็นกากบาท, motion-reduce)
 tsc web ผ่าน · /owners ตอบ 200
+
+[152] 2026-08-14 สมัครหอพัก: อัปโหลดเอกสารไม่ผ่าน "บางครั้ง" — nginx ตัดไฟล์เกิน 1MB
+อาการ: หน้า /partner-register กดแนบเอกสารแล้วขึ้น "อัปโหลดเอกสารไม่สำเร็จ" เป็นบางไฟล์ บางครั้ง
+สาเหตุหลัก: docker/nginx-*.conf ไม่เคยตั้ง client_max_body_size เลย nginx จึงใช้ค่าเริ่มต้น 1m
+  แต่แอปยอมรับเอกสารถึง 10MB (DOC_LIMIT) และรูป 5MB (IMAGE_LIMIT)
+  ไฟล์ > 1MB (รูปถ่ายมือถือปกติ 2-5MB) โดน nginx คืน 413 ตั้งแต่ยังไม่ถึง API
+  = ไฟล์เล็กผ่าน ไฟล์ใหญ่ไม่ผ่าน ผู้ใช้เห็นเป็น "บางครั้ง"
+  ในเครื่อง dev ยิงตรงไป API พอร์ต 4000 ไม่ผ่าน nginx จึงไม่เจอปัญหานี้เลย
+สาเหตุรอง (คนละอาการแต่เจอในหน้าเดียวกัน):
+  ก) ไอโฟนส่ง .heic/.heif ผ่าน accept="image/*" มาได้ แต่ upload-filters รับเฉพาะ jpg/png/gif/webp/pdf
+     เดิมต้องรอ error จากเซิร์ฟเวอร์ ตอนนี้บอกตั้งแต่ตอนเลือกไฟล์
+  ข) 413 ของ nginx เป็น HTML ไม่ใช่ JSON — โค้ดเดิมทำ res.json() แล้ว catch เป็น null
+     เหลือข้อความกลางๆ "อัปโหลดเอกสารไม่สำเร็จ" ไม่บอกสาเหตุ ทำให้ไล่ปัญหาไม่ได้
+แก้:
+- docker/nginx-hopak-ratelimit.conf เพิ่ม client_max_body_size 12m (http context)
+  ต้องอยู่ที่ http context ไม่ใช่ในไฟล์ sites-available เพราะ certbot คัดลอก server block ไปทำ :443 เอง
+  แก้เฉพาะ sites-available จะไม่มีผลกับ block :443 ที่ผู้ใช้จริงวิ่งเข้า
+  ตั้ง 12m เผื่อ overhead multipart ให้เอกสาร 10MB ผ่านได้จริง
+- apps/web/src/app/(auth)/partner-register/page.tsx
+  กัน .heic/.heif ตั้งแต่ฝั่งเบราว์เซอร์พร้อมบอกวิธีแก้
+  แยกข้อความตามสถานะจริง: 413 = ไฟล์ใหญ่เกิน, 429 = อัปโหลดถี่เกิน, อื่นๆ = แสดงรหัสสถานะ
+ต้องทำบน VPS ถึงจะมีผล:
+  sudo cp /opt/hopak/docker/nginx-hopak-ratelimit.conf /etc/nginx/conf.d/hopak-ratelimit.conf
+  sudo nginx -t && sudo systemctl reload nginx
+หมายเหตุ: จำกัดอัตรา 20 ครั้ง/นาที/IP ต่อ endpoint นี้ แนบได้สูงสุด 10 ไฟล์ (MAX_DOCUMENTS)
+  แนบครบ 10 แล้วลบแล้วแนบใหม่ในนาทีเดียวกันจะชน 429 ได้ ตอนนี้ขึ้นข้อความบอกชัดแล้ว
+tsc web ผ่าน (dev server ปิดอยู่ตอนตรวจ ยังไม่ได้กดจริงในเบราว์เซอร์)
