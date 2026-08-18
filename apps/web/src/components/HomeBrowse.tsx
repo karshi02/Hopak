@@ -240,6 +240,9 @@ function SectionHead({ title, sub, action }: { title: string; sub?: string; acti
   );
 }
 
+/** ทำเลยอดนิยม (การ์ดรายจังหวัด) — ปิดไว้ชั่วคราวตามที่สั่ง เปลี่ยนเป็น true เพื่อเอากลับ */
+const SHOW_POPULAR_ZONES = false;
+
 function ZoneCard({
   href,
   images,
@@ -1081,9 +1084,13 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         )}
       </div>
 
-      {/* ===== POPULAR ZONES (จังหวัดจริง) ===== */}
-      {topProvinces.length > 0 && (
+      {/* ===== POPULAR ZONES (จังหวัดจริง) =====
+          ปิดไว้ก่อนตามที่สั่ง — เปิดกลับด้วยการตั้ง SHOW_POPULAR_ZONES = true
+          กล่องนี้ครอบ "ใกล้สถานที่สำคัญ" กับ "ทำเลย่อย" อยู่ด้วย จึงปิดเฉพาะหัวข้อกับการ์ดจังหวัด
+          ไม่ได้ถอดทั้งบล็อก */}
+      {(SHOW_POPULAR_ZONES ? topProvinces.length > 0 : mskDistricts.length > 0) && (
         <div className="mx-auto max-w-[1240px] px-6 pt-12">
+          {SHOW_POPULAR_ZONES && (
           <SectionHead
             title={zonesTitle}
             sub={zonesSub}
@@ -1093,6 +1100,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               </Link>
             }
           />
+          )}
+          {SHOW_POPULAR_ZONES && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {topProvinces.map((z, i) => (
               <ZoneCard
@@ -1114,52 +1123,11 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               />
             ))}
           </div>
-
-          {/* สถานที่สำคัญรายอำเภอ — กดแล้วไปดูหอในอำเภอเดียวกันนั้น */}
-          {landmarkCards.length > 0 && (
-            <div className="mt-10">
-              <SectionHead title={t.landmarkTitle} sub={t.landmarkSub} />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {landmarkCards.map((l, i) => (
-                  <Link
-                    key={l.id}
-                    href={`/search?province=${encodeURIComponent(l.province)}&district=${encodeURIComponent(l.district)}`}
-                    className={`group relative block h-[132px] overflow-hidden rounded-[15px] shadow-[0_4px_14px_rgba(16,24,40,0.1)] transition-transform hover:-translate-y-1 ${
-                      l.imageUrl
-                        ? 'bg-[#0B0D12]'
-                        : [
-                            'bg-gradient-to-br from-[#3E5C8A] to-[#1E4FB0]',
-                            'bg-gradient-to-br from-[#2E7D5B] to-[#178F5A]',
-                            'bg-gradient-to-br from-[#6B4EA0] to-[#7C4DE0]',
-                            'bg-gradient-to-br from-[#8A6D3B] to-[#C79A4B]',
-                          ][i % 4]
-                    }`}
-                  >
-                    {l.imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={l.imageUrl}
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.82)] via-transparent to-transparent" />
-                    <div className="absolute bottom-3 left-3.5 right-3">
-                      <div className="truncate text-[14.5px] font-bold text-white">{l.name}</div>
-                      <div className="mt-0.5 truncate text-[11.5px] text-white/85">
-                        {l.district} · {t.zoneCount(l.zone!.count)}
-                        {l.zone!.cheapest != null && ` · ${t.zoneFrom(`฿${l.zone!.cheapest.toLocaleString()}`)}`}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
           )}
 
           {/* การ์ดย่อยรายอำเภอ — เฉพาะมหาสารคาม */}
           {mskDistricts.length > 0 && (
-            <div className="mt-10">
+            <div className={SHOW_POPULAR_ZONES ? 'mt-10' : ''}>
               <SectionHead title={t.mskZonesTitle} sub={t.mskZonesSub} />
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 {mskDistricts.map((z) => (
@@ -1251,6 +1219,49 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
             })}
           </div>
         </div>
+      )}
+
+      {/* ===== ใกล้สถานที่สำคัญ — ปิดท้ายหน้า ===== */}
+        {/* สถานที่สำคัญรายอำเภอ — กดแล้วไปดูหอในอำเภอเดียวกันนั้น */}
+      {landmarkCards.length > 0 && (
+        <div className="mx-auto max-w-[1240px] px-6 pt-12">
+            <SectionHead title={t.landmarkTitle} sub={t.landmarkSub} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {landmarkCards.map((l, i) => (
+                <Link
+                  key={l.id}
+                  href={`/search?province=${encodeURIComponent(l.province)}&district=${encodeURIComponent(l.district)}`}
+                  className={`group relative block h-[132px] overflow-hidden rounded-[15px] shadow-[0_4px_14px_rgba(16,24,40,0.1)] transition-transform hover:-translate-y-1 ${
+                    l.imageUrl
+                      ? 'bg-[#0B0D12]'
+                      : [
+                          'bg-gradient-to-br from-[#3E5C8A] to-[#1E4FB0]',
+                          'bg-gradient-to-br from-[#2E7D5B] to-[#178F5A]',
+                          'bg-gradient-to-br from-[#6B4EA0] to-[#7C4DE0]',
+                          'bg-gradient-to-br from-[#8A6D3B] to-[#C79A4B]',
+                        ][i % 4]
+                  }`}
+                >
+                  {l.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={l.imageUrl}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[rgba(11,13,18,0.82)] via-transparent to-transparent" />
+                  <div className="absolute bottom-3 left-3.5 right-3">
+                    <div className="truncate text-[14.5px] font-bold text-white">{l.name}</div>
+                    <div className="mt-0.5 truncate text-[11.5px] text-white/85">
+                      {l.district} · {t.zoneCount(l.zone!.count)}
+                      {l.zone!.cheapest != null && ` · ${t.zoneFrom(`฿${l.zone!.cheapest.toLocaleString()}`)}`}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
       )}
 
       {/* ===== FOOTER ===== */}
