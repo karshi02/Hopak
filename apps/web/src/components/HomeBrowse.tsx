@@ -243,6 +243,10 @@ function SectionHead({ title, sub, action }: { title: string; sub?: string; acti
 /** ทำเลยอดนิยม (การ์ดรายจังหวัด) — ปิดไว้ชั่วคราวตามที่สั่ง เปลี่ยนเป็น true เพื่อเอากลับ */
 const SHOW_POPULAR_ZONES = false;
 
+/** ทำเลย่อยรายอำเภอในมหาสารคาม — ปิดไว้ตามที่สั่ง เปลี่ยนเป็น true เพื่อเอากลับ
+ *  (ตัว mskDistricts ยังคำนวณอยู่ เพราะการ์ด "ใกล้สถานที่สำคัญ" ใช้จำนวนหอรายอำเภอจากตรงนี้) */
+const SHOW_MSK_DISTRICTS = false;
+
 function ZoneCard({
   href,
   images,
@@ -942,6 +946,66 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
       </div>
 
+      {/* ===== RECOMMENDED DORMS (คะแนนรีวิวจริงสูงสุด) ===== */}
+      {topDorms.length > 0 && (
+        <div className="mx-auto max-w-[1240px] px-6 pt-12">
+          <SectionHead title={t.trendingTitle} sub={t.trendingSub} />
+          <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
+            {topDorms.map((d) => {
+              const isFavorited = favoriteIds.has(d.id);
+              const cheapest = cheapestOf([d]);
+              return (
+                <Link
+                  key={d.id}
+                  href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
+                  className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#EAEDF2] bg-white shadow-[0_2px_6px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(16,24,40,0.14)]"
+                >
+                  <div className="relative h-[150px] shrink-0 bg-surface-canvas">
+                    {d.images?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={d.images[0]} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center font-mono text-xs text-ink-faint">
+                        {t.photoPlaceholder}
+                      </div>
+                    )}
+                    <FavoriteButton active={isFavorited} onToggle={() => toggle(d.id)} />
+                  </div>
+                  <div className="flex flex-1 flex-col p-3.5">
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <StarRating rating={d.avgRating} count={d.reviewCount} />
+                    </div>
+                    <div className="truncate text-[15px] font-bold tracking-tight">{d.name}</div>
+                    {d.university && <div className="mt-1 truncate text-xs text-[#8A909F]">{d.university}</div>}
+                    {/* ทำเล — อำเภอ (จับจาก address) + จังหวัด */}
+                    <div className="mt-1 flex items-center gap-1 text-xs text-[#8A909F]">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                        <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#9AA0AB" strokeWidth="2" />
+                        <circle cx="12" cy="10" r="3" stroke="#9AA0AB" strokeWidth="2" />
+                      </svg>
+                      <span className="truncate">
+                        {[findDistrict(d.address), provinceLabel(d.province)].filter(Boolean).join(' · ')}
+                      </span>
+                    </div>
+                    <div className="mt-auto border-t border-[#F0F2F6] pt-2.5">
+                      {cheapest != null ? (
+                        <>
+                          <span className="text-[11px] text-[#9AA0AB]">{lang === 'th' ? 'เริ่มต้น ' : 'From '}</span>
+                          <span className="font-sans text-[19px] font-bold text-tenant">฿{cheapest.toLocaleString()}</span>
+                          <span className="text-xs text-[#9AA0AB]"> {perUnit}</span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-ink-faint">{t.full}</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ===== PROVINCE SELECTOR + BROWSE =====
           ตัวเลือกจังหวัดอยู่ในหัวหมวดเลย ของเดิมลอยเป็นแถวเดี่ยวเหนือหัวข้อ ดูไม่รู้ว่าคุมอะไร */}
       <div className="mx-auto mt-12 max-w-[1240px] px-6">
@@ -1086,9 +1150,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
       {/* ===== POPULAR ZONES (จังหวัดจริง) =====
           ปิดไว้ก่อนตามที่สั่ง — เปิดกลับด้วยการตั้ง SHOW_POPULAR_ZONES = true
-          กล่องนี้ครอบ "ใกล้สถานที่สำคัญ" กับ "ทำเลย่อย" อยู่ด้วย จึงปิดเฉพาะหัวข้อกับการ์ดจังหวัด
-          ไม่ได้ถอดทั้งบล็อก */}
-      {(SHOW_POPULAR_ZONES ? topProvinces.length > 0 : mskDistricts.length > 0) && (
+          กล่องนี้ครอบ "ทำเลย่อย" อยู่ด้วย จึงปิดด้วยแฟล็กแยกกัน ไม่ได้ถอดทั้งบล็อก */}
+      {(SHOW_POPULAR_ZONES ? topProvinces.length > 0 : SHOW_MSK_DISTRICTS && mskDistricts.length > 0) && (
         <div className="mx-auto max-w-[1240px] px-6 pt-12">
           {SHOW_POPULAR_ZONES && (
           <SectionHead
@@ -1126,7 +1189,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           )}
 
           {/* การ์ดย่อยรายอำเภอ — เฉพาะมหาสารคาม */}
-          {mskDistricts.length > 0 && (
+          {SHOW_MSK_DISTRICTS && mskDistricts.length > 0 && (
             <div className={SHOW_POPULAR_ZONES ? 'mt-10' : ''}>
               <SectionHead title={t.mskZonesTitle} sub={t.mskZonesSub} />
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
@@ -1158,66 +1221,6 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* ===== RECOMMENDED DORMS (คะแนนรีวิวจริงสูงสุด) ===== */}
-      {topDorms.length > 0 && (
-        <div className="mx-auto max-w-[1240px] px-6 pt-12">
-          <SectionHead title={t.trendingTitle} sub={t.trendingSub} />
-          <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
-            {topDorms.map((d) => {
-              const isFavorited = favoriteIds.has(d.id);
-              const cheapest = cheapestOf([d]);
-              return (
-                <Link
-                  key={d.id}
-                  href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
-                  className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#EAEDF2] bg-white shadow-[0_2px_6px_rgba(16,24,40,0.05)] transition-all hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(16,24,40,0.14)]"
-                >
-                  <div className="relative h-[150px] shrink-0 bg-surface-canvas">
-                    {d.images?.[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={d.images[0]} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center font-mono text-xs text-ink-faint">
-                        {t.photoPlaceholder}
-                      </div>
-                    )}
-                    <FavoriteButton active={isFavorited} onToggle={() => toggle(d.id)} />
-                  </div>
-                  <div className="flex flex-1 flex-col p-3.5">
-                    <div className="mb-1 flex items-center gap-1.5">
-                      <StarRating rating={d.avgRating} count={d.reviewCount} />
-                    </div>
-                    <div className="truncate text-[15px] font-bold tracking-tight">{d.name}</div>
-                    {d.university && <div className="mt-1 truncate text-xs text-[#8A909F]">{d.university}</div>}
-                    {/* ทำเล — อำเภอ (จับจาก address) + จังหวัด */}
-                    <div className="mt-1 flex items-center gap-1 text-xs text-[#8A909F]">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                        <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0z" stroke="#9AA0AB" strokeWidth="2" />
-                        <circle cx="12" cy="10" r="3" stroke="#9AA0AB" strokeWidth="2" />
-                      </svg>
-                      <span className="truncate">
-                        {[findDistrict(d.address), provinceLabel(d.province)].filter(Boolean).join(' · ')}
-                      </span>
-                    </div>
-                    <div className="mt-auto border-t border-[#F0F2F6] pt-2.5">
-                      {cheapest != null ? (
-                        <>
-                          <span className="text-[11px] text-[#9AA0AB]">{lang === 'th' ? 'เริ่มต้น ' : 'From '}</span>
-                          <span className="font-sans text-[19px] font-bold text-tenant">฿{cheapest.toLocaleString()}</span>
-                          <span className="text-xs text-[#9AA0AB]"> {perUnit}</span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-ink-faint">{t.full}</span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
         </div>
       )}
 
