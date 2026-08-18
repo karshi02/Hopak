@@ -920,6 +920,137 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
       </div>
 
+      {/* ===== PROVINCE SELECTOR + BROWSE ===== */}
+      <div className="mx-auto mt-11 flex max-w-[1240px] items-center gap-3.5 px-6">
+        <span className="text-sm font-semibold text-ink-body">{t.selectProvince}</span>
+        <div className="relative w-full max-w-[320px]">
+          <div
+            onClick={() => setOpen((v) => !v)}
+            className="flex h-[50px] cursor-pointer items-center gap-2.5 rounded-xl border border-[#D8DCE2] bg-white px-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
+              <path
+                d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z"
+                stroke="#2F6FE0"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+              />
+              <circle cx="12" cy="11" r="2.3" stroke="#2F6FE0" strokeWidth="1.8" />
+            </svg>
+            <span className="flex-1 text-base font-semibold text-ink-strong">{provinceLabel(province)}</span>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            >
+              <path d="M6 9l6 6 6-6" stroke="#8A909B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          {open && (
+            <div className="absolute left-0 right-0 top-14 z-10 rounded-xl border border-card-border bg-white p-1.5 shadow-[0_12px_30px_rgba(20,40,80,0.16)]">
+              {PROVINCES.map((p) => {
+                const selected = p === province;
+                return (
+                  <div
+                    key={p}
+                    onClick={() => {
+                      setProvince(p);
+                      setOpen(false);
+                    }}
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[15px] hover:bg-[#F1F3F6] ${
+                      selected ? 'bg-tenant-tint text-tenant' : 'text-ink-body'
+                    }`}
+                  >
+                    <span className={`flex-1 ${selected ? 'font-bold' : 'font-medium'}`}>{provinceLabel(p)}</span>
+                    <span className="text-[13px] text-ink-muted">
+                      {byProvince.get(p)?.length ?? 0} {t.dormsUnit}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mx-auto mt-5 max-w-[1240px] px-6">
+        <div className="mb-3.5 flex items-baseline gap-2.5">
+          <div className="text-[22px] font-bold">{t.dormsIn(provinceLabel(province))}</div>
+          <span className="text-sm text-ink-muted">{t.nearbyCount(visibleCurrentDorms.length)}</span>
+        </div>
+
+        {visibleCurrentDorms.length === 0 ? (
+          <p className="text-ink-faint">{dailyMode ? t.noDailyDorms : t.noDorms}</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
+            {visibleCurrentDorms.slice(0, 4).map((d) => {
+              const okRooms = d.rooms.filter(roomOk);
+              const startingRoom = [...okRooms].sort((a, b) => roomPrice(a) - roomPrice(b))[0];
+              const isFavorited = favoriteIds.has(d.id);
+              // ยอดฮิต = รีวิวดี (คะแนน ≥ 4.5 จากรีวิวอย่างน้อย 3 ครั้ง)
+              const isPopular = (d.avgRating ?? 0) >= 4.5 && (d.reviewCount ?? 0) >= 3;
+              return (
+                <Link
+                  key={d.id}
+                  href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
+                  className="block overflow-hidden rounded-card-lg border border-[#E7E9EC] bg-white shadow-card hover:shadow-card-hover"
+                >
+                  <div className="relative h-[150px] bg-surface-canvas">
+                    {d.images?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={d.images[0]} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center font-mono text-xs text-ink-faint">
+                        {t.photoPlaceholder}
+                      </div>
+                    )}
+                    {isPopular && (
+                      <span className="absolute left-2.5 top-2.5 z-[1] inline-flex items-center gap-1 rounded-full bg-[#FF6B35] px-2.5 py-1 text-[11px] font-bold text-white shadow">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2c1 3-1 4-2 6-1 2 0 4 2 4s2-2 1-4c3 1 5 4 5 7a6 6 0 11-12 0c0-4 3-6 6-13z" />
+                        </svg>
+                        {t.popular}
+                      </span>
+                    )}
+                    <FavoriteButton active={isFavorited} onToggle={() => toggle(d.id)} />
+                  </div>
+                  <div className="p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="truncate text-[15.5px] font-bold">{d.name}</div>
+                      <StarRating rating={d.avgRating} count={d.reviewCount} />
+                    </div>
+                    <div className="mt-0.5 truncate text-[13px] text-ink-muted">
+                      {d.university ?? provinceLabel(d.province)}
+                      {myLocation && (
+                        <span className="text-tenant"> · {t.distanceAway(haversineKm(myLocation.lat, myLocation.lng, d.lat, d.lng))}</span>
+                      )}
+                    </div>
+                    <div className="mt-2.5 flex items-baseline justify-between gap-2 text-sm">
+                      {startingRoom ? (
+                        <span>
+                          <b className="font-sans text-lg">฿{roomPrice(startingRoom).toLocaleString()}</b>
+                          <span className="text-ink-muted"> {perUnit}</span>
+                        </span>
+                      ) : (
+                        <span className="text-ink-faint">{t.full}</span>
+                      )}
+                      {okRooms.length > 0 && (
+                        <span className="shrink-0 rounded-full bg-success-tint px-2 py-0.5 text-[11.5px] font-semibold text-success">
+                          {t.roomsAvailable(okRooms.length)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* ===== POPULAR ZONES (จังหวัดจริง) ===== */}
       {topProvinces.length > 0 && (
         <div className="mx-auto max-w-[1240px] px-6 pt-10">
@@ -1097,137 +1228,6 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           </div>
         </div>
       )}
-
-      {/* ===== PROVINCE SELECTOR + BROWSE ===== */}
-      <div className="mx-auto mt-11 flex max-w-[1240px] items-center gap-3.5 px-6">
-        <span className="text-sm font-semibold text-ink-body">{t.selectProvince}</span>
-        <div className="relative w-full max-w-[320px]">
-          <div
-            onClick={() => setOpen((v) => !v)}
-            className="flex h-[50px] cursor-pointer items-center gap-2.5 rounded-xl border border-[#D8DCE2] bg-white px-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <path
-                d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z"
-                stroke="#2F6FE0"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="11" r="2.3" stroke="#2F6FE0" strokeWidth="1.8" />
-            </svg>
-            <span className="flex-1 text-base font-semibold text-ink-strong">{provinceLabel(province)}</span>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
-            >
-              <path d="M6 9l6 6 6-6" stroke="#8A909B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-
-          {open && (
-            <div className="absolute left-0 right-0 top-14 z-10 rounded-xl border border-card-border bg-white p-1.5 shadow-[0_12px_30px_rgba(20,40,80,0.16)]">
-              {PROVINCES.map((p) => {
-                const selected = p === province;
-                return (
-                  <div
-                    key={p}
-                    onClick={() => {
-                      setProvince(p);
-                      setOpen(false);
-                    }}
-                    className={`flex cursor-pointer items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[15px] hover:bg-[#F1F3F6] ${
-                      selected ? 'bg-tenant-tint text-tenant' : 'text-ink-body'
-                    }`}
-                  >
-                    <span className={`flex-1 ${selected ? 'font-bold' : 'font-medium'}`}>{provinceLabel(p)}</span>
-                    <span className="text-[13px] text-ink-muted">
-                      {byProvince.get(p)?.length ?? 0} {t.dormsUnit}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mx-auto mt-5 max-w-[1240px] px-6">
-        <div className="mb-3.5 flex items-baseline gap-2.5">
-          <div className="text-[22px] font-bold">{t.dormsIn(provinceLabel(province))}</div>
-          <span className="text-sm text-ink-muted">{t.nearbyCount(visibleCurrentDorms.length)}</span>
-        </div>
-
-        {visibleCurrentDorms.length === 0 ? (
-          <p className="text-ink-faint">{dailyMode ? t.noDailyDorms : t.noDorms}</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
-            {visibleCurrentDorms.slice(0, 4).map((d) => {
-              const okRooms = d.rooms.filter(roomOk);
-              const startingRoom = [...okRooms].sort((a, b) => roomPrice(a) - roomPrice(b))[0];
-              const isFavorited = favoriteIds.has(d.id);
-              // ยอดฮิต = รีวิวดี (คะแนน ≥ 4.5 จากรีวิวอย่างน้อย 3 ครั้ง)
-              const isPopular = (d.avgRating ?? 0) >= 4.5 && (d.reviewCount ?? 0) >= 3;
-              return (
-                <Link
-                  key={d.id}
-                  href={`/dorms/${d.id}${dailyMode ? '?rental=daily' : ''}`}
-                  className="block overflow-hidden rounded-card-lg border border-[#E7E9EC] bg-white shadow-card hover:shadow-card-hover"
-                >
-                  <div className="relative h-[150px] bg-surface-canvas">
-                    {d.images?.[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={d.images[0]} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center font-mono text-xs text-ink-faint">
-                        {t.photoPlaceholder}
-                      </div>
-                    )}
-                    {isPopular && (
-                      <span className="absolute left-2.5 top-2.5 z-[1] inline-flex items-center gap-1 rounded-full bg-[#FF6B35] px-2.5 py-1 text-[11px] font-bold text-white shadow">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2c1 3-1 4-2 6-1 2 0 4 2 4s2-2 1-4c3 1 5 4 5 7a6 6 0 11-12 0c0-4 3-6 6-13z" />
-                        </svg>
-                        {t.popular}
-                      </span>
-                    )}
-                    <FavoriteButton active={isFavorited} onToggle={() => toggle(d.id)} />
-                  </div>
-                  <div className="p-3.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="truncate text-[15.5px] font-bold">{d.name}</div>
-                      <StarRating rating={d.avgRating} count={d.reviewCount} />
-                    </div>
-                    <div className="mt-0.5 truncate text-[13px] text-ink-muted">
-                      {d.university ?? provinceLabel(d.province)}
-                      {myLocation && (
-                        <span className="text-tenant"> · {t.distanceAway(haversineKm(myLocation.lat, myLocation.lng, d.lat, d.lng))}</span>
-                      )}
-                    </div>
-                    <div className="mt-2.5 flex items-baseline justify-between gap-2 text-sm">
-                      {startingRoom ? (
-                        <span>
-                          <b className="font-sans text-lg">฿{roomPrice(startingRoom).toLocaleString()}</b>
-                          <span className="text-ink-muted"> {perUnit}</span>
-                        </span>
-                      ) : (
-                        <span className="text-ink-faint">{t.full}</span>
-                      )}
-                      {okRooms.length > 0 && (
-                        <span className="shrink-0 rounded-full bg-success-tint px-2 py-0.5 text-[11.5px] font-semibold text-success">
-                          {t.roomsAvailable(okRooms.length)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* ===== FOOTER ===== */}
       <div className="mt-14 border-t border-[#E4E7EC] bg-white pt-11">
