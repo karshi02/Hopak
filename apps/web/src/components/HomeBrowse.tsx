@@ -112,8 +112,6 @@ const TEXT = {
     zonesSub: 'เลือกจังหวัดที่ใช่ แล้วดูหอพักทั้งหมดในจังหวัดนั้น',
     landmarkTitle: 'ใกล้สถานที่สำคัญ',
     landmarkSub: 'เลือกสถานที่ แล้วดูหอพักในอำเภอเดียวกัน',
-    mskZonesTitle: 'ทำเลย่อยในมหาสารคาม',
-    mskZonesSub: 'เลือกอำเภอที่ใช่',
     viewAllZones: 'ดูทั้งหมด →',
     selectProvince: 'เลือกจังหวัด',
     zoneCount: (n: number) => `${n} หอพัก`,
@@ -180,8 +178,6 @@ const TEXT = {
     zonesSub: 'Pick a province to see all its dorms',
     landmarkTitle: 'Near landmarks',
     landmarkSub: 'Pick a place, see dorms in the same district',
-    mskZonesTitle: 'Areas in Maha Sarakham',
-    mskZonesSub: 'Pick a district',
     viewAllZones: 'View all →',
     selectProvince: 'Select province',
     zoneCount: (n: number) => `${n} dorms`,
@@ -242,10 +238,6 @@ function SectionHead({ title, sub, action }: { title: string; sub?: string; acti
 
 /** ทำเลยอดนิยม (การ์ดรายจังหวัด) — ปิดไว้ชั่วคราวตามที่สั่ง เปลี่ยนเป็น true เพื่อเอากลับ */
 const SHOW_POPULAR_ZONES = false;
-
-/** ทำเลย่อยรายอำเภอในมหาสารคาม — ปิดไว้ตามที่สั่ง เปลี่ยนเป็น true เพื่อเอากลับ
- *  (ตัว mskDistricts ยังคำนวณอยู่ เพราะการ์ด "ใกล้สถานที่สำคัญ" ใช้จำนวนหอรายอำเภอจากตรงนี้) */
-const SHOW_MSK_DISTRICTS = false;
 
 function ZoneCard({
   href,
@@ -554,7 +546,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       .slice(0, 4);
   }, [byProvince]);
 
-  // การ์ดย่อยรายอำเภอ — ทำเฉพาะมหาสารคาม (จังหวัดหลักของแพลตฟอร์ม) จังหวัดอื่นยังไม่มีข้อมูลมากพอ
+  // จำนวนหอรายอำเภอของมหาสารคาม — ใช้กรอง/นับให้การ์ด "ใกล้สถานที่สำคัญ" เท่านั้น (ไม่มีหมวดทำเลย่อยบนหน้าแรกแล้ว)
   // ระบบไม่มีฟิลด์อำเภอ จับจากข้อความ address ของหอตรงๆ นับเฉพาะอำเภอที่มีหอจริง
   const mskDistricts = useMemo(() => {
     const list = byProvince.get(MSK_PROVINCE) ?? [];
@@ -1149,9 +1141,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       </div>
 
       {/* ===== POPULAR ZONES (จังหวัดจริง) =====
-          ปิดไว้ก่อนตามที่สั่ง — เปิดกลับด้วยการตั้ง SHOW_POPULAR_ZONES = true
-          กล่องนี้ครอบ "ทำเลย่อย" อยู่ด้วย จึงปิดด้วยแฟล็กแยกกัน ไม่ได้ถอดทั้งบล็อก */}
-      {(SHOW_POPULAR_ZONES ? topProvinces.length > 0 : SHOW_MSK_DISTRICTS && mskDistricts.length > 0) && (
+          ปิดไว้ก่อนตามที่สั่ง — เปิดกลับด้วยการตั้ง SHOW_POPULAR_ZONES = true */}
+      {SHOW_POPULAR_ZONES && topProvinces.length > 0 && (
         <div className="mx-auto max-w-[1240px] px-6 pt-12">
           {SHOW_POPULAR_ZONES && (
           <SectionHead
@@ -1186,40 +1177,6 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               />
             ))}
           </div>
-          )}
-
-          {/* การ์ดย่อยรายอำเภอ — เฉพาะมหาสารคาม */}
-          {SHOW_MSK_DISTRICTS && mskDistricts.length > 0 && (
-            <div className={SHOW_POPULAR_ZONES ? 'mt-10' : ''}>
-              <SectionHead title={t.mskZonesTitle} sub={t.mskZonesSub} />
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-                {mskDistricts.map((z) => (
-                  <Link
-                    key={z.district}
-                    href={`/search?province=${encodeURIComponent(MSK_PROVINCE)}&district=${encodeURIComponent(z.district)}`}
-                    className="group flex items-center justify-between gap-2 rounded-[13px] border border-[#EDF0F4] bg-[#F7F9FC] px-3.5 py-3 transition hover:border-tenant hover:bg-white"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-[13.5px] font-bold text-ink-strong">{z.district}</div>
-                      <div className="mt-0.5 truncate text-[11.5px] text-[#8A909F]">
-                        {t.zoneCount(z.count)}
-                        {z.cheapest != null && ` · ${t.zoneFrom(`฿${z.cheapest.toLocaleString()}`)}`}
-                      </div>
-                    </div>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                      <path
-                        d="M9 6l6 6-6 6"
-                        stroke="#B4BAC6"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="group-hover:stroke-tenant"
-                      />
-                    </svg>
-                  </Link>
-                ))}
-              </div>
-            </div>
           )}
         </div>
       )}
