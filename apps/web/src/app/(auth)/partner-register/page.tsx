@@ -516,7 +516,7 @@ export default function PartnerRegisterPage() {
                 <Field label="อีเมล" hint="เราจะส่งรหัส OTP ไปยืนยัน"><input value={email} type="email" onChange={(event) => setEmail(event.target.value)} placeholder="your@email.com" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 font-sans text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field>
               </div>
               <div className="mt-5">
-                <Turnstile onToken={setCaptcha} />
+                <Turnstile onToken={setCaptcha} action="owner-signup" />
               </div>
               <div className="flex-1" />
               {/* อีเมลนี้มีบัญชีเจ้าของหออยู่แล้ว — บอกให้ชัดตรงนี้เลย พร้อมทางไปต่อ ไม่ต้องให้เดา */}
