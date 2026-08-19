@@ -126,6 +126,7 @@ interface HeroSlide {
   url: string;
   pos: string;
   zoom: number;
+  fit?: 'cover' | 'contain';
 }
 
 export default function AdminWebsiteInlineEditPage() {
@@ -280,7 +281,7 @@ export default function AdminWebsiteInlineEditPage() {
   }
 
   // ปรับจุดโฟกัส/ซูมของรูปที่เลือกอยู่ — อัปเดตพรีวิวทันที แล้วค่อยยิงเก็บ
-  function patchSlide(patch: Partial<Pick<HeroSlide, 'pos' | 'zoom'>>) {
+  function patchSlide(patch: Partial<Pick<HeroSlide, 'pos' | 'zoom' | 'fit'>>) {
     const index = slideIdx;
     setSlides((prev) => prev.map((sl, i) => (i === index ? { ...sl, ...patch } : sl)));
     if (slideSaveTimer.current) clearTimeout(slideSaveTimer.current);
@@ -411,9 +412,16 @@ export default function AdminWebsiteInlineEditPage() {
               className="relative bg-cover bg-center px-5 py-9 text-center sm:px-12 sm:py-[52px]"
               style={{
                 background: heroBg,
-                // ซูม 100 = พอดีกรอบ มากกว่านั้นขยายจากจุดโฟกัสที่เลือก (ตรงกับที่หน้าแรกจริงเรนเดอร์)
-                backgroundSize: current && zoom > 100 ? `${zoom}% auto` : 'cover',
-                backgroundPosition: current ? current.pos || '50% 50%' : 'center',
+                // ตรงกับที่หน้าแรกจริงเรนเดอร์: contain = เห็นทั้งรูป · cover = ครอปเต็มกรอบ (ซูมได้)
+                backgroundSize: !current
+                  ? 'cover'
+                  : current.fit === 'contain'
+                    ? 'contain'
+                    : zoom > 100
+                      ? `${zoom}% auto`
+                      : 'cover',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: current && current.fit !== 'contain' ? current.pos || '50% 50%' : 'center',
               }}
             >
               {/* ม่านอ่านง่าย — ชุดเดียวกับหน้าแรกจริง จะได้เห็นตรงกับที่ผู้ใช้เห็น */}
@@ -538,6 +546,36 @@ export default function AdminWebsiteInlineEditPage() {
               {current && (
                 <div className="relative z-[2] mx-auto mt-6 flex max-w-[420px] flex-col gap-2.5 rounded-2xl bg-black/30 px-4 py-3 backdrop-blur-sm">
                   <div className="text-[12.5px] font-semibold text-white">รูปที่ {slideIdx + 1} — ตำแหน่งและขนาด</div>
+
+                  {/* วิธีวางรูปในกรอบ — "เห็นทั้งรูป" ระบบย่อให้พอดีจอเอง ไม่ต้องลากปรับ */}
+                  <div className="flex gap-1.5">
+                    {(
+                      [
+                        ['cover', 'เต็มกรอบ (ครอปขอบ)'],
+                        ['contain', 'เห็นทั้งรูป (ย่อพอดีจอ)'],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => patchSlide({ fit: mode })}
+                        className={`flex-1 rounded-[9px] px-2 py-1.5 text-[11.5px] font-bold transition ${
+                          (current?.fit ?? 'cover') === mode
+                            ? 'bg-white text-[#14171C]'
+                            : 'bg-white/15 text-white hover:bg-white/25'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {current?.fit === 'contain' ? (
+                    <p className="text-[11.5px] leading-relaxed text-white/75">
+                      โหมดนี้ระบบย่อรูปให้พอดีจอเองทุกขนาดหน้าจอ ไม่ครอปส่วนไหนทิ้ง
+                      พื้นที่ที่เหลือเติมด้วยรูปเดิมแบบเบลอ — ไม่ต้องปรับตำแหน่งหรือซูม
+                    </p>
+                  ) : (
+                    <>
                   <label className="flex items-center gap-3">
                     <span className="w-14 text-[12px] text-white/85">แนวนอน</span>
                     <input
@@ -585,6 +623,8 @@ export default function AdminWebsiteInlineEditPage() {
                   >
                     รีเซ็ตเป็นกึ่งกลาง / ไม่ซูม
                   </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

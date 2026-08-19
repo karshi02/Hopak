@@ -94,10 +94,14 @@ export class SettingsController {
   @Post('admin/settings/hero/slides/:index')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  updateHeroSlide(@Param('index') index: string, @Body() body: { pos?: string; zoom?: number }) {
+  updateHeroSlide(
+    @Param('index') index: string,
+    @Body() body: { pos?: string; zoom?: number; fit?: 'cover' | 'contain' },
+  ) {
     return this.settingsService.updateHeroSlide(Number(index), {
       pos: body?.pos,
       zoom: body?.zoom == null ? undefined : Number(body.zoom),
+      fit: body?.fit,
     });
   }
 

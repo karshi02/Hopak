@@ -13,8 +13,10 @@ export interface HeroSlide {
   url: string;
   /** จุดโฟกัสตอนครอป "X% Y%" */
   pos: string;
-  /** ซูม 100-250 (%) — 100 = พอดีกรอบ */
+  /** ซูม 100-250 (%) — 100 = พอดีกรอบ (ใช้เฉพาะโหมด cover) */
   zoom: number;
+  /** cover = ครอปให้เต็มกรอบ (ค่าเริ่มต้น) · contain = ย่อให้เห็นทั้งรูป ไม่ครอป */
+  fit: 'cover' | 'contain';
 }
 
 const MAX_HERO_SLIDES = 8;
@@ -26,7 +28,8 @@ function cleanSlide(raw: unknown): HeroSlide | null {
   const pos = /^\d{1,3}% \d{1,3}%$/.test(String(o.pos ?? '')) ? String(o.pos) : '50% 50%';
   const zoomRaw = Number(o.zoom);
   const zoom = Number.isFinite(zoomRaw) ? Math.min(250, Math.max(100, Math.round(zoomRaw))) : 100;
-  return { url, pos, zoom };
+  const fit = o.fit === 'contain' ? 'contain' : 'cover';
+  return { url, pos, zoom, fit };
 }
 
 export interface PromoCard {
@@ -110,7 +113,7 @@ export class SettingsService {
     const list = Array.isArray(settings?.heroSlides) ? settings!.heroSlides : [];
     const clean = list.map(cleanSlide).filter((x): x is HeroSlide => !!x);
     if (clean.length) return clean;
-    return settings?.heroImageUrl ? [{ url: settings.heroImageUrl, pos: '50% 50%', zoom: 100 }] : [];
+    return settings?.heroImageUrl ? [{ url: settings.heroImageUrl, pos: '50% 50%', zoom: 100, fit: 'cover' as const }] : [];
   }
 
   private async saveSlides(slides: HeroSlide[]) {
@@ -127,11 +130,11 @@ export class SettingsService {
   async addHeroSlides(urls: string[]) {
     const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
     const current = this.slidesOf(existing);
-    const added = urls.map((url) => ({ url, pos: '50% 50%', zoom: 100 }));
+    const added = urls.map((url) => ({ url, pos: '50% 50%', zoom: 100, fit: 'cover' as const }));
     return this.saveSlides([...current, ...added]);
   }
 
-  async updateHeroSlide(index: number, patch: { pos?: string; zoom?: number }) {
+  async updateHeroSlide(index: number, patch: { pos?: string; zoom?: number; fit?: 'cover' | 'contain' }) {
     const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
     const current = this.slidesOf(existing);
     if (!current[index]) throw new BadRequestException('ไม่พบสไลด์ที่ต้องการแก้');
@@ -217,7 +220,7 @@ export class SettingsService {
     const current = this.slidesOf(existing);
     const next = current.length
       ? [{ ...current[0], url: heroImageUrl }, ...current.slice(1)]
-      : [{ url: heroImageUrl, pos: '50% 50%', zoom: 100 }];
+      : [{ url: heroImageUrl, pos: '50% 50%', zoom: 100, fit: 'cover' as const }];
     return this.saveSlides(next);
   }
 
