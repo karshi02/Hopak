@@ -383,6 +383,9 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const [promoCards, setPromoCards] = useState<PromoCardData[]>([]);
   const [homeContent, setHomeContent] = useState<HomeContent>({});
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  // แบนเนอร์หลายรูป — แอดมินเพิ่มได้ ปรับจุดโฟกัส/ซูมได้รายรูป มากกว่า 1 รูปจะเลื่อนเองทุก 5 วิ
+  const [heroSlides, setHeroSlides] = useState<{ url: string; pos: string; zoom: number }[]>([]);
+  const [heroIndex, setHeroIndex] = useState(0);
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [topSearchQ, setTopSearchQ] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -391,12 +394,14 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     apiClient
       .get<{
         heroImageUrl: string | null;
+        heroSlides?: { url: string; pos: string; zoom: number }[];
         areaImages: Record<string, string[]>;
         promoCards: PromoCardData[];
         homeContent: HomeContent;
       }>('/settings/hero')
       .then((data) => {
         setHeroImageUrl(data.heroImageUrl ?? null);
+        setHeroSlides(data.heroSlides ?? []);
         setAreaImages(data.areaImages ?? {});
         setPromoCards(data.promoCards ?? []);
         setHomeContent(data.homeContent ?? {});
@@ -494,6 +499,22 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         : { tag: c.tagEn, title: c.titleEn, sub: c.subEn };
     return def;
   });
+
+  // รูปแบนเนอร์ที่จะโชว์จริง — ยังไม่เคยตั้งสไลด์แต่มี heroImageUrl เก่า ให้ใช้เป็นสไลด์เดียว
+  const slides =
+    heroSlides.length > 0
+      ? heroSlides
+      : heroImageUrl
+        ? [{ url: heroImageUrl, pos: homeContent.heroPos || '50% 50%', zoom: 100 }]
+        : [];
+
+  // เลื่อนแบนเนอร์เองทุก 5 วิ เฉพาะตอนมีมากกว่า 1 รูป (รูปเดียวไม่ต้องตั้ง timer ให้เปลือง)
+  useEffect(() => {
+    if (heroSlides.length < 2) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const id = window.setInterval(() => setHeroIndex((i) => (i + 1) % heroSlides.length), 5000);
+    return () => window.clearInterval(id);
+  }, [heroSlides.length]);
 
   // จอมือถือ: การ์ดจุดขาย 3 ใบเรียงลงมากินพื้นที่เกือบเต็มจอ เปลี่ยนเป็นเลื่อนแนวนอนทีละใบ เลื่อนเองทุก 4 วิ
   // เลื่อนด้วย scrollTo ของ container จริง (ไม่ใช่ transform) ปัดนิ้วเองยังทำงานตามปกติ จุดบอกตำแหน่งอ่านจาก scrollLeft
@@ -870,32 +891,74 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
       </div>
 
-      {/* ===== HERO ===== */}
-      {/* รูปที่อัปโหลด = โชว์ภาพจริงไม่มีฟิลเตอร์ (ใส่เงาตัวอักษรให้ยังอ่านออก) · ไม่มีรูป = สีที่แอดมินเลือก หรือ gradient เริ่มต้น */}
+      {/* ===== HERO =====
+          แบนเนอร์หลายรูป: ทุกรูปวางซ้อนกัน เปลี่ยนด้วย opacity (จางเข้า-ออก) ไม่ใช่การเลื่อน
+          จะได้ไม่ต้องคุม scroll และรูปที่ยังไม่ถึงคิวก็โหลดไว้ล่วงหน้าแล้ว ไม่วูบตอนสลับ
+          รูปของแอดมินมักมีตัวหนังสือในรูปอยู่แล้ว จึงมีม่านดำไล่เฉดคาดไว้ให้หัวข้อของระบบยังอ่านออก */}
       <div
-        className={`relative bg-cover bg-center px-4 pb-[150px] pt-11 text-center sm:pb-[190px] sm:pt-14 ${
-          heroImageUrl || homeContent.heroColor ? '' : 'bg-[linear-gradient(120deg,#2F6FE0,#2456B8)]'
+        className={`relative overflow-hidden px-4 pb-[150px] pt-11 text-center sm:pb-[190px] sm:pt-14 ${
+          slides.length || homeContent.heroColor ? '' : 'bg-[linear-gradient(120deg,#2F6FE0,#2456B8)]'
         }`}
-        style={
-          heroImageUrl
-            ? { backgroundImage: `url('${heroImageUrl}')`, backgroundPosition: homeContent.heroPos || 'center' }
-            : homeContent.heroColor
-              ? { background: homeContent.heroColor }
-              : undefined
-        }
+        style={!slides.length && homeContent.heroColor ? { background: homeContent.heroColor } : undefined}
       >
-        <h1
-          className="mx-auto max-w-3xl text-[26px] font-bold leading-tight tracking-tight text-white text-balance sm:text-[36px]"
-          style={heroImageUrl ? { textShadow: '0 2px 12px rgba(0,0,0,0.55)' } : undefined}
-        >
-          {heroTitle}
-        </h1>
-        <p
-          className="mt-2 text-[15px] text-[#EAF1FD] sm:text-[16px]"
-          style={heroImageUrl ? { textShadow: '0 1px 8px rgba(0,0,0,0.6)' } : undefined}
-        >
-          {heroSubtitle}
-        </p>
+        {slides.map((slide, i) => (
+          <div
+            key={`${slide.url}-${i}`}
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-cover transition-opacity duration-700 ease-out motion-reduce:transition-none"
+            style={{
+              backgroundImage: `url('${slide.url}')`,
+              backgroundPosition: slide.pos || 'center',
+              // ซูม 100% = พอดีกรอบ (cover) มากกว่านั้นขยายจากจุดโฟกัสเดิม
+              backgroundSize: slide.zoom > 100 ? `${slide.zoom}% auto` : 'cover',
+              opacity: i === heroIndex % slides.length ? 1 : 0,
+            }}
+          />
+        ))}
+
+        {/* ม่านอ่านง่าย — เข้มบนล่าง จางกลาง ตัวหนังสือในรูปของแอดมินยังเห็น แต่หัวข้อเราไม่จม */}
+        {slides.length > 0 && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(8,12,22,0.62) 0%, rgba(8,12,22,0.30) 45%, rgba(8,12,22,0.55) 100%)',
+            }}
+          />
+        )}
+
+        <div className="relative">
+          <h1
+            className="mx-auto max-w-3xl text-[26px] font-bold leading-tight tracking-tight text-white text-balance sm:text-[36px]"
+            style={slides.length ? { textShadow: '0 2px 14px rgba(0,0,0,0.75)' } : undefined}
+          >
+            {heroTitle}
+          </h1>
+          <p
+            className="mt-2 text-[15px] text-[#EAF1FD] sm:text-[16px]"
+            style={slides.length ? { textShadow: '0 1px 10px rgba(0,0,0,0.8)' } : undefined}
+          >
+            {heroSubtitle}
+          </p>
+
+          {/* จุดบอกรูป — โชว์เฉพาะตอนมีหลายรูป กดข้ามได้ */}
+          {slides.length > 1 && (
+            <div className="mt-4 flex items-center justify-center gap-1.5">
+              {slides.map((slide, i) => (
+                <button
+                  key={`dot-${slide.url}-${i}`}
+                  type="button"
+                  aria-label={`${lang === 'th' ? 'แบนเนอร์ที่' : 'Banner'} ${i + 1}`}
+                  onClick={() => setHeroIndex(i)}
+                  className={`h-[6px] rounded-full transition-all ${
+                    i === heroIndex % slides.length ? 'w-[20px] bg-white' : 'w-[6px] bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ===== SEARCH CARD (floats over hero) ===== */}

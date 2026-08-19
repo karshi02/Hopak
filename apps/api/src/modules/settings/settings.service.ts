@@ -8,6 +8,27 @@ const MAX_COMMISSION_RATE = 0.5;
 
 const SETTINGS_ID = 'site';
 
+/** สไลด์แบนเนอร์หน้าแรก 1 รูป */
+export interface HeroSlide {
+  url: string;
+  /** จุดโฟกัสตอนครอป "X% Y%" */
+  pos: string;
+  /** ซูม 100-250 (%) — 100 = พอดีกรอบ */
+  zoom: number;
+}
+
+const MAX_HERO_SLIDES = 8;
+
+function cleanSlide(raw: unknown): HeroSlide | null {
+  const o = (raw ?? {}) as Partial<HeroSlide>;
+  const url = String(o.url ?? '').trim();
+  if (!url) return null;
+  const pos = /^\d{1,3}% \d{1,3}%$/.test(String(o.pos ?? '')) ? String(o.pos) : '50% 50%';
+  const zoomRaw = Number(o.zoom);
+  const zoom = Number.isFinite(zoomRaw) ? Math.min(250, Math.max(100, Math.round(zoomRaw))) : 100;
+  return { url, pos, zoom };
+}
+
 export interface PromoCard {
   tagTh: string;
   titleTh: string;
@@ -84,9 +105,49 @@ export class SettingsService {
     return this.getFees();
   }
 
+  /** สไลด์ทั้งหมด — DB ว่างแต่มี heroImageUrl เดิม ให้ถือว่าเป็นสไลด์เดียว (ของเก่าไม่หาย) */
+  private slidesOf(settings: { heroSlides?: unknown; heroImageUrl?: string | null } | null): HeroSlide[] {
+    const list = Array.isArray(settings?.heroSlides) ? settings!.heroSlides : [];
+    const clean = list.map(cleanSlide).filter((x): x is HeroSlide => !!x);
+    if (clean.length) return clean;
+    return settings?.heroImageUrl ? [{ url: settings.heroImageUrl, pos: '50% 50%', zoom: 100 }] : [];
+  }
+
+  private async saveSlides(slides: HeroSlide[]) {
+    const clean = slides.slice(0, MAX_HERO_SLIDES);
+    const settings = await this.prisma.siteSettings.upsert({
+      where: { id: SETTINGS_ID },
+      // heroImageUrl ยังเก็บรูปแรกไว้ เผื่อโค้ด/แคชเก่าที่ยังอ่านฟิลด์นี้อยู่
+      create: { id: SETTINGS_ID, heroSlides: clean as unknown as object, heroImageUrl: clean[0]?.url ?? null },
+      update: { heroSlides: clean as unknown as object, heroImageUrl: clean[0]?.url ?? null },
+    });
+    return { heroSlides: this.slidesOf(settings), heroImageUrl: settings.heroImageUrl };
+  }
+
+  async addHeroSlides(urls: string[]) {
+    const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
+    const current = this.slidesOf(existing);
+    const added = urls.map((url) => ({ url, pos: '50% 50%', zoom: 100 }));
+    return this.saveSlides([...current, ...added]);
+  }
+
+  async updateHeroSlide(index: number, patch: { pos?: string; zoom?: number }) {
+    const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
+    const current = this.slidesOf(existing);
+    if (!current[index]) throw new BadRequestException('ไม่พบสไลด์ที่ต้องการแก้');
+    current[index] = cleanSlide({ ...current[index], ...patch })!;
+    return this.saveSlides(current);
+  }
+
+  async removeHeroSlide(index: number) {
+    const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
+    return this.saveSlides(this.slidesOf(existing).filter((_, i) => i !== index));
+  }
+
   async getHero() {
     const settings = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
     return {
+      heroSlides: this.slidesOf(settings),
       heroImageUrl: settings?.heroImageUrl ?? null,
       posterUrls: settings?.posterUrls ?? [],
       areaImages: normalizeAreaImages(settings?.areaImages),
@@ -125,10 +186,10 @@ export class SettingsService {
   async clearHero() {
     const settings = await this.prisma.siteSettings.upsert({
       where: { id: SETTINGS_ID },
-      create: { id: SETTINGS_ID, heroImageUrl: null },
-      update: { heroImageUrl: null },
+      create: { id: SETTINGS_ID, heroImageUrl: null, heroSlides: [] },
+      update: { heroImageUrl: null, heroSlides: [] },
     });
-    return { heroImageUrl: settings.heroImageUrl };
+    return { heroImageUrl: settings.heroImageUrl, heroSlides: [] as HeroSlide[] };
   }
 
   // รับการ์ดจุดขายทั้งชุด (แทนที่ของเดิมทั้งหมด) — เก็บได้สูงสุด 3 ใบตามดีไซน์หน้าแรก
@@ -150,13 +211,14 @@ export class SettingsService {
     return { promoCards: settings.promoCards as unknown as PromoCard[] };
   }
 
+  /** ปุ่ม "เปลี่ยนรูปพื้นหลัง" เดิม = แทนที่สไลด์แรก (สไลด์อื่นคงไว้) */
   async setHero(heroImageUrl: string) {
-    const settings = await this.prisma.siteSettings.upsert({
-      where: { id: SETTINGS_ID },
-      create: { id: SETTINGS_ID, heroImageUrl },
-      update: { heroImageUrl },
-    });
-    return { heroImageUrl: settings.heroImageUrl };
+    const existing = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
+    const current = this.slidesOf(existing);
+    const next = current.length
+      ? [{ ...current[0], url: heroImageUrl }, ...current.slice(1)]
+      : [{ url: heroImageUrl, pos: '50% 50%', zoom: 100 }];
+    return this.saveSlides(next);
   }
 
   async addPosters(urls: string[]) {

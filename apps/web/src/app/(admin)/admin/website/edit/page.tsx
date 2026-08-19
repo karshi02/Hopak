@@ -122,6 +122,12 @@ function Editable({
   );
 }
 
+interface HeroSlide {
+  url: string;
+  pos: string;
+  zoom: number;
+}
+
 export default function AdminWebsiteInlineEditPage() {
   const [loaded, setLoaded] = useState(false);
   const [initial, setInitial] = useState<Values>({});
@@ -133,16 +139,25 @@ export default function AdminWebsiteInlineEditPage() {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heroInputRef = useRef<HTMLInputElement>(null);
+  const slideInputRef = useRef<HTMLInputElement>(null);
+  // แบนเนอร์หลายรูป — จุดโฟกัส/ซูมเก็บรายรูป (คนละชุดกับข้อความที่กด "บันทึก" ทีเดียว)
+  // การปรับสไลด์ยิง API ทันทีแบบหน่วง 500ms ไม่งั้นลากสไลเดอร์ทีเดียวยิงหลายสิบครั้ง
+  const [slides, setSlides] = useState<HeroSlide[]>([]);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const slideSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     apiClient
-      .get<{ heroImageUrl: string | null; promoCards: PromoCard[]; homeContent: HomeContent }>('/settings/hero')
+      .get<{ heroImageUrl: string | null; heroSlides?: HeroSlide[]; promoCards: PromoCard[]; homeContent: HomeContent }>(
+        '/settings/hero',
+      )
       .then((data) => {
         const init = buildInitial(data.homeContent ?? {}, data.promoCards ?? []);
         setInitial(init);
         setValues(init);
         setLoadedPromos(data.promoCards ?? []);
         setHeroImageUrl(data.heroImageUrl ?? null);
+        setSlides(data.heroSlides ?? []);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -223,6 +238,65 @@ export default function AdminWebsiteInlineEditPage() {
     }
   }
 
+  // เพิ่มรูปแบนเนอร์ (ทีละหลายไฟล์ได้) ต่อท้ายของเดิม
+  async function handleAddSlides(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append('files', f));
+      const res = await fetch(`${API_URL}/admin/settings/hero/slides`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: fd,
+      });
+      if (!res.ok) throw new Error();
+      const data: { heroSlides: HeroSlide[]; heroImageUrl: string | null } = await res.json();
+      setSlides(data.heroSlides);
+      setHeroImageUrl(data.heroImageUrl);
+      setSlideIdx(data.heroSlides.length - 1); // เด้งไปรูปที่เพิ่งเพิ่ม จะได้ปรับต่อได้เลย
+      showToast(`เพิ่มรูปแล้ว ${files.length} รูป ✓`);
+    } catch {
+      showToast('อัปโหลดรูปไม่สำเร็จ');
+    }
+  }
+
+  async function handleRemoveSlide(index: number) {
+    try {
+      const res = await fetch(`${API_URL}/admin/settings/hero/slides/${index}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error();
+      const data: { heroSlides: HeroSlide[]; heroImageUrl: string | null } = await res.json();
+      setSlides(data.heroSlides);
+      setHeroImageUrl(data.heroImageUrl);
+      setSlideIdx((i) => Math.max(0, Math.min(i, data.heroSlides.length - 1)));
+      showToast('เอารูปออกแล้ว');
+    } catch {
+      showToast('เอารูปออกไม่สำเร็จ');
+    }
+  }
+
+  // ปรับจุดโฟกัส/ซูมของรูปที่เลือกอยู่ — อัปเดตพรีวิวทันที แล้วค่อยยิงเก็บ
+  function patchSlide(patch: Partial<Pick<HeroSlide, 'pos' | 'zoom'>>) {
+    const index = slideIdx;
+    setSlides((prev) => prev.map((sl, i) => (i === index ? { ...sl, ...patch } : sl)));
+    if (slideSaveTimer.current) clearTimeout(slideSaveTimer.current);
+    slideSaveTimer.current = setTimeout(async () => {
+      try {
+        await fetch(`${API_URL}/admin/settings/hero/slides/${index}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+      } catch {
+        showToast('บันทึกตำแหน่งรูปไม่สำเร็จ');
+      }
+    }, 500);
+  }
+
   async function handleClearHero() {
     try {
       const res = await fetch(`${API_URL}/admin/settings/hero`, {
@@ -231,19 +305,23 @@ export default function AdminWebsiteInlineEditPage() {
       });
       if (!res.ok) throw new Error();
       setHeroImageUrl(null);
+      setSlides([]);
+      setSlideIdx(0);
       showToast('เอารูปพื้นหลังออกแล้ว');
     } catch {
       showToast('เอารูปออกไม่สำเร็จ');
     }
   }
 
-  const heroBg = heroImageUrl
-    ? `url('${heroImageUrl}')`
+  const current = slides[slideIdx];
+  const heroBg = current
+    ? `url('${current.url}')`
     : values.heroColor || 'linear-gradient(120deg,#2F6FE0,#2456B8)';
-  const heroTextShadow = heroImageUrl ? '0 2px 12px rgba(0,0,0,.55)' : undefined;
-  // แยกตำแหน่งรูป "X% Y%" เป็นตัวเลขให้ slider คุม
-  const [posX, posY] = (values.heroPos || '50% 50%').split(' ').map((p) => parseInt(p, 10) || 0);
-  const setPos = (x: number, y: number) => onEdit('heroPos', `${x}% ${y}%`);
+  const heroTextShadow = current ? '0 2px 14px rgba(0,0,0,.75)' : undefined;
+  // แยกตำแหน่งรูป "X% Y%" เป็นตัวเลขให้ slider คุม (ของรูปที่เลือกอยู่)
+  const [posX, posY] = (current?.pos || '50% 50%').split(' ').map((p) => parseInt(p, 10) || 0);
+  const setPos = (x: number, y: number) => patchSlide({ pos: `${x}% ${y}%` });
+  const zoom = current?.zoom ?? 100;
 
   return (
     <div className="-m-4 sm:-m-6">
@@ -333,10 +411,22 @@ export default function AdminWebsiteInlineEditPage() {
               className="relative bg-cover bg-center px-5 py-9 text-center sm:px-12 sm:py-[52px]"
               style={{
                 background: heroBg,
-                backgroundSize: 'cover',
-                backgroundPosition: heroImageUrl ? values.heroPos || '50% 50%' : 'center',
+                // ซูม 100 = พอดีกรอบ มากกว่านั้นขยายจากจุดโฟกัสที่เลือก (ตรงกับที่หน้าแรกจริงเรนเดอร์)
+                backgroundSize: current && zoom > 100 ? `${zoom}% auto` : 'cover',
+                backgroundPosition: current ? current.pos || '50% 50%' : 'center',
               }}
             >
+              {/* ม่านอ่านง่าย — ชุดเดียวกับหน้าแรกจริง จะได้เห็นตรงกับที่ผู้ใช้เห็น */}
+              {current && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, rgba(8,12,22,0.62) 0%, rgba(8,12,22,0.30) 45%, rgba(8,12,22,0.55) 100%)',
+                  }}
+                />
+              )}
               <div className="absolute right-3.5 top-3.5 z-[3] flex gap-2">
                 <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[10px] bg-white/[.92] px-3.5 text-[13px] font-bold text-[#1E4FB0] shadow-[0_4px_12px_rgba(0,0,0,.18)]">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
@@ -402,10 +492,52 @@ export default function AdminWebsiteInlineEditPage() {
                 </div>
               )}
 
-              {/* เลือกตำแหน่งรูป — โชว์เฉพาะตอนมีรูป เลื่อนแล้วพรีวิวสด */}
-              {heroImageUrl && (
+              {/* แถบรูปแบนเนอร์ — เพิ่ม/ลบ/เลือกรูปที่จะปรับ (หน้าแรกจะเลื่อนเองทุก 5 วิ ถ้ามีเกิน 1 รูป) */}
+              <div className="relative z-[2] mx-auto mt-6 flex max-w-[560px] flex-wrap items-center justify-center gap-2 rounded-2xl bg-black/30 px-3 py-3 backdrop-blur-sm">
+                {slides.map((sl, i) => (
+                  <div key={`${sl.url}-${i}`} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setSlideIdx(i)}
+                      className={`block h-[46px] w-[74px] overflow-hidden rounded-[9px] border-2 transition ${
+                        i === slideIdx ? 'border-white' : 'border-white/30 hover:border-white/70'
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={sl.url} alt="" className="h-full w-full object-cover" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSlide(i)}
+                      aria-label="เอารูปนี้ออก"
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#E34D4D] text-[11px] font-bold text-white shadow"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <label className="flex h-[46px] cursor-pointer items-center gap-1.5 rounded-[9px] border-2 border-dashed border-white/50 px-3 text-[12.5px] font-bold text-white hover:border-white">
+                  + เพิ่มรูป
+                  <input
+                    ref={slideInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleAddSlides}
+                    className="hidden"
+                  />
+                </label>
+                {slides.length > 1 && (
+                  <span className="w-full text-center text-[11.5px] text-white/75">
+                    มี {slides.length} รูป — หน้าแรกจะเลื่อนเองทุก 5 วินาที
+                  </span>
+                )}
+              </div>
+
+              {/* ตำแหน่ง + ซูมของรูปที่เลือก — เลื่อนแล้วพรีวิวสด บันทึกให้อัตโนมัติ */}
+              {current && (
                 <div className="relative z-[2] mx-auto mt-6 flex max-w-[420px] flex-col gap-2.5 rounded-2xl bg-black/30 px-4 py-3 backdrop-blur-sm">
-                  <div className="text-[12.5px] font-semibold text-white">ตำแหน่งรูป (เลื่อนเลือกส่วนที่จะโชว์)</div>
+                  <div className="text-[12.5px] font-semibold text-white">รูปที่ {slideIdx + 1} — ตำแหน่งและขนาด</div>
                   <label className="flex items-center gap-3">
                     <span className="w-14 text-[12px] text-white/85">แนวนอน</span>
                     <input
@@ -430,12 +562,28 @@ export default function AdminWebsiteInlineEditPage() {
                     />
                     <span className="w-9 text-right text-[12px] text-white/85">{posY}%</span>
                   </label>
+                  <label className="flex items-center gap-3">
+                    <span className="w-14 text-[12px] text-white/85">ซูม</span>
+                    <input
+                      type="range"
+                      min={100}
+                      max={250}
+                      step={5}
+                      value={zoom}
+                      onChange={(e) => patchSlide({ zoom: parseInt(e.target.value, 10) })}
+                      className="h-1.5 flex-1 accent-white"
+                    />
+                    <span className="w-9 text-right text-[12px] text-white/85">{zoom}%</span>
+                  </label>
                   <button
                     type="button"
-                    onClick={() => setPos(50, 50)}
+                    onClick={() => {
+                      setPos(50, 50);
+                      patchSlide({ zoom: 100 });
+                    }}
                     className="self-start text-[12px] font-semibold text-white/80 underline hover:text-white"
                   >
-                    รีเซ็ตเป็นกึ่งกลาง
+                    รีเซ็ตเป็นกึ่งกลาง / ไม่ซูม
                   </button>
                 </div>
               )}

@@ -69,6 +69,45 @@ export class SettingsController {
     return this.settingsService.setHero(`${apiUrl}/uploads/${file.filename}`);
   }
 
+  // เพิ่มรูปแบนเนอร์ทีละหลายไฟล์ (ต่อท้ายของเดิม สูงสุด 8 รูป)
+  @Post('admin/settings/hero/slides')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @UseInterceptors(
+    FilesInterceptor('files', 8, {
+      storage: diskStorage({
+        destination: join(process.cwd(), 'uploads'),
+        filename: (_req, file, cb) =>
+          cb(null, `hero-${Date.now()}-${Math.round(Math.random() * 1e6)}${extname(file.originalname)}`),
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: imageFileFilter,
+    }),
+  )
+  async addHeroSlides(@UploadedFiles() files: Express.Multer.File[]) {
+    if (!files?.length) throw new BadRequestException('ไม่พบไฟล์');
+    const apiUrl = process.env.API_URL || 'http://localhost:4000';
+    return this.settingsService.addHeroSlides(files.map((f) => `${apiUrl}/uploads/${f.filename}`));
+  }
+
+  // ปรับจุดโฟกัส/ซูมของสไลด์ทีละรูป
+  @Post('admin/settings/hero/slides/:index')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  updateHeroSlide(@Param('index') index: string, @Body() body: { pos?: string; zoom?: number }) {
+    return this.settingsService.updateHeroSlide(Number(index), {
+      pos: body?.pos,
+      zoom: body?.zoom == null ? undefined : Number(body.zoom),
+    });
+  }
+
+  @Delete('admin/settings/hero/slides/:index')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  removeHeroSlide(@Param('index') index: string) {
+    return this.settingsService.removeHeroSlide(Number(index));
+  }
+
   @Post('admin/settings/posters')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
