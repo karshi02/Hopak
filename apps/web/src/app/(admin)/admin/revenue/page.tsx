@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { useLang } from '@/hooks/useLang';
 import { downloadCsv } from '@/lib/csv';
-import { PageLoader } from '@/components/PageLoader';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 type Period = 'day' | 'month' | 'year';
 
@@ -96,7 +96,7 @@ export default function AdminRevenuePage() {
   const baht = (n: number) => `฿${Math.round(n).toLocaleString()}`;
   const label = (key: string) => (period === 'month' ? months[Number(key) - 1] ?? key : key);
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RouteSkeleton variant="console" />;
   if (!data) return <p className="text-ink-faint">—</p>;
 
   const totalCommission = data.totals.monthlyCommission + data.totals.dailyCommission;

@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useBookings } from '@/hooks/useBookings';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
-import { PageLoader } from '@/components/PageLoader';
 import { getToken } from '@/lib/auth';
 import type { Booking } from '@hopak/shared';
+import { ContentSkeleton } from '@/components/RouteSkeleton';
 
 const TEXT = {
   th: {
@@ -169,7 +169,7 @@ export default function BookingsPage() {
         </div>
 
         {loading ? (
-          <div className="mt-10"><PageLoader /></div>
+          <div className="mt-10"><ContentSkeleton rows={3} /></div>
         ) : (
           <>
             {/* stat strip */}

@@ -13,7 +13,7 @@ import { usePartnerMode } from '@/hooks/usePartnerMode';
 import { calcPayout } from '@hopak/shared';
 import { useFees } from '@/hooks/useFees';
 import type { Booking, Dorm, Room } from '@hopak/shared';
-import { PageLoader } from '@/components/PageLoader';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 type DormWithRooms = Dorm & { rooms: Room[] };
 type BookingWithRoom = Booking & { room?: { name?: string; dorm?: { name?: string } } };
@@ -311,7 +311,7 @@ export default function PartnerDashboardPage() {
     return cells;
   }, [year, month, daily]);
 
-  if (loading) return <PageLoader theme="seller" />;
+  if (loading) return <RouteSkeleton variant="console" />;
 
   const availableRooms = rooms.filter((r) => r.status.toUpperCase() === 'AVAILABLE');
   const occupiedRooms = rooms.length - availableRooms.length;

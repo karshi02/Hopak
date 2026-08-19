@@ -13,6 +13,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { StarRating } from '@/components/StarRating';
 import type { User } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
+import { ContentSkeleton } from '@/components/RouteSkeleton';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -561,7 +562,7 @@ function BookingsSection({ t, lang }: { t: T; lang: Lang }) {
     <div id="bookings" className="scroll-mt-24 rounded-card-lg border border-card-border bg-white p-6 shadow-sm">
       <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.bookingsTitle}</div>
       {loading ? (
-        <PageLoader />
+        <ContentSkeleton variant="form" rows={3} />
       ) : bookings.length > 0 ? (
         <div className="flex flex-col gap-3.5">
           {bookings.map((b) => (
@@ -613,7 +614,7 @@ function SavedSection({ t }: { t: T }) {
     <div id="saved" className="scroll-mt-24 rounded-card-lg border border-card-border bg-white p-6 shadow-sm">
       <div className="mb-4 text-[17px] font-bold text-ink-strong">{t.savedTitle}</div>
       {!loaded ? (
-        <PageLoader />
+        <ContentSkeleton variant="form" rows={3} />
       ) : visibleFavorites.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {visibleFavorites.map((dorm) => {

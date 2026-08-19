@@ -7,11 +7,11 @@ import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
 import type { Dorm, Review, Room } from '@hopak/shared';
-import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { AMENITY_ICON, amenityLabel } from '@/lib/amenities';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 const MapPicker = dynamic(() => import('@/components/map/MapPicker'), { ssr: false });
 
@@ -354,7 +354,7 @@ export default function DormDetailPage() {
       .filter((g) => g.rooms.length > 0);
   }, [availableRooms, isDaily]);
 
-  if (!dorm) return <PageLoader />;
+  if (!dorm) return <RouteSkeleton variant="detail" />;
 
   const cheapestRoom = [...availableRooms].sort((a, b) => a.pricePerMonth - b.pricePerMonth)[0];
   const hasRating = (dorm.reviewCount ?? 0) > 0 && dorm.avgRating != null;

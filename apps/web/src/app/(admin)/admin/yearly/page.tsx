@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { useLang } from '@/hooks/useLang';
 import { downloadCsv } from '@/lib/csv';
-import { PageLoader } from '@/components/PageLoader';
 import { YearlyRevenueChart } from '@/components/admin/YearlyRevenueChart';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 interface MonthRow {
   month: number;
@@ -183,7 +183,7 @@ export default function AdminYearlyPage() {
     );
   }
 
-  if (loading) return <PageLoader />;
+  if (loading) return <RouteSkeleton variant="console" />;
   if (!data) return <p className="text-ink-faint">—</p>;
 
 

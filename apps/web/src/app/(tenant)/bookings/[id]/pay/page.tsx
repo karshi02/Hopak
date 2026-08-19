@@ -8,9 +8,9 @@ import { getToken } from '@/lib/auth';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
 import type { Booking } from '@hopak/shared';
-import { PageLoader } from '@/components/PageLoader';
 import { BookingStepper } from '@/components/booking/BookingStepper';
 import { BookingSummary } from '@/components/booking/BookingSummary';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
@@ -147,7 +147,7 @@ export default function PayBookingPage() {
     setBooking((b) => (b ? { ...b } : b)); // trigger charge effect again
   }
 
-  if (!booking) return <PageLoader />;
+  if (!booking) return <RouteSkeleton variant="list" />;
 
   // ห้องถูกผู้เช่าอื่นกำลังจ่ายอยู่ (409) — โชว์เต็มหน้า + ปุ่มกลับไปเลือกห้อง
   if (roomTaken) {

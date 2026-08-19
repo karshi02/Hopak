@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { useLang } from '@/hooks/useLang';
 import { getSocket } from '@/lib/ws';
-import { PageLoader } from '@/components/PageLoader';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 interface IncomeRow {
   paymentId: string;
@@ -155,7 +155,7 @@ export default function PartnerIncomePage() {
       .catch(() => setDaily({ days: [], totalReceived: 0, totalPending: 0 }));
   }, [view, from, to]);
 
-  if (!income) return <PageLoader theme="seller" />;
+  if (!income) return <RouteSkeleton variant="console" />;
 
   const roomTypeLabel = (type: string) => ROOM_TYPE[type]?.[lang] ?? type;
   // คอมรวมที่แอปหักไปทั้งหมด (ทุกการจอง ไม่ว่าโอนแล้วหรือรอโอน) — คอมถูกหักตั้งแต่จ่ายเงิน

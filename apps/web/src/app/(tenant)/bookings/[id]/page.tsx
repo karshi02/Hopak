@@ -8,10 +8,10 @@ import { getSocket } from '@/lib/ws';
 import { normalizeStatus } from '@/lib/normalize';
 import { useLang } from '@/hooks/useLang';
 import type { Booking } from '@hopak/shared';
-import { PageLoader } from '@/components/PageLoader';
 import { BookingStepper } from '@/components/booking/BookingStepper';
 import { BookingSummary } from '@/components/booking/BookingSummary';
 import { HopakIcon } from '@/components/HopakIcon';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 
 const TEXT = {
   th: {
@@ -145,7 +145,7 @@ export default function BookingDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  if (!booking) return <PageLoader />;
+  if (!booking) return <RouteSkeleton variant="list" />;
 
   const status = normalizeStatus(booking.status);
   const canCancel = new Date() <= new Date(booking.cancelDeadline) && status !== 'cancelled';

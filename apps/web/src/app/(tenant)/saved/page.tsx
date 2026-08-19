@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useLang } from '@/hooks/useLang';
 import { getToken } from '@/lib/auth';
-import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { StarRating } from '@/components/StarRating';
+import { ContentSkeleton } from '@/components/RouteSkeleton';
 
 const TEXT = {
   th: {
@@ -38,7 +38,7 @@ export default function SavedPage() {
     if (!getToken()) router.replace('/login');
   }, [router]);
 
-  if (!loaded) return <PageLoader />;
+  if (!loaded) return <div className="mx-auto max-w-[1240px] px-4 pt-8 sm:px-6"><ContentSkeleton variant="cards" rows={2} /></div>;
 
   return (
     <main className="mx-auto max-w-6xl p-4 sm:p-6">

@@ -13,9 +13,9 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { useLang } from '@/hooks/useLang';
 import { apiClient } from '@/lib/api-client';
 import { haversineKm } from '@/lib/geo';
-import { PageLoader } from '@/components/PageLoader';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { StarRating } from '@/components/StarRating';
+import { ContentSkeleton } from '@/components/RouteSkeleton';
 
 const ALL_THAI_PROVINCES = [
   'กรุงเทพมหานคร', 'กระบี่', 'กาญจนบุรี', 'กาฬสินธุ์', 'กำแพงเพชร', 'ขอนแก่น', 'จันทบุรี', 'ฉะเชิงเทรา',
@@ -225,7 +225,8 @@ export default function SearchPage() {
   const [pickedProvince, setPickedProvince] = useState('');
   const [priceRange, setPriceRange] = useState(() => params.get('priceRange') ?? 'all');
   const [roomType, setRoomType] = useState(() => params.get('roomType') ?? 'all');
-  const [amenity, setAmenity] = useState('all');
+  // รับค่ามาจากชิปหน้าแรกได้ด้วย (?amenity=laundry) ไม่งั้นกดชิปแล้วมาถึงหน้านี้ตัวกรองไม่ติด
+  const [amenity, setAmenity] = useState(() => params.get('amenity') ?? 'all');
   const [sortBy, setSortBy] = useState('recommended');
   const [sponsored, setSponsored] = useState<SponsoredCampaign[]>([]);
 
@@ -675,7 +676,7 @@ export default function SearchPage() {
       )}
 
       {loading ? (
-        <PageLoader />
+        <ContentSkeleton variant="cards" rows={3} />
       ) : (
         /* จอใหญ่แยกไซด์บาร์ตัวกรองออกมาซ้าย (sticky) — จอเล็กใช้แถบกรองด้านบนเหมือนเดิม */
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-[288px_1fr]">
