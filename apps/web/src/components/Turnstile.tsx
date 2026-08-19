@@ -56,7 +56,15 @@ function loadScript(): Promise<void> {
  * ไม่ตั้ง NEXT_PUBLIC_TURNSTILE_SITE_KEY = ไม่แสดงอะไรเลย ฟอร์มยังใช้งานได้ตามปกติ
  * (ฝั่ง API ก็ข้ามการตรวจถ้าไม่มี TURNSTILE_SECRET_KEY — สองฝั่งต้องตั้งคู่กันเสมอ)
  */
-export function Turnstile({ onToken, lang }: { onToken: (token: string) => void; lang?: 'th' | 'en' }) {
+export function Turnstile({
+  onToken,
+  lang,
+  align = 'left',
+}: {
+  onToken: (token: string) => void;
+  lang?: 'th' | 'en';
+  align?: 'left' | 'right';
+}) {
   const boxRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
   const onTokenRef = useRef(onToken);
@@ -75,6 +83,8 @@ export function Turnstile({ onToken, lang }: { onToken: (token: string) => void;
         widgetId.current = window.turnstile.render(boxRef.current, {
           sitekey: SITE_KEY,
           language: lang === 'en' ? 'en' : 'th',
+          // บังคับธีมสว่างให้เข้ากับฟอร์ม — ค่าเริ่มต้น auto จะกลายเป็นกล่องดำบนเครื่องที่ตั้ง dark mode
+          theme: 'light',
           callback: (token) => onTokenRef.current(token),
           // token มีอายุ ~5 นาที หมดอายุแล้วต้องล้างของเดิมทิ้ง ไม่งั้นฟอร์มส่ง token ตายไปให้ API
           'expired-callback': () => onTokenRef.current(''),
@@ -98,15 +108,17 @@ export function Turnstile({ onToken, lang }: { onToken: (token: string) => void;
   if (!SITE_KEY) return null;
 
   return (
-    <div className="mt-1">
-      <div ref={boxRef} />
-      {failed && (
-        <p className="mt-1.5 text-[12.5px] font-semibold text-[#C0392B]">
-          {lang === 'en'
-            ? 'Could not load the bot check. Refresh the page and try again.'
-            : 'โหลดตัวยืนยันตัวตนไม่สำเร็จ ลองรีเฟรชหน้าแล้วทำใหม่'}
-        </p>
-      )}
+    <div className={`mt-1 flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+      <div>
+        <div ref={boxRef} />
+        {failed && (
+          <p className="mt-1.5 text-[12.5px] font-semibold text-[#C0392B]">
+            {lang === 'en'
+              ? 'Could not load the bot check. Refresh the page and try again.'
+              : 'โหลดตัวยืนยันตัวตนไม่สำเร็จ ลองรีเฟรชหน้าแล้วทำใหม่'}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

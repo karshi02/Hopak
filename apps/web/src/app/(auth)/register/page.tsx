@@ -377,7 +377,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="mt-4">
-                <Turnstile onToken={setCaptcha} lang={lang} />
+                <Turnstile onToken={setCaptcha} lang={lang} align="right" />
               </div>
 
               {error && <p className="mt-4 text-sm text-danger">{error}</p>}
