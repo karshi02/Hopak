@@ -39,6 +39,7 @@ const TEXT = {
     haveAccount: 'มีบัญชีแล้ว?',
     terms: 'การสมัครถือว่ายอมรับเงื่อนไขการใช้งานและนโยบายความเป็นส่วนตัว',
     err1: 'สร้างบัญชีไม่สำเร็จ',
+    errPhone: 'กรอกเบอร์โทรให้ครบ 10 หลัก (ขึ้นต้นด้วย 0)',
     // step 2
     title2: 'ตั้งค่าโปรไฟล์',
     sub2: 'เพื่อให้หอพักติดต่อคุณได้สะดวก',
@@ -79,6 +80,7 @@ const TEXT = {
     haveAccount: 'Already have an account?',
     terms: 'By signing up you accept our Terms of Service and Privacy Policy',
     err1: 'Could not create account',
+    errPhone: 'Enter a valid 10-digit phone number starting with 0',
     title2: 'Set up your profile',
     sub2: 'So dorms can reach you easily',
     uploadPhoto: 'Upload profile photo',
@@ -154,12 +156,19 @@ export default function RegisterPage() {
   async function handleCreateAccount(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // เบอร์ไทยต้อง 10 หลักขึ้นต้นด้วย 0 — ใช้กติกาเดียวกับฟอร์มจอง (bookings/new)
+    // เว้นวรรค/ขีดที่คนพิมพ์ติดมาให้ตัดทิ้งก่อนเทียบ แล้วส่งเฉพาะตัวเลขล้วนขึ้นไป
+    const phoneDigits = phone.replace(/[^0-9]/g, '');
+    if (!/^0\d{9}$/.test(phoneDigits)) {
+      setError(t.errPhone);
+      return;
+    }
     setSubmitting(true);
     try {
       const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/register', {
         name,
         email,
-        phone: phone || undefined,
+        phone: phoneDigits,
         password,
       });
       setToken(accessToken);
@@ -339,7 +348,16 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelBase}>{t.fPhone}</label>
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phPhone} className={`${inputBase} font-sans`} />
+                    <input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder={t.phPhone}
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      required
+                      className={`${inputBase} font-sans`}
+                    />
                   </div>
                   <div>
                     <label className={labelBase}>{t.fPass}</label>

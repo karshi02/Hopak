@@ -181,6 +181,12 @@ export class OwnerApplicationsService {
     const app = await this.getOrThrow(id, secret);
     if (app.status === 'COMPLETED') throw new ForbiddenException('ใบสมัครนี้เสร็จสิ้นแล้ว');
 
+    // เบอร์เข้ามาตอนขั้นที่ 2 (ไม่ใช่ตอน start) ด่านกันเบอร์ซ้ำใน start() จึงไม่ครอบเคสนี้ ต้องเช็คที่นี่อีกที
+    if (dto.phone) {
+      const taken = await this.prisma.user.findFirst({ where: { role: 'OWNER', phone: dto.phone } });
+      if (taken) throw new ConflictException('เบอร์นี้มีบัญชีเจ้าของหออยู่แล้ว กรุณาเข้าสู่ระบบเจ้าของหอ');
+    }
+
     const updated = await this.prisma.ownerApplication.update({
       where: { id },
       data: {
@@ -190,6 +196,7 @@ export class OwnerApplicationsService {
         lat: dto.lat,
         lng: dto.lng,
         note: dto.note,
+        ...(dto.phone ? { phone: dto.phone } : {}),
       },
       select: SAFE_SELECT,
     });
@@ -330,6 +337,11 @@ export class OwnerApplicationsService {
     }
     if (!app.dormName || !app.province || app.lat == null || app.lng == null) {
       throw new BadRequestException('กรุณากรอกข้อมูลหอพักให้ครบก่อน');
+    }
+    // เอกสารยืนยันตัวตนเป็นเงื่อนไขจริงของการเปิดหอ ไม่ใช่แค่ด่านหน้าเว็บ
+    // (ยิง API ตรงข้ามหน้าเว็บได้ ถ้าไม่ตรวจตรงนี้จะได้บัญชี OWNER + หอที่ไม่มีเอกสารเลย)
+    if (!app.documents.length) {
+      throw new BadRequestException('กรุณาแนบเอกสารยืนยันอย่างน้อย 1 ไฟล์ก่อน');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);

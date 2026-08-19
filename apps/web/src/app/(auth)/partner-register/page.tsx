@@ -126,6 +126,15 @@ function BrandPanel() {
   );
 }
 
+// ขอบเขตไฟล์เอกสาร — ต้องตรงกับฝั่ง API เสมอ
+// ชนิดไฟล์: apps/api/src/common/upload-filters.ts (DOC_EXT/DOC_MIME)
+// ขนาด: DOC_LIMIT 10MB · จำนวน: MAX_DOCUMENTS ใน owner-applications.service.ts
+const DOC_MAX_FILES = 10;
+const DOC_MAX_MB = 10;
+const DOC_EXT_RE = /\.(jpe?g|png|gif|webp|pdf)$/i;
+const DOC_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp,.pdf,image/jpeg,image/png,image/gif,image/webp,application/pdf';
+const DOC_TYPES_LABEL = 'JPG · PNG · WEBP · GIF · PDF';
+
 export default function PartnerRegisterPage() {
   const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState('');
@@ -147,11 +156,17 @@ export default function PartnerRegisterPage() {
   const [otpExpiresIn, setOtpExpiresIn] = useState(0); // อายุรหัสที่ส่งไป (600 วิ ตรงกับ backend)
   const [ownerExists, setOwnerExists] = useState(false);
   const [docs, setDocs] = useState<{ name: string; size: number }[]>([]);
+  // เอกสารที่แนบไว้ตั้งแต่รอบก่อน (ได้กลับมาตอนยืนยัน OTP เพื่อเข้าใบสมัครเดิม)
+  // เก็บแยกจาก docs เพราะฝั่ง API คืนมาเป็น signed URL ไม่มีชื่อไฟล์/ขนาดให้แสดง
+  const [savedDocs, setSavedDocs] = useState<string[]>([]);
+  // กล่องเอกสารพับเก็บไว้ก่อน กดหัวข้อถึงจะกาง — ข้อความเงื่อนไขยาว กินพื้นที่ฟอร์มไปทั้งหน้าจอมือถือ
+  const [docsOpen, setDocsOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const docInputRef = useRef<HTMLInputElement>(null);
   const [showMap, setShowMap] = useState(false);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [province, setProvince] = useState('');
+  const [phone, setPhone] = useState('');
   const [placeName, setPlaceName] = useState('');
   const [outsideTh, setOutsideTh] = useState(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -271,12 +286,18 @@ export default function PartnerRegisterPage() {
     setBusy(true);
     try {
       // ยืนยันโดยไม่มี secret (กลับมาทำใบสมัครเดิมต่อ) API จะออก secret ใหม่มาให้ตรงนี้
-      const res = await apiClient.post<{ secret?: string }>(
+      const res = await apiClient.post<{ secret?: string; documents?: string[]; phone?: string | null }>(
         `/owner-applications/${appId}/verify-otp`,
         { code },
         secretHeader(),
       );
       if (res.secret) setAppSecret(res.secret);
+      // ดึงเอกสารที่เคยแนบไว้กลับมาแสดง ไม่งั้นผู้สมัครต้องอัปโหลดซ้ำทั้งที่ไฟล์เดิมยังอยู่
+      // และไฟล์เดิมยังนับรวมเพดาน 10 ไฟล์อยู่ อัปซ้ำไม่กี่รอบก็ตัน
+      // response นี้เป็นสถานะล่าสุดจากเซิร์ฟเวอร์อยู่แล้ว (รวมไฟล์ที่เพิ่งอัปในรอบนี้ด้วย) จึงล้าง docs ทิ้งกันนับซ้ำ
+      setSavedDocs(res.documents ?? []);
+      if (res.phone) setPhone(res.phone);
+      setDocs([]);
       setOtpVerified(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'รหัสไม่ถูกต้องหรือหมดอายุ');
@@ -285,23 +306,38 @@ export default function PartnerRegisterPage() {
     }
   }
 
+  const docCount = docs.length + savedDocs.length;
   const secretHeader = () => (appSecret ? { 'x-application-secret': appSecret } : undefined);
 
   // เอกสารยืนยัน (บัตรประชาชน/โฉนด/ทะเบียนบ้าน) — เก็บแบบ private แอดมินเท่านั้นที่เปิดดูได้
   async function uploadDocs(files: FileList | null) {
     if (!files?.length || !appId) return;
     setError(null);
+    const already = docs.length + savedDocs.length;
+    if (already >= DOC_MAX_FILES) {
+      setError(`แนบเอกสารได้สูงสุด ${DOC_MAX_FILES} ไฟล์ (ตอนนี้ ${already} ไฟล์แล้ว)`);
+      return;
+    }
     setUploading(true);
     try {
+      let slots = DOC_MAX_FILES - already;
       for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) {
-          setError(`${file.name} ใหญ่เกิน 10MB`);
+        // กันชนเพดานตั้งแต่ฝั่งหน้าเว็บ ไม่ต้องรอ 400 จาก API ทีละไฟล์
+        if (slots <= 0) {
+          setError(`แนบเอกสารได้สูงสุด ${DOC_MAX_FILES} ไฟล์ ไฟล์ที่เหลือไม่ถูกอัปโหลด`);
+          break;
+        }
+        if (file.size > DOC_MAX_MB * 1024 * 1024) {
+          setError(`${file.name} ใหญ่เกิน ${DOC_MAX_MB}MB`);
           continue;
         }
-        // .heic/.heif จากไอโฟนผ่าน accept="image/*" มาได้ แต่ฝั่งเซิร์ฟเวอร์ไม่รับ
-        // (เบราว์เซอร์ส่วนใหญ่เปิดไม่ขึ้น แอดมินจะตรวจเอกสารไม่ได้) บอกตรงนี้เลยจะได้ไม่ต้องรอ error จากเซิร์ฟเวอร์
+        // HEIC จากไอโฟนเจอบ่อยสุด บอกวิธีแก้ตรงๆ แทนข้อความรวม (ต้องเช็คก่อน DOC_EXT_RE ไม่งั้นตกลงไปเข้าข้อความรวม)
         if (/\.(heic|heif)$/i.test(file.name)) {
           setError(`${file.name} เป็นไฟล์ HEIC ยังไม่รองรับ — ถ่ายใหม่เป็น JPEG หรือแปลงไฟล์ก่อน`);
+          continue;
+        }
+        if (!DOC_EXT_RE.test(file.name)) {
+          setError(`${file.name} เป็นชนิดไฟล์ที่ไม่รองรับ — ใช้ ${DOC_TYPES_LABEL} เท่านั้น`);
           continue;
         }
         const form = new FormData();
@@ -319,6 +355,7 @@ export default function PartnerRegisterPage() {
           if (res.status === 429) throw new Error('อัปโหลดถี่เกินไป รอสักครู่แล้วลองใหม่');
           throw new Error(`อัปโหลด ${file.name} ไม่สำเร็จ (ข้อผิดพลาด ${res.status})`);
         }
+        slots -= 1;
         setDocs((prev) => [...prev, { name: file.name, size: file.size }]);
       }
     } catch (err) {
@@ -337,9 +374,15 @@ export default function PartnerRegisterPage() {
     if (!dorm.trim()) return setError('กรอกชื่อหอพัก');
     if (!province) return setError('เลือกจังหวัด');
     if (!pin) return setError('ปักหมุดตำแหน่งหอบนแผนที่ก่อน');
+    // เบอร์เจ้าของหอจำเป็นจริง — แอดมินใช้โทรยืนยันตัวตนก่อนอนุมัติ และผู้เช่าที่จ่ายเงินแล้วต้องติดต่อได้
+    const phoneDigits = phone.replace(/[^0-9]/g, '');
+    if (!/^0\d{9}$/.test(phoneDigits)) return setError('กรอกเบอร์โทรให้ครบ 10 หลัก (ขึ้นต้นด้วย 0)');
     if (password.length < 6) return setError('รหัสผ่านอย่างน้อย 6 ตัวอักษร');
     if (password !== password2) return setError('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
-    if (docs.length === 0) return setError('แนบเอกสารยืนยันอย่างน้อย 1 ไฟล์');
+    if (docCount === 0) {
+      setDocsOpen(true); // กางกล่องให้เห็นปุ่มแนบไฟล์ ไม่งั้นขึ้น error แต่กล่องพับอยู่ หาไม่เจอว่าต้องทำอะไร
+      return setError('แนบเอกสารยืนยันอย่างน้อย 1 ไฟล์');
+    }
 
     setBusy(true);
     try {
@@ -351,6 +394,7 @@ export default function PartnerRegisterPage() {
           province,
           lat: pin.lat,
           lng: pin.lng,
+          phone: phoneDigits,
         },
         secretHeader(),
       );
@@ -561,14 +605,39 @@ export default function PartnerRegisterPage() {
               </div>}
               <div className="mt-5"><Field label="ที่อยู่ / รายละเอียดเพิ่มเติม"><input value={addr} onChange={(event) => setAddr(event.target.value)} placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field></div>
               <div className="my-6 h-px bg-[#E7ECEA]" />
-              <div className="space-y-4"><Field label="ชื่อหอพัก"><input value={dorm} onChange={(event) => setDorm(event.target.value)} placeholder="เช่น หอพักบ้านอุ่นใจ" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field><div className="grid gap-4"><Field label="จังหวัด"><select value={province} onChange={(event) => setProvince(event.target.value)} className="h-[52px] w-full appearance-none rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none focus:border-[#0E9F8E]"><option value="">เลือกจังหวัด</option>{ALL_PROVINCES.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field></div></div>
+              <div className="space-y-4"><Field label="ชื่อหอพัก"><input value={dorm} onChange={(event) => setDorm(event.target.value)} placeholder="เช่น หอพักบ้านอุ่นใจ" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field><Field label="เบอร์โทรติดต่อ" hint="แอดมินใช้ยืนยันตัวตน · ผู้เช่าเห็นหลังชำระเงินแล้วเท่านั้น"><input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" inputMode="numeric" autoComplete="tel" maxLength={12} placeholder="08x-xxx-xxxx" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 font-sans text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field><div className="grid gap-4"><Field label="จังหวัด"><select value={province} onChange={(event) => setProvince(event.target.value)} className="h-[52px] w-full appearance-none rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[14px] outline-none focus:border-[#0E9F8E]"><option value="">เลือกจังหวัด</option>{ALL_PROVINCES.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field></div></div>
               {/* เอกสารยืนยันตัวตน — แอดมินใช้ตรวจก่อนอนุมัติหอ */}
               <div className="mt-5 rounded-[14px] border border-[#E7ECEA] bg-[#FAFCFB] p-4">
-                <p className="text-[14px] font-bold text-[#33413B]">
-                  แนบเอกสารยืนยัน <span className="text-[#E34D4D]">*</span>
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setDocsOpen((v) => !v)}
+                  aria-expanded={docsOpen}
+                  className="flex w-full items-center gap-2 text-left"
+                >
+                  <span className="text-[14px] font-bold text-[#33413B]">
+                    แนบเอกสารยืนยัน <span className="text-[#E34D4D]">*</span>
+                  </span>
+                  {/* พับอยู่แต่มีไฟล์แล้ว ต้องเห็นจำนวนโดยไม่ต้องกางออกมาดู */}
+                  {docCount > 0 && (
+                    <span className="rounded-full bg-[#E4F7F1] px-2 py-0.5 text-[11.5px] font-bold text-[#0E9F8E]">
+                      {docCount} ไฟล์
+                    </span>
+                  )}
+                  <span className="ml-auto shrink-0 text-[#7A857F]" style={{ transform: docsOpen ? 'rotate(180deg)' : undefined }}>
+                    <Icon className="h-4 w-4"><path d="m6 9 6 6 6-6" /></Icon>
+                  </span>
+                </button>
+
+                {!docsOpen && docCount === 0 && (
+                  <p className="mt-1 text-[12.5px] text-[#7A857F]">กดเพื่อแนบบัตรประชาชน · โฉนด/สัญญาเช่า · ทะเบียนบ้าน</p>
+                )}
+
+                <div className={docsOpen ? '' : 'hidden'}>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-[#7A857F]">
-                  บัตรประชาชน · โฉนด/สัญญาเช่า · ทะเบียนบ้าน (รูปภาพหรือ PDF ไม่เกิน 10MB ต่อไฟล์)
+                  บัตรประชาชน · โฉนด/สัญญาเช่า · ทะเบียนบ้าน
+                  <br />
+                  ไฟล์ที่รองรับ: <b className="text-[#33413B]">{DOC_TYPES_LABEL}</b> · ไม่เกิน {DOC_MAX_MB}MB ต่อไฟล์ · สูงสุด{' '}
+                  {DOC_MAX_FILES} ไฟล์ (ไฟล์ HEIC จากไอโฟนยังไม่รองรับ ให้ตั้งกล้องเป็น &quot;รูปแบบที่เข้ากันได้มากที่สุด&quot; หรือแปลงเป็น JPG ก่อน)
                   <br />
                   <b className="text-[#33413B]">เอกสารต้องเป็นของเจ้าของหอเท่านั้น</b> — ชื่อในเอกสารต้องตรงกับชื่อผู้สมัคร
                   <br />
@@ -579,19 +648,40 @@ export default function PartnerRegisterPage() {
                   ref={docInputRef}
                   type="file"
                   multiple
-                  accept="image/*,application/pdf"
+                  accept={DOC_ACCEPT}
                   onChange={(event) => uploadDocs(event.target.files)}
                   className="hidden"
                 />
                 <button
                   type="button"
                   onClick={() => docInputRef.current?.click()}
-                  disabled={uploading || !appId}
+                  disabled={uploading || !appId || !appSecret}
                   className="mt-3 flex h-[46px] w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-[#0E9F8E] bg-white text-[14px] font-bold text-[#0E9F8E] disabled:opacity-50"
                 >
                   <Icon className="h-4 w-4"><path d="M12 5v14M5 12h14" /></Icon>
                   {uploading ? 'กำลังอัปโหลด...' : 'เลือกไฟล์เอกสาร'}
                 </button>
+
+                {savedDocs.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {savedDocs.map((url, index) => (
+                      <li key={url} className="flex items-center gap-2.5 rounded-[10px] bg-white px-3 py-2">
+                        <span className="text-[#12B58C]"><Icon className="h-4 w-4"><path d="m5 12 4.5 4.5L19 7" /></Icon></span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-[#33413B]">
+                          เอกสารที่แนบไว้แล้ว #{index + 1}
+                        </span>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 text-[12px] font-bold text-[#0E9F8E] underline"
+                        >
+                          เปิดดู
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
                 {docs.length > 0 && (
                   <ul className="mt-3 space-y-2">
@@ -606,6 +696,7 @@ export default function PartnerRegisterPage() {
                     ))}
                   </ul>
                 )}
+                </div>
               </div>
 
               <div className="mt-4 grid gap-4 min-[821px]:grid-cols-2">
