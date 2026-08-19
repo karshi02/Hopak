@@ -29,6 +29,14 @@ interface Landmark {
   imageUrl: string | null;
 }
 
+interface HeroSlide {
+  url: string;
+  pos: string;
+  zoom: number;
+  /** cover = ครอปเต็มกรอบ · contain = ย่อให้เห็นทั้งรูป (เติมพื้นหลังด้วยรูปเดิมเบลอ) */
+  fit?: 'cover' | 'contain';
+}
+
 interface HomeContent {
   heroTitleTh?: string;
   heroSubtitleTh?: string;
@@ -88,6 +96,8 @@ const TEXT = {
     topSearchPhrases: ['ค้นหาจังหวัด', 'หอพักใกล้มหาวิทยาลัย', 'ชื่อหอพักใกล้ฉัน'],
     login: 'เข้าสู่ระบบ',
     register: 'สมัครสมาชิก',
+    ctaRegister: 'สมัครฟรี เริ่มหาหอเลย',
+    ctaSub: 'สมัครครั้งเดียว จองได้ทุกหอในระบบ',
     logout: 'ออกจากระบบ',
     heroTitle: 'หาหอพักใกล้มหาวิทยาลัย ราคาโปร่งใส จองได้ทันที',
     heroSubtitle: 'เปรียบเทียบค่าน้ำค่าไฟก่อนจอง',
@@ -154,6 +164,8 @@ const TEXT = {
     topSearchPhrases: ['Search by province', 'Dorms near your university', 'Dorm name near me'],
     login: 'Log in',
     register: 'Sign up',
+    ctaRegister: 'Sign up free — start searching',
+    ctaSub: 'One account books any dorm on Hoprak',
     logout: 'Log out',
     heroTitle: 'Find dorms near your university — transparent pricing, book instantly',
     heroSubtitle: 'Compare water & electric rates before booking',
@@ -384,7 +396,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const [homeContent, setHomeContent] = useState<HomeContent>({});
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   // แบนเนอร์หลายรูป — แอดมินเพิ่มได้ ปรับจุดโฟกัส/ซูมได้รายรูป มากกว่า 1 รูปจะเลื่อนเองทุก 5 วิ
-  const [heroSlides, setHeroSlides] = useState<{ url: string; pos: string; zoom: number }[]>([]);
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
   const [heroIndex, setHeroIndex] = useState(0);
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [topSearchQ, setTopSearchQ] = useState('');
@@ -394,7 +406,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     apiClient
       .get<{
         heroImageUrl: string | null;
-        heroSlides?: { url: string; pos: string; zoom: number }[];
+        heroSlides?: HeroSlide[];
         areaImages: Record<string, string[]>;
         promoCards: PromoCardData[];
         homeContent: HomeContent;
@@ -467,6 +479,29 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   const t = TEXT[lang];
   // ข้อความหน้าแรกที่แอดมินแก้ได้ (เฉพาะภาษาไทย) — ทับ default เมื่อดูภาษาไทยและแอดมินตั้งค่าไว้
   const isTh = lang === 'th';
+  /**
+   * ปุ่มชวนสมัคร — โชว์เฉพาะคนที่ยังไม่ล็อกอิน
+   * ล็อกอินแล้วไม่ต้องโชว์อะไร (เขาสมัครไปแล้ว การ์ดค้นหาอยู่ใต้ลงไปแค่ไม่กี่พิกเซล)
+   * รอผล useCurrentUser ก่อนค่อยตัดสินใจ ไม่งั้นปุ่มจะกะพริบขึ้นมาแวบหนึ่งทุกครั้งที่คนล็อกอินเปิดหน้าแรก
+   */
+  function HeroCta({ onDark = false }: { onDark?: boolean }) {
+    if (userLoading || user) return null;
+    return (
+      <div className="mt-5 flex flex-col items-center gap-2">
+        <Link
+          href="/register"
+          className="inline-flex h-[52px] items-center gap-2.5 rounded-pill bg-tenant px-7 text-[16px] font-bold text-white shadow-[0_10px_24px_rgba(47,111,224,0.35)] transition hover:bg-tenant-dark hover:shadow-[0_12px_28px_rgba(47,111,224,0.45)] active:scale-[.98] sm:h-[56px] sm:px-9 sm:text-[17px]"
+        >
+          {t.ctaRegister}
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h13M12 5l7 7-7 7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
+        <span className={`text-[12.5px] ${onDark ? 'text-white/80' : 'text-ink-faint'}`}>{t.ctaSub}</span>
+      </div>
+    );
+  }
+
   const heroTitle = (isTh && homeContent.heroTitleTh) || t.heroTitle;
   const heroSubtitle = (isTh && homeContent.heroSubtitleTh) || t.heroSubtitle;
   const zonesTitle = (isTh && homeContent.zonesTitleTh) || t.zonesTitle;
@@ -505,7 +540,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     heroSlides.length > 0
       ? heroSlides
       : heroImageUrl
-        ? [{ url: heroImageUrl, pos: homeContent.heroPos || '50% 50%', zoom: 100 }]
+        ? [{ url: heroImageUrl, pos: homeContent.heroPos || '50% 50%', zoom: 100, fit: 'cover' as const }]
         : [];
 
   // เลื่อนแบนเนอร์เองทุก 5 วิ เฉพาะตอนมีมากกว่า 1 รูป (รูปเดียวไม่ต้องตั้ง timer ให้เปลือง)
@@ -892,77 +927,77 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       </div>
 
       {/* ===== HERO =====
-          แบนเนอร์หลายรูป: ทุกรูปวางซ้อนกัน เปลี่ยนด้วย opacity (จางเข้า-ออก) ไม่ใช่การเลื่อน
-          จะได้ไม่ต้องคุม scroll และรูปที่ยังไม่ถึงคิวก็โหลดไว้ล่วงหน้าแล้ว ไม่วูบตอนสลับ
-          รูปของแอดมินมักมีตัวหนังสือในรูปอยู่แล้ว จึงมีม่านดำไล่เฉดคาดไว้ให้หัวข้อของระบบยังอ่านออก */}
-      <div
-        className={`relative overflow-hidden px-4 pb-[150px] pt-11 text-center sm:pb-[190px] sm:pt-14 ${
-          slides.length || homeContent.heroColor ? '' : 'bg-[linear-gradient(120deg,#2F6FE0,#2456B8)]'
-        }`}
-        style={!slides.length && homeContent.heroColor ? { background: homeContent.heroColor } : undefined}
-      >
-        {slides.map((slide, i) => (
-          <div
-            key={`${slide.url}-${i}`}
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-cover transition-opacity duration-700 ease-out motion-reduce:transition-none"
-            style={{
-              backgroundImage: `url('${slide.url}')`,
-              backgroundPosition: slide.pos || 'center',
-              // ซูม 100% = พอดีกรอบ (cover) มากกว่านั้นขยายจากจุดโฟกัสเดิม
-              backgroundSize: slide.zoom > 100 ? `${slide.zoom}% auto` : 'cover',
-              opacity: i === heroIndex % slides.length ? 1 : 0,
-            }}
-          />
-        ))}
+          มีโปสเตอร์จากแอดมิน = วางเป็นแถบเต็มความกว้างจอ เห็นทั้งรูป ไม่ครอป ไม่มีอะไรทับ
+          (โปสเตอร์มีข้อความในตัวเองอยู่แล้ว ทับหัวข้อของระบบลงไปอีกชั้นแล้วอ่านไม่ออกทั้งคู่)
+          หัวข้อของระบบกับการ์ดค้นหาจึงลงมาอยู่ใต้รูปเป็นชั้นๆ แทน
+          ไม่มีโปสเตอร์ = ใช้แถบสี/gradient แบบเดิม หัวข้ออยู่บนแถบ การ์ดค้นหาซ้อนขึ้นไปครึ่งหนึ่งเหมือนเดิม */}
+      {slides.length > 0 ? (
+        <div className="relative w-full bg-[#0B1020]">
+          {slides.map((slide, i) => {
+            const active = i === heroIndex % slides.length;
+            return active ? (
+              // รูปที่กำลังโชว์อยู่ในสายเลย์เอาต์ปกติ ความสูงของแถบจึงเท่ากับสัดส่วนรูปจริง ไม่ครอปสักด้าน
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`${slide.url}-${i}`}
+                src={slide.url}
+                alt=""
+                className="block w-full transition-opacity duration-700 ease-out motion-reduce:transition-none"
+              />
+            ) : (
+              // รูปที่ยังไม่ถึงคิว โหลดไว้เงียบๆ ตอนสลับจะได้ไม่วูบ
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={`${slide.url}-${i}`} src={slide.url} alt="" className="hidden" />
+            );
+          })}
 
-        {/* ม่านอ่านง่าย — เข้มบนล่าง จางกลาง ตัวหนังสือในรูปของแอดมินยังเห็น แต่หัวข้อเราไม่จม */}
-        {slides.length > 0 && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(8,12,22,0.62) 0%, rgba(8,12,22,0.30) 45%, rgba(8,12,22,0.55) 100%)',
-            }}
-          />
-        )}
-
-        <div className="relative">
-          <h1
-            className="mx-auto max-w-3xl text-[26px] font-bold leading-tight tracking-tight text-white text-balance sm:text-[36px]"
-            style={slides.length ? { textShadow: '0 2px 14px rgba(0,0,0,0.75)' } : undefined}
-          >
-            {heroTitle}
-          </h1>
-          <p
-            className="mt-2 text-[15px] text-[#EAF1FD] sm:text-[16px]"
-            style={slides.length ? { textShadow: '0 1px 10px rgba(0,0,0,0.8)' } : undefined}
-          >
-            {heroSubtitle}
-          </p>
-
-          {/* จุดบอกรูป — โชว์เฉพาะตอนมีหลายรูป กดข้ามได้ */}
           {slides.length > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-1.5">
+            <div className="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-1.5 sm:bottom-4">
               {slides.map((slide, i) => (
                 <button
                   key={`dot-${slide.url}-${i}`}
                   type="button"
                   aria-label={`${lang === 'th' ? 'แบนเนอร์ที่' : 'Banner'} ${i + 1}`}
                   onClick={() => setHeroIndex(i)}
-                  className={`h-[6px] rounded-full transition-all ${
-                    i === heroIndex % slides.length ? 'w-[20px] bg-white' : 'w-[6px] bg-white/50'
+                  className={`h-[6px] rounded-full shadow-[0_1px_4px_rgba(0,0,0,0.4)] transition-all ${
+                    i === heroIndex % slides.length ? 'w-[20px] bg-white' : 'w-[6px] bg-white/60'
                   }`}
                 />
               ))}
             </div>
           )}
         </div>
-      </div>
+      ) : (
+        <div
+          className={`relative px-4 pb-[150px] pt-11 text-center sm:pb-[190px] sm:pt-14 ${
+            homeContent.heroColor ? '' : 'bg-[linear-gradient(120deg,#2F6FE0,#2456B8)]'
+          }`}
+          style={homeContent.heroColor ? { background: homeContent.heroColor } : undefined}
+        >
+          <h1 className="mx-auto max-w-3xl text-[26px] font-bold leading-tight tracking-tight text-white text-balance sm:text-[36px]">
+            {heroTitle}
+          </h1>
+          <p className="mt-2 text-[15px] text-[#EAF1FD] sm:text-[16px]">{heroSubtitle}</p>
+          <HeroCta onDark />
+        </div>
+      )}
 
+      {/* หัวข้อของระบบ — ใต้โปสเตอร์ พื้นอ่อน อ่านง่าย ไม่ต้องพึ่งเงาตัวอักษร */}
+      {slides.length > 0 && (
+        <div className="px-4 pb-2 pt-7 text-center sm:pt-9">
+          <h1 className="mx-auto max-w-3xl text-[24px] font-bold leading-tight tracking-tight text-ink-strong text-balance sm:text-[34px]">
+            {heroTitle}
+          </h1>
+          <p className="mt-2 text-[15px] text-ink-muted sm:text-[16px]">{heroSubtitle}</p>
+          <HeroCta />
+        </div>
+      )}
       {/* ===== SEARCH CARD (floats over hero) ===== */}
-      <div className="relative z-[2] mx-auto -mt-[120px] w-full max-w-[880px] px-4 sm:-mt-[140px] lg:-mt-[160px] lg:max-w-[1040px]">
+      <div
+        className={`relative z-[2] mx-auto w-full max-w-[880px] px-4 lg:max-w-[1040px] ${
+          slides.length > 0 ? 'mt-4' : '-mt-[120px] sm:-mt-[140px] lg:-mt-[160px]'
+        }`}
+      >
         {/* category tabs */}
         <div className="flex gap-1.5 pl-3.5">
           <button
