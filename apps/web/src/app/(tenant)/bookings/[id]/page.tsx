@@ -23,6 +23,13 @@ const TEXT = {
     } as Record<string, string>,
     pay: 'ชำระเงิน',
     cancel: 'ยกเลิกการจอง',
+    cancelTitle: 'ยกเลิกการจองนี้ไหม?',
+    cancelBody: 'ห้องจะกลับไปเปิดให้คนอื่นจอง ถ้าเปลี่ยนใจทีหลังจองใหม่ได้ตามห้องที่ว่างอยู่ตอนนั้น',
+    cancelFreeNote: 'ยังไม่ได้ชำระเงิน ยกเลิกตอนนี้ไม่มีค่าใช้จ่าย',
+    cancelKeep: 'เก็บไว้ก่อน',
+    cancelConfirm: 'ยกเลิกการจอง',
+    cancelBusy: 'กำลังยกเลิก...',
+    cancelFailed: 'ยกเลิกไม่สำเร็จ ลองใหม่อีกครั้ง',
     receiptTitle: 'ใบเสร็จรับเงิน',
     receiptDone: 'ชำระเงินสำเร็จ',
     receiptDesc: 'เงินเข้าระบบเรียบร้อย นี่คือใบเสร็จของคุณ นำโค้ดด้านล่างไปยืนยันกับเจ้าของหอตอนเข้าพักเพื่อรับกุญแจ',
@@ -50,6 +57,9 @@ const TEXT = {
     cancelledDesc: 'การจองนี้สิ้นสุดแล้ว คุณสามารถเลือกจองหอพักอื่นได้',
     ctaViewBookings: 'ดูการจองของฉัน',
     payCta: 'ไปหน้าชำระเงิน',
+    moreDetails: 'ดูรายละเอียดเพิ่มเติม',
+    lessDetails: 'ย่อรายละเอียด',
+    backToTop: 'กลับขึ้นด้านบน',
     hintPay: 'สแกน QR พร้อมเพย์ · ระบบตรวจยอดอัตโนมัติ',
     hintReceipt: 'เก็บใบเสร็จไว้เป็นหลักฐาน',
     downloadReceipt: 'พิมพ์ / ดาวน์โหลดใบเสร็จ',
@@ -66,6 +76,13 @@ const TEXT = {
     } as Record<string, string>,
     pay: 'Pay',
     cancel: 'Cancel booking',
+    cancelTitle: 'Cancel this booking?',
+    cancelBody: 'The room goes back up for others to book. You can book again later from whatever is free at that time.',
+    cancelFreeNote: 'Nothing has been charged, so cancelling now costs nothing.',
+    cancelKeep: 'Keep it',
+    cancelConfirm: 'Cancel booking',
+    cancelBusy: 'Cancelling...',
+    cancelFailed: 'Could not cancel. Please try again.',
     receiptTitle: 'Receipt',
     receiptDone: 'Payment successful',
     receiptDesc:
@@ -95,6 +112,9 @@ const TEXT = {
     cancelledDesc: 'This booking has ended. You can book another dorm.',
     ctaViewBookings: 'View my bookings',
     payCta: 'Go to payment',
+    moreDetails: 'More details',
+    lessDetails: 'Hide details',
+    backToTop: 'Back to top',
     hintPay: 'Scan the PromptPay QR · verified automatically',
     hintReceipt: 'Keep the receipt as proof',
     downloadReceipt: 'Print / download receipt',
@@ -111,6 +131,19 @@ export default function BookingDetailPage() {
   const t = TEXT[lang];
   const [booking, setBooking] = useState<Booking | null>(null);
   const [copied, setCopied] = useState(false);
+  // ปุ่มลูกศรกลับขึ้นบน — โผล่หลังเลื่อนลงพ้นหนึ่งจอ ลอยตามตลอด
+  const [showTop, setShowTop] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  // ปิดแล้วต้องคาไว้ให้จังหวะเลื่อนลงเล่นจบก่อนถอดออกจาก DOM
+  const [cancelClosing, setCancelClosing] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 260);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (!getToken()) {
@@ -133,9 +166,35 @@ export default function BookingDetailPage() {
     };
   }, [id]);
 
-  async function handleCancel() {
-    await apiClient.patch(`/bookings/${id}/cancel`);
-    apiClient.get<Booking>(`/bookings/${id}`).then(setBooking);
+  // กดปุ่มยกเลิก = เปิดไดอะล็อกถามก่อน ไม่ยิงทันที (ยกเลิกแล้วกู้คืนไม่ได้)
+  function handleCancel() {
+    setCancelError(null);
+    setCancelOpen(true);
+  }
+
+  function closeCancel() {
+    if (cancelBusy) return; // กำลังยิง API อยู่ ห้ามปิดหนี
+    setCancelClosing(true);
+    setTimeout(() => {
+      setCancelOpen(false);
+      setCancelClosing(false);
+    }, 500);
+  }
+
+  async function confirmCancel() {
+    setCancelBusy(true);
+    setCancelError(null);
+    try {
+      await apiClient.patch(`/bookings/${id}/cancel`);
+      const fresh = await apiClient.get<Booking>(`/bookings/${id}`);
+      setBooking(fresh);
+      closeCancel();
+    } catch {
+      // apiClient โยน error เมื่อ response ไม่ ok — ต้อง catch เสมอ ไม่งั้นหน้าพังทั้งหน้า
+      setCancelError(t.cancelFailed);
+    } finally {
+      setCancelBusy(false);
+    }
   }
 
   function copyToken() {
@@ -191,7 +250,7 @@ export default function BookingDetailPage() {
 
         <BookingStepper current={stepNum} lang={lang} />
 
-        <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_400px]">
+        <div className={`mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_400px] ${canPay ? "pb-[104px] lg:pb-0" : ""}`}>
           <div className="min-h-[440px] rounded-[20px] border border-[#EAEDF2] bg-white p-6 shadow-[0_2px_8px_rgba(16,24,40,0.05)] sm:p-[30px]">
 
       {/* STEP 2 · READY TO PAY (จองแล้ว พร้อมชำระเงินทันที) */}
@@ -346,10 +405,30 @@ export default function BookingDetailPage() {
 
           </div>
 
+          {/* มือถือ: ปุ่มหลักอยู่ใต้การ์ดขั้นตอนเลย ไม่ต้องเลื่อนผ่านกล่องสรุปยาวๆ ก่อน
+              จอ lg ขึ้นไปไม่ต้องมี เพราะกล่องสรุปกับปุ่มอยู่คอลัมน์ขวาเห็นพร้อมกันอยู่แล้ว */}
+          {canPay && (
+            <div className="lg:hidden">
+              {/* ปุ่มจ่ายเงินอยู่ที่แถบติดขอบล่างตัวเดียว ไม่ต้องมีซ้ำในเนื้อหา
+                  ปุ่มยกเลิกย้ายไปล่างสุดของหน้า — เป็นทางออก ไม่ใช่สิ่งที่อยากให้กดก่อน */}
+              <p className="text-center text-[11.5px] text-[#9AA0AB]">{t.hintPay}</p>
+            </div>
+          )}
+
           {/* RIGHT · summary */}
           <BookingSummary booking={booking} lang={lang}>
+            {/* มือถือ: ปุ่มยกเลิกอยู่ใต้ยอดชำระในกล่องสรุปเลย (ปุ่มจ่ายเงินอยู่ที่แถบติดขอบล่าง) */}
+            {canPay && canCancel && (
+              <button
+                onClick={handleCancel}
+                className="mt-4 flex h-[46px] w-full items-center justify-center rounded-[13px] border border-danger text-sm font-semibold text-danger active:bg-danger-tint lg:hidden"
+              >
+                {t.cancel}
+              </button>
+            )}
             {canPay && (
-              <>
+              // จอ lg ขึ้นไปใช้ชุดปุ่มเต็ม (จ่ายเงิน + ยกเลิก) เพราะไม่มีแถบติดขอบล่าง
+              <div className="hidden lg:block">
                 <button
                   onClick={() => router.push(`/bookings/${id}/pay`)}
                   className="mt-[18px] flex h-[52px] w-full items-center justify-center rounded-[13px] bg-gradient-to-br from-tenant to-[#5B9DFF] text-base font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.3)] hover:brightness-105"
@@ -365,7 +444,7 @@ export default function BookingDetailPage() {
                     {t.cancel}
                   </button>
                 )}
-              </>
+              </div>
             )}
             {showReceipt && (
               <>
@@ -396,8 +475,99 @@ export default function BookingDetailPage() {
               </button>
             )}
           </BookingSummary>
+
         </div>
       </div>
+
+      {/* ยืนยันก่อนยกเลิก — บอกผลที่ตามมาจริงๆ (ห้องหลุดมือ กู้คืนไม่ได้) ไม่ใช่แค่ถามว่าแน่ใจไหม */}
+      {cancelOpen && (
+        <div
+          onClick={closeCancel}
+          className="hopak-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-[rgba(11,13,18,0.42)] p-4 sm:items-center"
+          style={{
+            animation: cancelClosing ? 'hopak-backdrop-out .5s ease-out forwards' : 'hopak-backdrop-in .5s ease-out',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-title"
+            onClick={(e) => e.stopPropagation()}
+            className="hopak-sheet w-full max-w-[460px] rounded-[22px] bg-white p-6 shadow-[0_24px_60px_rgba(8,12,24,0.35)] sm:p-7"
+            style={{
+              animation: cancelClosing
+                ? 'hopak-sheet-down .5s cubic-bezier(.22,.61,.24,1) forwards'
+                : 'hopak-sheet-up .5s cubic-bezier(.22,.61,.24,1)',
+            }}
+          >
+            {/* ปฏิทินโทนกลาง — ของเดิมเป็นสามเหลี่ยมเตือนสีแดง ดูเหมือนกำลังจะเกิดเรื่องร้ายแรง
+                ทั้งที่ยังไม่ได้จ่ายเงิน ยกเลิกตอนนี้ไม่เสียอะไร */}
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F4F9]">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M8 3v3.5M16 3v3.5M4 10h16M5.5 5.5h13a1 1 0 011 1V19a1 1 0 01-1 1h-13a1 1 0 01-1-1V6.5a1 1 0 011-1z" stroke="#5B616C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 14l4 4M14 14l-4 4" stroke="#5B616C" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h2 id="cancel-title" className="mt-4 text-[22px] font-bold leading-snug text-ink-strong">
+              {t.cancelTitle}
+            </h2>
+            <p className="mt-2.5 text-[15.5px] leading-relaxed text-[#6B7280]">{t.cancelBody}</p>
+            <p className="mt-3.5 rounded-[12px] bg-[#F4F7FB] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#5B616C]">{t.cancelFreeNote}</p>
+            {cancelError && <p className="mt-3 text-[13px] font-semibold text-danger">{cancelError}</p>}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
+              <button
+                onClick={confirmCancel}
+                disabled={cancelBusy}
+                className="h-[62px] flex-1 rounded-[16px] border-2 border-danger bg-white text-[17px] font-bold text-danger disabled:opacity-60"
+              >
+                {cancelBusy ? t.cancelBusy : t.cancelConfirm}
+              </button>
+              <button
+                onClick={closeCancel}
+                disabled={cancelBusy}
+                className="h-[62px] flex-1 rounded-[16px] bg-tenant text-[17.5px] font-bold text-white shadow-[0_10px_22px_rgba(47,111,224,0.32)] disabled:opacity-50"
+              >
+                {t.cancelKeep}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ปุ่มลูกศรกลับขึ้นบน — ลอยตามจอ โผล่เมื่อเลื่อนลงมาแล้ว วางเหนือแถบจ่ายเงิน */}
+      <button
+        type="button"
+        aria-label={t.backToTop}
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        className={`fixed right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-white text-tenant shadow-[0_8px_22px_rgba(16,24,40,0.22)] ring-1 ring-black/[0.05] transition-all duration-300 lg:bottom-6 ${
+          canPay ? 'bottom-[92px]' : 'bottom-6'
+        } ${showTop ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'}`}
+      >
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+          <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {/* แถบติดขอบล่าง (มือถือ) — ปุ่มจ่ายเงินตามไปด้วยตลอดหน้า ไม่ต้องเลื่อนกลับขึ้นไปหา */}
+      {canPay && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#EAEDF2] bg-white/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 shadow-[0_-6px_20px_rgba(16,24,40,0.1)] backdrop-blur lg:hidden">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11.5px] text-[#8A909F]">{t.amountDue}</div>
+              <div className="font-sans text-[19px] font-bold leading-tight text-tenant">
+                ฿{booking.amount.toLocaleString()}
+              </div>
+            </div>
+            <button
+              onClick={() => router.push(`/bookings/${id}/pay`)}
+              className="h-[48px] shrink-0 rounded-[13px] bg-gradient-to-br from-tenant to-[#5B9DFF] px-6 text-[15px] font-bold text-white shadow-[0_8px_18px_rgba(47,111,224,0.32)] active:scale-[.99]"
+            >
+              {t.payCta}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

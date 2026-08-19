@@ -96,3 +96,27 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
 }
+
+/* ไดอะล็อกยืนยัน — เลื่อนขึ้นจากขอบล่าง 0.5 วิ
+   ใช้ animation ไม่ใช่ transition เพราะ element เพิ่งถูกแทรกเข้า DOM
+   (transition ไม่เล่นให้ element ที่เพิ่งแทรก — เจอมาแล้วกับลิ้นชักเมนูและแบนเนอร์) */
+@keyframes hopak-sheet-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes hopak-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hopak-sheet, .hopak-backdrop { animation: none !important; }
+}
+
+@keyframes hopak-sheet-down {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+@keyframes hopak-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
