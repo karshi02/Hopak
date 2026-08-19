@@ -20,7 +20,7 @@ import { LangSwitch } from '@/components/LangSwitch';
 // ตัวเลขที่โชว์ต้องมาจากค่าที่แอดมินตั้งจริง (useFees ยิง /settings/fees) ไม่ใช่ค่าคงที่ในโค้ด
 
 /** ระยะเวลาสไลด์ลิ้นชัก — ชุดเดียวกับลิ้นชักฝั่งผู้เช่า (MobileHomeChrome) */
-const DRAWER_MS = 620;
+const DRAWER_MS = 300;
 const DRAWER_EASE = 'cubic-bezier(.32,.72,0,1)';
 
 /** รูปประกอบของแต่ละขั้นตอน/ฟีเจอร์ แยกจากข้อความเพราะไม่ขึ้นกับภาษา */
@@ -239,7 +239,7 @@ export default function OwnerLandingPage() {
   }, [menuOpen]);
 
   const menuItems = t.menuLabels.map((label, i) => ({ label, href: MENU_HREFS[i] }));
-  const bar = 'absolute h-[2px] w-[17px] rounded-sm bg-white transition-transform duration-[560ms] motion-reduce:transition-none';
+  const bar = 'absolute h-[2px] w-[17px] rounded-sm bg-white transition-transform duration-[300ms] motion-reduce:transition-none';
   const ease = { transitionTimingFunction: DRAWER_EASE };
 
   return (

@@ -16,7 +16,7 @@ import type { Lang } from '@/hooks/useLang';
 type MenuUser = { name: string; avatarUrl?: string | null } | null;
 
 /** ระยะเวลาสไลด์ลิ้นชัก — ต้องตรงกับ duration ใน className ด้านล่าง ไม่งั้นถอดออกก่อนสไลด์จบ */
-const DRAWER_MS = 620;
+const DRAWER_MS = 300;
 /** โค้งแบบ iOS: ออกตัวเร็วแล้วค่อยๆ หยุด (ease-out) ให้รู้สึกลื่นกว่า ease ปกติ */
 const DRAWER_EASE = 'cubic-bezier(.32,.72,0,1)';
 
@@ -95,7 +95,7 @@ export function MobileMenuButton({
   open?: boolean;
 }) {
   // easing ใส่เป็น inline style ไม่ใช่คลาส — Tailwind อ่านคลาสจากซอร์ส สร้างจากตัวแปรตอนรันไม่ทัน
-  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-[560ms] motion-reduce:transition-none ${
+  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-[300ms] motion-reduce:transition-none ${
     variant === 'onDark' ? 'bg-white' : 'bg-ink-strong dark:bg-white'
   }`;
   const ease = { transitionTimingFunction: DRAWER_EASE };
@@ -328,8 +328,9 @@ export function MobileHomeChrome({
                   onClick={onClose}
                   /* ไล่ทีละอันเท่ากันทั้งขาเข้าและขาออก — ขาออกไล่ย้อนจากอันล่างขึ้นบน */
                   style={{
-                    transitionDuration: '440ms',
-                    transitionDelay: `${90 + (shown ? i : menuItems.length - 1 - i) * 40}ms`,
+                    // ต้องจบภายในเวลาลิ้นชัก (DRAWER_MS) ไม่งั้นเมนูยังไล่ขึ้นอยู่ทั้งที่ลิ้นชักปิดไปแล้ว
+                    transitionDuration: '190ms',
+                    transitionDelay: `${20 + (shown ? i : menuItems.length - 1 - i) * 14}ms`,
                   }}
                   className={`flex h-12 items-center gap-3.5 rounded-[11px] px-3.5 transition-[opacity,transform] ease-out motion-reduce:transition-none active:bg-surface-canvas ${
                     shown ? 'translate-x-0 opacity-100' : 'translate-x-3 opacity-0'
