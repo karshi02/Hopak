@@ -34,6 +34,22 @@ export class SettingsController {
     return this.settingsService.getHero();
   }
 
+  // อ่านได้สาธารณะ — หน้าเว็บฝั่งเจ้าของหอ/หน้าขายของต้องโชว์ % ให้ตรงกับที่ระบบหักจริง
+  @Get('settings/fees')
+  getFees() {
+    return this.settingsService.getFees();
+  }
+
+  @Post('admin/settings/fees')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  setFees(@Body() body: { commissionRate: number; dailyCommissionRate: number }) {
+    return this.settingsService.setFees({
+      commissionRate: Number(body?.commissionRate),
+      dailyCommissionRate: Number(body?.dailyCommissionRate),
+    });
+  }
+
   @Post('admin/settings/hero')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')

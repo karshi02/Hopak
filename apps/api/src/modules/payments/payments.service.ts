@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { calcPayout } from '@hopak/shared';
+import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../../prisma.service';
 import { XenditGateway } from './gateway/xendit.gateway';
 import { UploadsService } from '../uploads/uploads.service';
@@ -21,6 +22,7 @@ export class PaymentsService {
     private uploads: UploadsService,
     private notifications: NotificationsService,
     private realtime: RealtimeGateway,
+    private settings: SettingsService,
   ) {}
 
   // รายได้ payout ของเจ้าของหอ แยกตามสถานะ: SETTLED = รอโอน, TRANSFERRED = โอนแล้ว
@@ -173,10 +175,14 @@ export class PaymentsService {
     // ค่าคอมคิดจาก "ค่าห้อง" (roomPrice) เท่านั้น — มัดจำคืนเจ้าของหอเต็ม ไม่โดนหัก
     // อัตราต่างกันตามประเภทการเช่า: รายเดือน 20% · รายวัน 10% (รายวันไม่มีมัดจำ ฐาน = ยอดเต็ม)
     const commissionBase = booking.roomPrice;
+    // อัตราอ่านจาก SiteSettings ทุกครั้งที่ออกบิล (แอดมินปรับได้) ตัวเลขที่คิดได้เก็บลง Payment
+    // บิลเก่าจึงไม่เปลี่ยนตามเมื่อแอดมินแก้อัตราภายหลัง
+    const fees = await this.settings.getFees();
     const split = calcPayout({
       amount: booking.amount,
       commissionBase,
       rentalType: booking.rentalType,
+      rates: { monthly: fees.commissionRate, daily: fees.dailyCommissionRate },
     });
     await this.prisma.payment.create({
       data: {

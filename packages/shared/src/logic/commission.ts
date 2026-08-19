@@ -8,9 +8,15 @@ export function calcCommission(base: number, rate: number = COMMISSION_RATE): nu
   return round2(base * rate);
 }
 
-// ชุดตัวเลขทั้งหมดของบิลเดียว — ใช้อัตราตามประเภทการเช่า (รายเดือน 20% / รายวัน 10%)
-export function calcPayout(params: { amount: number; commissionBase: number; rentalType?: RentalKind | string | null }) {
-  const rate = commissionRateFor(params.rentalType);
+// ชุดตัวเลขทั้งหมดของบิลเดียว — ใช้อัตราตามประเภทการเช่า
+// rates = อัตราที่แอดมินตั้งไว้ใน SiteSettings (ส่งมาจากฝั่ง API) ไม่ส่ง = ใช้ค่า default ในไฟล์ fees.ts
+export function calcPayout(params: {
+  amount: number;
+  commissionBase: number;
+  rentalType?: RentalKind | string | null;
+  rates?: { monthly?: number | null; daily?: number | null };
+}) {
+  const rate = commissionRateFor(params.rentalType, params.rates);
   const commission = calcCommission(params.commissionBase, rate);
   const chamberShare = round2(commission * CHAMBER_RATE);
   return {

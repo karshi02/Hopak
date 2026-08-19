@@ -9,10 +9,12 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaService } from '../../prisma.service';
 
+import { SettingsService } from '../settings/settings.service';
+
 @Module({
   imports: [RealtimeModule, NotificationsModule],
   controllers: [PaymentsController, WebhooksController, OwnerIncomeController],
-  providers: [PaymentsService, XenditGateway, UploadsService, PrismaService],
+  providers: [PaymentsService, XenditGateway, UploadsService, PrismaService, SettingsService],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

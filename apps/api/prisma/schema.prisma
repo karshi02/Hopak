@@ -25,6 +25,11 @@ model SiteSettings {
   // ข้อความหน้าแรกที่แอดมินแก้ไขได้แบบ inline — { heroTitleTh, heroSubtitleTh, zonesTitleTh, zonesSubTh, trust:[{titleTh,subTh}] }
   // ว่าง = ใช้ข้อความ default ที่ hardcode ในหน้าเว็บ (แอดมินแก้เฉพาะภาษาไทย อังกฤษใช้ default)
   homeContent  Json     @default("{}")
+  // อัตราค่าคอมที่แอดมินปรับได้เอง (เก็บเป็นสัดส่วน 0-1 ไม่ใช่เปอร์เซ็นต์)
+  // ว่าง = ใช้ค่า default จาก packages/shared (กันเคส DB ยังไม่เคยตั้งค่า)
+  // ค่าที่คิดไปแล้วเก็บลง Payment ทุกใบ การแก้ตรงนี้จึงมีผลกับบิลใหม่เท่านั้น ไม่ย้อนหลัง
+  commissionRate      Float?
+  dailyCommissionRate Float?
   updatedAt    DateTime @updatedAt
 }
 

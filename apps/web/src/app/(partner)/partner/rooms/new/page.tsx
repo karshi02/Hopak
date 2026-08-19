@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api-client';
 import { getToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
 import { usePartnerMode } from '@/hooks/usePartnerMode';
-import { DAILY_COMMISSION_RATE } from '@hopak/shared';
+import { useFees, toPct } from '@/hooks/useFees';
 import type { Dorm } from '@hopak/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -160,6 +160,7 @@ const TEXT = {
 };
 
 export default function NewRoomPage() {
+  const fees = useFees(); // เรตรายวันจริงจากเซิร์ฟเวอร์ ใช้โชว์ยอดที่เจ้าของหอได้รับต่อคืน
   const router = useRouter();
   const { lang } = useLang();
   const t = TEXT[lang];
@@ -481,14 +482,14 @@ export default function NewRoomPage() {
                   <span className="shrink-0 text-sm font-medium text-ink-muted">{t.perNight}</span>
                 </div>
               </div>
-              {/* ยอดที่เจ้าของได้รับจริงต่อคืน หลังหักค่าคอม 20% */}
+              {/* ยอดที่เจ้าของได้รับจริงต่อคืน หลังหักค่าคอมรายวันตามเรตที่แอดมินตั้งไว้ */}
               <div className="rounded-[13px] border border-hairline bg-success-tint p-3.5">
                 <div className="mb-2 text-xs font-semibold text-success">{t.netPerNight}</div>
                 <div className="font-sans text-2xl font-bold text-success">
-                  ฿{Math.round(num(pricePerDay) * (1 - DAILY_COMMISSION_RATE)).toLocaleString()}
+                  ฿{Math.round(num(pricePerDay) * (1 - fees.dailyCommissionRate)).toLocaleString()}
                 </div>
                 <div className="mt-1 text-[11.5px] text-ink-muted">
-                  ฿{num(pricePerDay).toLocaleString()} − ฿{Math.round(num(pricePerDay) * DAILY_COMMISSION_RATE).toLocaleString()} (10%)
+                  ฿{num(pricePerDay).toLocaleString()} − ฿{Math.round(num(pricePerDay) * fees.dailyCommissionRate).toLocaleString()} ({toPct(fees.dailyCommissionRate)}%)
                 </div>
               </div>
             </div>

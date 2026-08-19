@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
+import { BadRequestException } from '@nestjs/common';
+import { COMMISSION_RATE, DAILY_COMMISSION_RATE, CHAMBER_RATE, isValidRate } from '@hopak/shared';
+
+// เพดานค่าคอมที่ตั้งได้ — กันตั้งพลาดจนเจ้าของหอแทบไม่เหลือเงิน
+const MAX_COMMISSION_RATE = 0.5;
 
 const SETTINGS_ID = 'site';
 
@@ -48,6 +53,36 @@ function normalizeAreaImages(raw: unknown): Record<string, string[]> {
 @Injectable()
 export class SettingsService {
   constructor(private prisma: PrismaService) {}
+
+  // อัตราค่าคอมที่ใช้จริง — NULL ใน DB = ยังไม่เคยตั้ง ใช้ค่า default จาก packages/shared
+  async getFees() {
+    const settings = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
+    return {
+      commissionRate: isValidRate(settings?.commissionRate) ? settings!.commissionRate! : COMMISSION_RATE,
+      dailyCommissionRate: isValidRate(settings?.dailyCommissionRate)
+        ? settings!.dailyCommissionRate!
+        : DAILY_COMMISSION_RATE,
+      chamberRate: CHAMBER_RATE,
+    };
+  }
+
+  // แก้ได้เฉพาะแอดมิน — เพดาน 50% กันพิมพ์ผิดแล้วหักเจ้าของหอจนหมด (เช่นตั้ง 12 แทน 0.12)
+  async setFees(input: { commissionRate: number; dailyCommissionRate: number }) {
+    const check = (value: number, label: string) => {
+      if (!isValidRate(value) || value > MAX_COMMISSION_RATE) {
+        throw new BadRequestException(`${label} ต้องอยู่ระหว่าง 0 ถึง ${MAX_COMMISSION_RATE * 100}%`);
+      }
+      return Math.round(value * 10000) / 10000;
+    };
+    const commissionRate = check(input.commissionRate, 'ค่าคอมรายเดือน');
+    const dailyCommissionRate = check(input.dailyCommissionRate, 'ค่าคอมรายวัน');
+    await this.prisma.siteSettings.upsert({
+      where: { id: SETTINGS_ID },
+      create: { id: SETTINGS_ID, commissionRate, dailyCommissionRate },
+      update: { commissionRate, dailyCommissionRate },
+    });
+    return this.getFees();
+  }
 
   async getHero() {
     const settings = await this.prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } });

@@ -161,6 +161,14 @@ const TEXT = {
     ownerAccName: 'ชื่อบัญชี',
     ownerAccNo: 'เลขที่บัญชี',
     ownerPromptpay: 'พร้อมเพย์',
+    feesTitle: 'อัตราค่าคอมมิชชัน',
+    feesSub: 'มีผลกับบิลที่ออกใหม่เท่านั้น ยอดที่คิดไปแล้วเก็บไว้ในบิลเดิม ไม่เปลี่ยนย้อนหลัง',
+    feesMonthly: 'รายเดือน (% ของค่าห้อง)',
+    feesDaily: 'รายวัน (% ของยอดต่อคืน)',
+    feesSave: 'บันทึกอัตราใหม่',
+    feesSaving: 'กำลังบันทึก...',
+    feesSaved: 'บันทึกแล้ว',
+    feesRange: 'กรอกได้ 0–50%',
     ownerNoBank: 'ยังไม่ได้ตั้งบัญชีรับเงิน — โอนอัตโนมัติไม่ได้',
     ownerPending: 'ยอดรอโอนของเจ้าของรายนี้',
     ownerLoading: 'กำลังโหลด...',
@@ -240,6 +248,14 @@ const TEXT = {
     ownerAccName: 'Account name',
     ownerAccNo: 'Account number',
     ownerPromptpay: 'PromptPay',
+    feesTitle: 'Commission rates',
+    feesSub: 'Applies to newly issued bills only — amounts already charged stay as recorded.',
+    feesMonthly: 'Monthly (% of room price)',
+    feesDaily: 'Daily (% of nightly total)',
+    feesSave: 'Save rates',
+    feesSaving: 'Saving...',
+    feesSaved: 'Saved',
+    feesRange: 'Allowed range 0–50%',
     ownerNoBank: 'No payout account set — automatic transfer unavailable',
     ownerPending: 'Pending payout for this owner',
     ownerLoading: 'Loading...',
@@ -260,6 +276,45 @@ type Tab = 'all' | 'pending' | 'transferred';
 export default function AdminFinancePage() {
   const { lang } = useLang();
   const t = TEXT[lang];
+
+  // อัตราค่าคอม — แก้ที่นี่แล้วมีผลกับบิลใหม่ทันที (payments.service อ่านค่านี้ตอนออก QR)
+  // เก็บเป็น "เปอร์เซ็นต์" ในช่องกรอก แต่ส่ง/รับกับ API เป็นสัดส่วน 0-1
+  const [feePct, setFeePct] = useState<{ monthly: string; daily: string }>({ monthly: '', daily: '' });
+  const [feeBusy, setFeeBusy] = useState(false);
+  const [feeMsg, setFeeMsg] = useState<string | null>(null);
+  useEffect(() => {
+    apiClient
+      .get<{ commissionRate: number; dailyCommissionRate: number }>('/settings/fees')
+      .then((d) =>
+        setFeePct({
+          monthly: String(Math.round(d.commissionRate * 1000) / 10),
+          daily: String(Math.round(d.dailyCommissionRate * 1000) / 10),
+        }),
+      )
+      .catch(() => {});
+  }, []);
+
+  async function saveFees() {
+    setFeeMsg(null);
+    const monthly = Number(feePct.monthly);
+    const daily = Number(feePct.daily);
+    if (![monthly, daily].every((v) => Number.isFinite(v) && v >= 0 && v <= 50)) {
+      setFeeMsg(t.feesRange);
+      return;
+    }
+    setFeeBusy(true);
+    try {
+      await apiClient.post('/admin/settings/fees', {
+        commissionRate: monthly / 100,
+        dailyCommissionRate: daily / 100,
+      });
+      setFeeMsg(t.feesSaved);
+    } catch (err) {
+      setFeeMsg(err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ');
+    } finally {
+      setFeeBusy(false);
+    }
+  }
   const now = new Date();
   const [sel, setSel] = useState<Period>({ year: now.getFullYear(), month: now.getMonth() + 1 });
   const [fin, setFin] = useState<FinanceSummary | null>(null);
@@ -646,6 +701,41 @@ export default function AdminFinancePage() {
             </div>
           )}
           {dormRows.length === 0 && <p className="text-ink-faint">{t.none}</p>}
+        </div>
+      </div>
+
+      {/* ===== อัตราค่าคอม (แอดมินปรับเอง) ===== */}
+      <div className="mt-6 rounded-[18px] border border-card-border bg-white p-4 shadow-card sm:p-5 print:hidden">
+        <h2 className="text-[17px] font-bold text-ink-strong">{t.feesTitle}</h2>
+        <p className="mt-0.5 text-[12.5px] text-ink-muted">{t.feesSub}</p>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          {(
+            [
+              ['monthly', t.feesMonthly],
+              ['daily', t.feesDaily],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="min-w-[190px] flex-1">
+              <span className="mb-1.5 block text-[12.5px] font-semibold text-ink-muted">{label}</span>
+              <div className="flex h-[42px] items-center gap-2 rounded-[11px] border border-card-border bg-white px-3.5">
+                <input
+                  value={feePct[key]}
+                  onChange={(e) => setFeePct((prev) => ({ ...prev, [key]: e.target.value }))}
+                  inputMode="decimal"
+                  className="w-full bg-transparent font-sans text-[15px] font-bold tabular-nums text-ink-strong outline-none"
+                />
+                <span className="shrink-0 text-[13px] font-semibold text-ink-faint">%</span>
+              </div>
+            </label>
+          ))}
+          <button
+            onClick={saveFees}
+            disabled={feeBusy}
+            className="h-[42px] shrink-0 rounded-[11px] bg-tenant px-5 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {feeBusy ? t.feesSaving : t.feesSave}
+          </button>
+          {feeMsg && <span className="text-[12.5px] font-semibold text-ink-muted">{feeMsg}</span>}
         </div>
       </div>
 

@@ -10,7 +10,8 @@ import { KpiCard } from '@/components/admin/KpiCard';
 import { RevenueChart, Donut } from '@/components/admin/RevenueChart';
 import { Badge, bookingStatusBadge } from '@/components/dashboard/Badge';
 import { usePartnerMode } from '@/hooks/usePartnerMode';
-import { calcPayout, COMMISSION_RATE } from '@hopak/shared';
+import { calcPayout } from '@hopak/shared';
+import { useFees } from '@/hooks/useFees';
 import type { Booking, Dorm, Room } from '@hopak/shared';
 import { PageLoader } from '@/components/PageLoader';
 
@@ -153,6 +154,7 @@ function dayKey(d: Date) {
 }
 
 export default function PartnerDashboardPage() {
+  const fees = useFees(); // อัตราค่าคอมจริงจากเซิร์ฟเวอร์ ใช้คิดคอลัมน์ค่าคอมในไฟล์ CSV
   const { lang } = useLang();
   const t = TEXT[lang];
   const [dorms, setDorms] = useState<DormWithRooms[]>([]);
@@ -346,7 +348,7 @@ export default function PartnerDashboardPage() {
         Math.round(r.room),
         Math.round(r.deposit),
         Math.round(r.gross),
-        Math.round(r.room * COMMISSION_RATE),
+        Math.round(r.room * fees.commissionRate),
         Math.round(r.net),
         i === month ? occupancyPct : '',
       ].join(','),
@@ -366,7 +368,7 @@ export default function PartnerDashboardPage() {
         Math.round(total.room),
         Math.round(total.deposit),
         Math.round(total.gross),
-        Math.round(total.room * COMMISSION_RATE),
+        Math.round(total.room * fees.commissionRate),
         Math.round(total.net),
         '',
       ].join(','),

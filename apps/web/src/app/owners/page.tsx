@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { COMMISSION_RATE } from '@hopak/shared';
+import { useFees, toPct } from '@/hooks/useFees';
 import { useLang } from '@/hooks/useLang';
 import { LangSwitch } from '@/components/LangSwitch';
 
@@ -10,14 +10,14 @@ import { LangSwitch } from '@/components/LangSwitch';
  * หน้า "เรียนรู้เพิ่มเติม" สำหรับเจ้าของหอ — หน้าขายของ ไม่ต้องล็อกอิน
  * ปุ่ม CTA ทุกตัวพาไปหน้าสมัครเปิดหอพักจริง (/partner-register)
  *
- * ตัวเลขค่าคอมดึงจาก COMMISSION_RATE ตัวเดียวกับที่ระบบใช้คิดเงินจริง
- * ไม่ฮาร์ดโค้ด 20% ไว้ในข้อความ — วันไหนเปลี่ยนเรตแล้วลืมแก้หน้านี้ = โฆษณาผิดจากของจริง
+ * ตัวเลขค่าคอมดึงจาก /settings/fees (ค่าที่แอดมินตั้งไว้ ระบบใช้คิดเงินจริงด้วยค่าเดียวกัน)
+ * ไม่ฮาร์ดโค้ด % ไว้ในข้อความ — วันไหนแอดมินเปลี่ยนเรต หน้านี้ต้องเปลี่ยนตามเอง
  *
  * สองภาษาเหมือนหน้าอื่น (useLang เก็บค่าไว้ให้ทั้งเว็บ) สลับได้ในลิ้นชักเมนูบนมือถือ
  * และที่หัวเว็บบนจอใหญ่
  */
 
-const COMMISSION_PCT = Math.round(COMMISSION_RATE * 100);
+// ตัวเลขที่โชว์ต้องมาจากค่าที่แอดมินตั้งจริง (useFees ยิง /settings/fees) ไม่ใช่ค่าคงที่ในโค้ด
 
 /** ระยะเวลาสไลด์ลิ้นชัก — ชุดเดียวกับลิ้นชักฝั่งผู้เช่า (MobileHomeChrome) */
 const DRAWER_MS = 620;
@@ -43,7 +43,7 @@ const FEATURE_ART = [
 
 const MENU_HREFS = ['#pricing', '#steps', '#faq', '/partner-register', '/partner-login'];
 
-const TEXT = {
+const buildText = (COMMISSION_PCT: number) => ({
   th: {
     forOwners: 'สำหรับเจ้าของหอ',
     navPricing: 'ค่าบริการ',
@@ -197,7 +197,7 @@ const TEXT = {
     ctaPoints: ['No lock-in contract', 'Pause your listing any time', 'Free setup help from our team'],
     fab: 'How to join & use',
   },
-};
+});
 
 function Icon({ d, color, size = 24 }: { d: string; color: string; size?: number }) {
   return (
@@ -218,7 +218,10 @@ function CheckDot() {
 
 export default function OwnerLandingPage() {
   const { lang, setLang } = useLang();
-  const t = TEXT[lang];
+  // อัตราจริงจากเซิร์ฟเวอร์ — ข้อความโฆษณาทุกจุดในหน้านี้อ้างเลขเดียวกับที่ระบบหักจริง
+  const fees = useFees();
+  const commissionPct = toPct(fees.commissionRate);
+  const t = buildText(commissionPct)[lang];
   const [menuOpen, setMenuOpen] = useState(false);
 
   // ลิ้นชักต้องอยู่ใน DOM ต่ออีกแป๊บตอนปิด ไม่งั้นถอดทิ้งทันทีจนไม่เห็นจังหวะสไลด์ออก
@@ -527,7 +530,7 @@ export default function OwnerLandingPage() {
             <div className="text-[22px] font-extrabold tracking-[-0.5px] sm:text-[28px]">{t.pricingTitle}</div>
             <p className="mt-3 max-w-[560px] text-[15px] leading-relaxed text-[#5B616C]">
               {t.pricingBefore}
-              <b className="text-[#1E4FB0]">{COMMISSION_PCT}%</b>
+              <b className="text-[#1E4FB0]">{commissionPct}%</b>
               {t.pricingAfter}
             </p>
             <div className="mt-5 flex flex-wrap gap-6">
@@ -542,7 +545,7 @@ export default function OwnerLandingPage() {
           <div className="w-full shrink-0 rounded-[20px] bg-white p-6 text-center shadow-[0_16px_40px_rgba(30,79,176,0.16)] sm:w-[250px]">
             <div className="text-[13px] text-ink-faint">{t.pricingPerBooking}</div>
             <div className="font-sans text-[52px] font-extrabold leading-[1.1] tracking-[-2px] text-tenant">
-              {COMMISSION_PCT}%
+              {commissionPct}%
             </div>
             <div className="mb-4 text-[13px] text-ink-faint">{t.pricingOnlyWhen}</div>
             <Link
