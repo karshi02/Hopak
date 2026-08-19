@@ -61,10 +61,11 @@ const TEXT = {
   },
 } satisfies Record<Lang, Record<string, unknown>>;
 
+/** ไอคอนเมนู — 20px เส้นหนา 2 อ่านออกบนจอมือถือ ของเดิม 18px เส้น 1.8 ดูจางจนแยกไม่ออกว่าเป็นรูปอะไร */
 function MenuIcon({ d, color }: { d: string; color: string }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d={d} stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d={d} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -179,14 +180,17 @@ export function MobileHomeChrome({
     };
   }, [open]);
 
+  // สีเส้นเข้มกว่าเดิมทุกอัน (ตัวจางๆ อ่านไม่ออกบนพื้น tint) และรูปที่เดาไม่ออกวาดใหม่:
+  // "เรียนรู้เพิ่มเติม" เดิมเป็นหมวกรับปริญญาที่ทับกันจนดูเป็นสามเหลี่ยมประหลาด เปลี่ยนเป็นหนังสือ
+  // "ลงประกาศหอพัก" เดิมเป็นบ้านเปล่า ซ้ำกับไอคอนบ้านที่อื่นในหน้า เปลี่ยนเป็นโทรโข่ง = ประกาศ
   const menuItems = [
-    { href: '/search', label: t.items.search, bg: '#EAF1FF', color: '#2F6FE0', d: 'M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-4-4' },
-    { href: '/search', label: t.items.zones, bg: '#E7F7EF', color: '#178F5A', d: 'M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 1118 0zM12 10a2 2 0 100-4 2 2 0 000 4z' },
-    { href: '/saved', label: t.items.saved, bg: '#FFF1EC', color: '#E0692F', d: 'M12 21s-8-4.5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 6.5-8 11-8 11z' },
-    { href: '/bookings', label: t.items.bookings, bg: '#F3ECFF', color: '#7C4DE0', d: 'M8 2v3M16 2v3M4 8h16M5 5h14v15H5z' },
-    { href: '/partner-register', label: t.items.partner, bg: '#FFF3E0', color: '#C77B14', d: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5' },
-    { href: '/owners', label: t.items.ownerLearn, bg: '#EAF1FF', color: '#1E4FB0', d: 'M12 3l9 5-9 5-9-5 9-5zM12 13v8M8 17h8' },
-    { href: '/partner-login', label: t.items.partnerLogin, bg: '#EEF1F6', color: '#5B616C', d: 'M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3' },
+    { href: '/search', label: t.items.search, bg: '#EAF1FF', color: '#1E4FB0', d: 'M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-4.2-4.2' },
+    { href: '/search', label: t.items.zones, bg: '#E7F7EF', color: '#0E7A4A', d: 'M20 10c0 5.5-8 11-8 11s-8-5.5-8-11a8 8 0 1116 0zM12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
+    { href: '/saved', label: t.items.saved, bg: '#FFF1EC', color: '#C9541D', d: 'M12 20.5S4 15.8 4 9.9a4.6 4.6 0 018-3A4.6 4.6 0 0120 9.9c0 5.9-8 10.6-8 10.6z' },
+    { href: '/bookings', label: t.items.bookings, bg: '#F3ECFF', color: '#6438C8', d: 'M8 3v3.5M16 3v3.5M4 10h16M5.5 5.5h13a1 1 0 011 1V19a1 1 0 01-1 1h-13a1 1 0 01-1-1V6.5a1 1 0 011-1z' },
+    { href: '/partner-register', label: t.items.partner, bg: '#FFF3E0', color: '#A66208', d: 'M4 10.5v3a1.5 1.5 0 001.5 1.5H7l6.5 4V5L7 9H5.5A1.5 1.5 0 004 10.5zM7 15v4.5M17.5 9.5a3.5 3.5 0 010 5' },
+    { href: '/owners', label: t.items.ownerLearn, bg: '#EAF1FF', color: '#1E4FB0', d: 'M4 5.5A2.5 2.5 0 016.5 3H19v14.5H6.5A2.5 2.5 0 004 20V5.5zM4 20a2.5 2.5 0 002.5 2.5H19M8 7.5h7M8 11h5' },
+    { href: '/partner-login', label: t.items.partnerLogin, bg: '#EEF1F6', color: '#454B57', d: 'M14 3.5h4.5a1.5 1.5 0 011.5 1.5v14a1.5 1.5 0 01-1.5 1.5H14M10 8l4 4-4 4M14 12H3.5' },
   ];
 
   const navItems = [
@@ -332,7 +336,7 @@ export function MobileHomeChrome({
                   }`}
                 >
                   <span
-                    className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px]"
+                    className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-[10px]"
                     style={{ background: item.bg }}
                   >
                     <MenuIcon d={item.d} color={item.color} />
