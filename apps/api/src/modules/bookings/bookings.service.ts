@@ -61,9 +61,11 @@ export class BookingsService {
     }
     // เก็บค่าเช่า+มัดจำเป็น snapshot ตอนจอง (ราคาห้องอาจเปลี่ยนภายหลัง) — มัดจำใช้ระดับห้องก่อน
     // ถ้าห้องไม่ได้ตั้ง (0) ตกไปใช้ค่ามัดจำระดับหอ. ผู้เช่าจ่ายรวมกับเรา (กันจ่ายมัดจำตรงเจ้าของหอแล้วโดนโกง)
-    // จ่ายเต็มสัญญาล่วงหน้า: ค่าเช่า = ราคา/เดือน × จำนวนเดือนที่เลือก (1/3/6) — มัดจำจ่ายครั้งเดียว
-    const months = dto.leaseMonths ?? 1;
-    const roomPrice = room.pricePerMonth * months;
+    // ระยะเวลาสัญญา (3/6/12 เดือน) ไม่มีผลกับยอดที่จ่ายผ่านระบบ
+    // ผู้เช่าจ่ายผ่าน Hoprak แค่ "เดือนแรก + มัดจำ" เดือนถัดไปจ่ายกับเจ้าของหอเอง
+    // ค่าคอมจึงคิดจากค่าเช่าเดือนแรกเท่านั้น (commissionBase = roomPrice)
+    const months = dto.leaseMonths ?? 3;
+    const roomPrice = room.pricePerMonth;
     const deposit = room.deposit > 0 ? room.deposit : room.dorm.deposit;
     const booking = await this.prisma.booking.create({
       data: {
@@ -92,7 +94,7 @@ export class BookingsService {
       room.dorm.ownerId,
       'booking',
       'มีการจองใหม่',
-      `${dto.contactName} จอง${roomLabel} · เข้าอยู่ ${checkIn} · เช่า ${dto.leaseMonths ?? 1} เดือน — รอผู้เช่าชำระเงิน`,
+      `${dto.contactName} จอง${roomLabel} · เข้าอยู่ ${checkIn} · สัญญา ${months} เดือน (จ่ายผ่านระบบเดือนแรก) — รอผู้เช่าชำระเงิน`,
     );
 
     return booking;

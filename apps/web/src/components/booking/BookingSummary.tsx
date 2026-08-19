@@ -70,9 +70,11 @@ export function BookingSummary({
 }) {
   const t = TEXT[lang];
   const room = booking.room;
-  // รายเดือนหลายเดือน = โชว์ "ค่าเช่า N เดือน" (roomPrice เป็นยอดรวมทั้งสัญญาแล้ว) ; รายวัน/1 เดือน = ป้ายเดิม
+  // roomPrice = ค่าเช่าเดือนแรกเท่านั้น (ระยะสัญญาไม่คูณเข้ายอด) ป้ายจึงเป็น "ค่าเช่าเดือนแรก" เสมอ
+  // บิลเก่าที่ออกก่อนเปลี่ยนกติกาเก็บยอดรวมทั้งสัญญาไว้ ยังโชว์ "ค่าเช่า N เดือน" ตามข้อมูลจริงของบิลนั้น
   const months = booking.leaseMonths ?? 1;
-  const rentLabel = booking.rentalType !== 'DAILY' && months > 1 ? `${t.rent} ${months} ${t.monthsWord}` : t.firstMonth;
+  const legacyFullLease = booking.rentalType !== 'DAILY' && months > 1 && (booking.roomPrice ?? 0) >= (room?.pricePerMonth ?? 0) * 2;
+  const rentLabel = legacyFullLease ? `${t.rent} ${months} ${t.monthsWord}` : t.firstMonth;
   const roomLabel = room?.name || (room?.type?.toUpperCase() === 'AIR' ? t.roomAir : t.roomFan);
   const cover = room?.images?.[0] ?? room?.dorm?.images?.[0] ?? null;
   const rating = room?.dorm?.avgRating;

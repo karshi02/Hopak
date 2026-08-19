@@ -27,20 +27,22 @@ const TEXT = {
     phoneInvalid: 'กรอกเบอร์โทรให้ครบ 10 หลัก (ขึ้นต้นด้วย 0)',
     checkInLabel: 'วันเข้าอยู่ที่ต้องการ',
     otherDate: 'เลือกวันอื่น',
-    leaseLabel: 'ระยะเวลาเช่า',
-    leaseUnit: (n: number) => `${n} เดือน`,
+    leaseLabel: 'ระยะเวลาสัญญาเช่า',
+    leaseUnit: (n: number) => (n >= 12 ? `${n / 12} ปี` : `${n} เดือน`),
+    leaseNote: 'ความยาวสัญญากับเจ้าของหอ — ไม่มีผลกับยอดที่จ่ายตอนนี้',
     noteLabel: 'หมายเหตุถึงเจ้าของหอ (ถ้ามี)',
     notePlaceholder: 'เช่น ต้องการเข้าดูห้องก่อน, สอบถามเรื่องสัตว์เลี้ยง...',
     summaryTitle: 'สรุปค่าใช้จ่าย',
     firstMonth: 'ค่าเช่าเดือนแรก',
-    rentMonths: (n: number) => `ค่าเช่า ${n} เดือน`,
+    rentFirstMonth: 'ค่าเช่าเดือนแรก',
+    rentFirstMonthNote: 'จ่ายผ่านระบบเฉพาะเดือนแรก เดือนถัดไปจ่ายกับเจ้าของหอโดยตรง',
     recommended: 'แนะนำ',
     deposit: 'ค่ามัดจำ',
     depositNote: 'ชำระผ่าน Hoprak พร้อมค่าเช่า (ปลอดภัย ไม่ต้องโอนตรงเจ้าของหอ)',
     bookingFee: 'ค่าจองผ่าน Hoprak',
     free: 'ฟรี',
     payNow: 'ยอดชำระผ่าน Hoprak',
-    payNowNote: 'ค่าเช่าตามจำนวนเดือน + ค่ามัดจำ',
+    payNowNote: 'ค่าเช่าเดือนแรก + ค่ามัดจำ (สัญญากี่เดือนก็จ่ายเท่ากัน)',
     submit: 'ส่งคำขอจอง',
     submitting: 'กำลังส่งคำขอ...',
     ctaHint: 'กดเพื่อส่งคำขอไปยังเจ้าของหอ',
@@ -85,19 +87,21 @@ const TEXT = {
     checkInLabel: 'Preferred move-in date',
     otherDate: 'Pick another date',
     leaseLabel: 'Lease term',
-    leaseUnit: (n: number) => `${n} month${n > 1 ? 's' : ''}`,
+    leaseUnit: (n: number) => (n >= 12 ? `${n / 12} year${n >= 24 ? 's' : ''}` : `${n} months`),
+    leaseNote: 'Contract length with the owner — does not change what you pay now',
     noteLabel: 'Note to the owner (optional)',
     notePlaceholder: 'e.g. I would like to view the room first, question about pets...',
     summaryTitle: 'Cost summary',
     firstMonth: 'First month rent',
-    rentMonths: (n: number) => `Rent × ${n} month${n > 1 ? 's' : ''}`,
+    rentFirstMonth: 'First month rent',
+    rentFirstMonthNote: 'Only the first month goes through Hoprak; later months are paid to the owner',
     recommended: 'Recommended',
     deposit: 'Deposit',
     depositNote: 'Paid via Hoprak with the rent (safe — no direct transfer to the owner)',
     bookingFee: 'Hoprak booking fee',
     free: 'Free',
     payNow: 'Payable through Hoprak',
-    payNowNote: 'Rent for the selected months + deposit',
+    payNowNote: 'First month rent + deposit (same for any lease length)',
     submit: 'Send booking request',
     submitting: 'Sending request...',
     ctaHint: 'Tap to send the request to the dorm owner',
@@ -209,7 +213,7 @@ function NewBookingForm() {
   const [contactPhone, setContactPhone] = useState('');
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
-  const [leaseMonths, setLeaseMonths] = useState(1);
+  const [leaseMonths, setLeaseMonths] = useState(3);
   const [guests, setGuests] = useState(1);
   const [bookedRanges, setBookedRanges] = useState<{ from: string; to: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -317,7 +321,8 @@ function NewBookingForm() {
   const deposit = isDaily ? 0 : roomDeposit > 0 ? roomDeposit : room.dorm.deposit ?? 0;
   const pricePerDay = room.pricePerDay ?? 0;
   // ยอดจ่ายรวม: รายเดือน = ค่าเช่า/เดือน × จำนวนเดือน + มัดจำ · รายวัน = ค่าห้อง/คืน × จำนวนคืน
-  const rentTotal = room.pricePerMonth * leaseMonths;
+  // สัญญากี่เดือนก็จ่ายผ่านระบบเท่ากัน — เดือนแรก + มัดจำ (เดือนถัดไปจ่ายกับเจ้าของหอเอง)
+  const rentTotal = room.pricePerMonth;
   const payTotal = isDaily ? pricePerDay * nights : rentTotal + deposit;
   const cover = room.images?.[0] ?? room.dorm.images?.[0] ?? null;
   const locale = t.dateLocale;
@@ -482,8 +487,9 @@ function NewBookingForm() {
           {!isDaily && (
             <div className="mt-5">
               <label className="mb-1.5 block text-[13px] font-semibold text-ink-body">{t.leaseLabel}</label>
+              <p className="mb-2.5 text-[11.5px] text-ink-faint">{t.leaseNote}</p>
               <div className="flex gap-2.5">
-                {[1, 3, 6].map((m) => {
+                {[3, 6, 12].map((m) => {
                   const active = leaseMonths === m;
                   return (
                     <button
@@ -494,8 +500,8 @@ function NewBookingForm() {
                         active ? 'border-tenant bg-tenant-tint text-tenant' : 'border-card-border bg-white text-ink-body'
                       }`}
                     >
-                      {/* ป้ายแนะนำบนตัวเลือก 3 เดือน */}
-                      {m === 3 && (
+                      {/* ป้ายแนะนำบนตัวเลือก 6 เดือน */}
+                      {m === 6 && (
                         <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-tenant px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                           {t.recommended}
                         </span>
@@ -574,10 +580,8 @@ function NewBookingForm() {
                 <>
                   <div className="mb-2.5 flex items-start justify-between gap-3">
                     <span className="text-[13.5px] text-ink-subtitle">
-                      {t.rentMonths(leaseMonths)}
-                      <span className="block text-[11px] text-ink-faint">
-                        ฿{room.pricePerMonth.toLocaleString()}/{lang === 'th' ? 'เดือน' : 'mo'} × {leaseMonths}
-                      </span>
+                      {t.rentFirstMonth}
+                      <span className="block text-[11px] text-ink-faint">{t.rentFirstMonthNote}</span>
                     </span>
                     <span className="font-sans text-sm font-semibold tabular-nums text-ink-strong">
                       ฿{rentTotal.toLocaleString()}
