@@ -20,8 +20,8 @@ import { LangSwitch } from '@/components/LangSwitch';
 // ตัวเลขที่โชว์ต้องมาจากค่าที่แอดมินตั้งจริง (useFees ยิง /settings/fees) ไม่ใช่ค่าคงที่ในโค้ด
 
 /** ระยะเวลาสไลด์ลิ้นชัก — ชุดเดียวกับลิ้นชักฝั่งผู้เช่า (MobileHomeChrome) */
-const DRAWER_MS = 300;
-const DRAWER_EASE = 'cubic-bezier(.32,.72,0,1)';
+const DRAWER_MS = 600;
+const DRAWER_EASE = 'cubic-bezier(.22,.61,.24,1)';
 
 /** รูปประกอบของแต่ละขั้นตอน/ฟีเจอร์ แยกจากข้อความเพราะไม่ขึ้นกับภาษา */
 const STEP_ART = [
@@ -230,8 +230,16 @@ export default function OwnerLandingPage() {
   useEffect(() => {
     if (menuOpen) {
       setRender(true);
-      const id = requestAnimationFrame(() => setShown(true));
-      return () => cancelAnimationFrame(id);
+      // รอสองเฟรม — rAF ชั้นเดียวตั้งค่าปลายทางก่อนเบราว์เซอร์วาดสถานะเริ่มต้น
+      // ลิ้นชักจะโผล่ทันทีแบบไม่มีทรานสิชัน (ตั้ง duration เท่าไรก็ไม่มีผล)
+      let inner = 0;
+      const outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => setShown(true));
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(inner);
+      };
     }
     setShown(false);
     const id = setTimeout(() => setRender(false), DRAWER_MS);
@@ -239,7 +247,7 @@ export default function OwnerLandingPage() {
   }, [menuOpen]);
 
   const menuItems = t.menuLabels.map((label, i) => ({ label, href: MENU_HREFS[i] }));
-  const bar = 'absolute h-[2px] w-[17px] rounded-sm bg-white transition-transform duration-[300ms] motion-reduce:transition-none';
+  const bar = 'absolute h-[2px] w-[17px] rounded-sm bg-white transition-transform duration-[600ms] motion-reduce:transition-none';
   const ease = { transitionTimingFunction: DRAWER_EASE };
 
   return (

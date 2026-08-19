@@ -16,9 +16,9 @@ import type { Lang } from '@/hooks/useLang';
 type MenuUser = { name: string; avatarUrl?: string | null } | null;
 
 /** ระยะเวลาสไลด์ลิ้นชัก — ต้องตรงกับ duration ใน className ด้านล่าง ไม่งั้นถอดออกก่อนสไลด์จบ */
-const DRAWER_MS = 300;
+const DRAWER_MS = 600;
 /** โค้งแบบ iOS: ออกตัวเร็วแล้วค่อยๆ หยุด (ease-out) ให้รู้สึกลื่นกว่า ease ปกติ */
-const DRAWER_EASE = 'cubic-bezier(.32,.72,0,1)';
+const DRAWER_EASE = 'cubic-bezier(.22,.61,.24,1)';
 
 const TEXT = {
   th: {
@@ -95,7 +95,7 @@ export function MobileMenuButton({
   open?: boolean;
 }) {
   // easing ใส่เป็น inline style ไม่ใช่คลาส — Tailwind อ่านคลาสจากซอร์ส สร้างจากตัวแปรตอนรันไม่ทัน
-  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-[300ms] motion-reduce:transition-none ${
+  const bar = `absolute h-[2px] w-[17px] rounded-sm transition-transform duration-[600ms] motion-reduce:transition-none ${
     variant === 'onDark' ? 'bg-white' : 'bg-ink-strong dark:bg-white'
   }`;
   const ease = { transitionTimingFunction: DRAWER_EASE };
@@ -147,28 +147,26 @@ export function MobileHomeChrome({
     let lastY = window.scrollY;
     const onScroll = () => {
       const y = window.scrollY;
+      // ถึงท้ายหน้าแล้วต้องโผล่เสมอ ไม่งั้นช่องว่างที่กันไว้ให้แถบ (pb-[76px]) จะกลายเป็นแถบเปล่าใต้ footer
+      const atBottom = y + window.innerHeight >= document.documentElement.scrollHeight - 4;
+      if (atBottom) {
+        setNavHidden(false);
+        lastY = y;
+        return;
+      }
       if (Math.abs(y - lastY) <= 6) return;
       setNavHidden(y > lastY && y > 40);
       lastY = y;
     };
+    onScroll(); // เผื่อโหลดหน้ามาแล้วอยู่ท้ายหน้าเลย (กดลิงก์มาพร้อม anchor / คืนตำแหน่งสกรอลล์)
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // ลิ้นชักต้องอยู่ใน DOM ต่ออีกแป๊บตอนปิด ไม่งั้นถอดทิ้งทันทีจนไม่เห็นจังหวะสไลด์ออก
-  // render = ยังวาดอยู่ไหม, shown = อยู่ในตำแหน่งเปิดแล้วหรือยัง (ติ๊กถัดไปค่อยเปลี่ยนคลาสเพื่อให้ transition ทำงาน)
-  const [render, setRender] = useState(open);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    if (open) {
-      setRender(true);
-      const id = requestAnimationFrame(() => setShown(true));
-      return () => cancelAnimationFrame(id);
-    }
-    setShown(false);
-    const id = setTimeout(() => setRender(false), DRAWER_MS);
-    return () => clearTimeout(id);
-  }, [open]);
+  // ลิ้นชักอยู่ใน DOM ตลอด เปิด/ปิดด้วยการสลับคลาสอย่างเดียว
+  // เดิมแทรกเข้า DOM ตอนกดเปิด แล้วค่อยเปลี่ยนคลาสในเฟรมถัดไป — เบราว์เซอร์ไม่เล่นทรานสิชัน
+  // ให้ element ที่เพิ่งถูกแทรก ขาเปิดจึงเด้งโผล่ทันที (ตั้ง duration เท่าไรก็ไม่มีผล) ส่วนขาปิดเล่นปกติ
+  const shown = open;
 
   // เปิดลิ้นชักแล้วล็อกไม่ให้หน้าหลังเลื่อนตาม
   useEffect(() => {
@@ -226,19 +224,18 @@ export function MobileHomeChrome({
       )}
 
       {/* ===== ลิ้นชักเมนู (เลื่อนออกจากขวา) ===== */}
-      {render && (
-        <>
+      <>
           <div
             onClick={onClose}
-            style={{ transitionDuration: `${DRAWER_MS}ms` }}
-            className={`fixed inset-0 z-[80] bg-[rgba(11,13,18,0.5)] transition-opacity ease-out motion-reduce:transition-none sm:hidden ${
-              shown ? 'opacity-100' : 'opacity-0'
+            style={{ transitionDuration: `${DRAWER_MS}ms`, transitionTimingFunction: DRAWER_EASE }}
+            className={`fixed inset-0 z-[80] bg-[rgba(11,13,18,0.5)] transition-opacity motion-reduce:transition-none sm:hidden ${
+              shown ? 'opacity-100' : 'pointer-events-none opacity-0'
             }`}
           />
           <div
             style={{ transitionDuration: `${DRAWER_MS}ms`, transitionTimingFunction: DRAWER_EASE }}
-            className={`fixed bottom-0 right-0 top-0 z-[81] flex w-[286px] max-w-[86vw] flex-col bg-white shadow-[-8px_0_40px_rgba(8,12,24,0.35)] transition-transform will-change-transform motion-reduce:transition-none sm:hidden ${
-              shown ? 'translate-x-0' : 'translate-x-full'
+            className={`fixed bottom-0 right-0 top-0 z-[81] flex w-[286px] max-w-[86vw] transform-gpu flex-col bg-white shadow-[-8px_0_40px_rgba(8,12,24,0.35)] [backface-visibility:hidden] transition-transform will-change-transform motion-reduce:transition-none sm:hidden ${
+              shown ? 'translate-x-0' : 'pointer-events-none translate-x-full'
             }`}
           >
             <div className="bg-[linear-gradient(150deg,#1E4FB0,#122C63)] px-5 pb-5 pt-[max(env(safe-area-inset-top),18px)]">
@@ -328,12 +325,13 @@ export function MobileHomeChrome({
                   onClick={onClose}
                   /* ไล่ทีละอันเท่ากันทั้งขาเข้าและขาออก — ขาออกไล่ย้อนจากอันล่างขึ้นบน */
                   style={{
-                    // ต้องจบภายในเวลาลิ้นชัก (DRAWER_MS) ไม่งั้นเมนูยังไล่ขึ้นอยู่ทั้งที่ลิ้นชักปิดไปแล้ว
-                    transitionDuration: '190ms',
-                    transitionDelay: `${20 + (shown ? i : menuItems.length - 1 - i) * 14}ms`,
+                    // จางพร้อมกันทั้งชุด สั้นกว่าลิ้นชักเล็กน้อย — ไล่ทีละอันแล้วจังหวะปิดดูสะดุด
+                    // เพราะตาไล่ตามรายการอยู่ ทั้งที่ลิ้นชักเลื่อนออกไปแล้ว
+                    transitionDuration: shown ? '380ms' : '240ms',
+                    transitionDelay: shown ? '120ms' : '0ms',
                   }}
                   className={`flex h-12 items-center gap-3.5 rounded-[11px] px-3.5 transition-[opacity,transform] ease-out motion-reduce:transition-none active:bg-surface-canvas ${
-                    shown ? 'translate-x-0 opacity-100' : 'translate-x-3 opacity-0'
+                    shown ? 'translate-x-0 opacity-100' : 'translate-x-1.5 opacity-0'
                   }`}
                 >
                   <span
@@ -357,7 +355,7 @@ export function MobileHomeChrome({
             </div>
           </div>
         </>
-      )}
+
     </>
   );
 }
