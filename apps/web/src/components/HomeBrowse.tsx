@@ -96,8 +96,6 @@ const TEXT = {
     topSearchPhrases: ['ค้นหาจังหวัด', 'หอพักใกล้มหาวิทยาลัย', 'ชื่อหอพักใกล้ฉัน'],
     login: 'เข้าสู่ระบบ',
     register: 'สมัครสมาชิก',
-    ctaRegister: 'สมัครฟรี เริ่มหาหอเลย',
-    ctaSub: 'สมัครครั้งเดียว จองได้ทุกหอในระบบ',
     logout: 'ออกจากระบบ',
     heroTitle: 'หาหอพักใกล้มหาวิทยาลัย ราคาโปร่งใส จองได้ทันที',
     heroSubtitle: 'เปรียบเทียบค่าน้ำค่าไฟก่อนจอง',
@@ -111,7 +109,7 @@ const TEXT = {
     budget: 'งบประมาณ / เดือน',
     searchBtn: 'ค้นหาหอพัก',
     availableOnly: 'เฉพาะห้องว่างพร้อมเข้าอยู่',
-    chips: ['หอแอร์ราคาถูก', 'เดินถึงมหาลัย', 'มีเครื่องซักผ้า', 'ที่จอดรถ', 'สัตว์เลี้ยงได้'],
+    chips: ['แอร์ ราคาไม่เกิน 3,000', 'มีเครื่องซักผ้า', 'ที่จอดรถ', 'สัตว์เลี้ยงได้', 'ห้องน้ำในตัว'],
     popularLabel: 'ยอดนิยม:',
     promos: [
       { tag: 'ยืนยันตัวตนแล้ว', title: 'หอพักทุกแห่งผ่านการตรวจสอบโดยแอดมิน', sub: 'ปลอดภัย ไม่โดนหลอก' },
@@ -164,8 +162,6 @@ const TEXT = {
     topSearchPhrases: ['Search by province', 'Dorms near your university', 'Dorm name near me'],
     login: 'Log in',
     register: 'Sign up',
-    ctaRegister: 'Sign up free — start searching',
-    ctaSub: 'One account books any dorm on Hoprak',
     logout: 'Log out',
     heroTitle: 'Find dorms near your university — transparent pricing, book instantly',
     heroSubtitle: 'Compare water & electric rates before booking',
@@ -179,7 +175,7 @@ const TEXT = {
     budget: 'Budget / month',
     searchBtn: 'Search Dorms',
     availableOnly: 'Available rooms only',
-    chips: ['Cheap AC rooms', 'Walk to university', 'Has laundry', 'Parking', 'Pets allowed'],
+    chips: ['AC under ฿3,000', 'Laundry', 'Parking', 'Pets allowed', 'Private bathroom'],
     popularLabel: 'Popular:',
     promos: [
       { tag: 'Verified', title: 'Every dorm is reviewed by our admin team', sub: 'Safe, no scams' },
@@ -480,27 +476,16 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   // ข้อความหน้าแรกที่แอดมินแก้ได้ (เฉพาะภาษาไทย) — ทับ default เมื่อดูภาษาไทยและแอดมินตั้งค่าไว้
   const isTh = lang === 'th';
   /**
-   * ปุ่มชวนสมัคร — โชว์เฉพาะคนที่ยังไม่ล็อกอิน
-   * ล็อกอินแล้วไม่ต้องโชว์อะไร (เขาสมัครไปแล้ว การ์ดค้นหาอยู่ใต้ลงไปแค่ไม่กี่พิกเซล)
-   * รอผล useCurrentUser ก่อนค่อยตัดสินใจ ไม่งั้นปุ่มจะกะพริบขึ้นมาแวบหนึ่งทุกครั้งที่คนล็อกอินเปิดหน้าแรก
+   * ชิปค้นหาด่วน — ทุกอันต้องพาไปหน้าค้นหาพร้อมตัวกรองจริง (ของเดิมเป็นข้อความเฉยๆ กดไม่ได้)
+   * ตัด "เดินถึงมหาลัย" ออกเพราะระบบไม่มีข้อมูลระยะเดินให้กรอง ใส่ไว้ก็เป็นปุ่มหลอก
    */
-  function HeroCta({ onDark = false }: { onDark?: boolean }) {
-    if (userLoading || user) return null;
-    return (
-      <div className="mt-5 flex flex-col items-center gap-2">
-        <Link
-          href="/register"
-          className="inline-flex h-[52px] items-center gap-2.5 rounded-pill bg-tenant px-7 text-[16px] font-bold text-white shadow-[0_10px_24px_rgba(47,111,224,0.35)] transition hover:bg-tenant-dark hover:shadow-[0_12px_28px_rgba(47,111,224,0.45)] active:scale-[.98] sm:h-[56px] sm:px-9 sm:text-[17px]"
-        >
-          {t.ctaRegister}
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12h13M12 5l7 7-7 7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
-        <span className={`text-[12.5px] ${onDark ? 'text-white/80' : 'text-ink-faint'}`}>{t.ctaSub}</span>
-      </div>
-    );
-  }
+  const quickChips = [
+    { query: 'roomType=AIR&priceRange=under3000', icon: 'M4 6h16v9H4zM8 17v1M12 17v2M16 17v1' },
+    { query: 'amenity=laundry', icon: 'M5 3h14v18H5zM12 14m-3.5 0a3.5 3.5 0 107 0 3.5 3.5 0 10-7 0M8 6h.01M11 6h.01' },
+    { query: 'amenity=park', icon: 'M12 12m-9 0a9 9 0 1018 0 9 9 0 10-18 0M10 16V8h3a2.5 2.5 0 010 5h-3' },
+    { query: 'amenity=pet', icon: 'M12 14c3 0 5 2 5 4H7c0-2 2-4 5-4zM8 8m-2 0a2 2 0 104 0 2 2 0 10-4 0M16 8m-2 0a2 2 0 104 0 2 2 0 10-4 0' },
+    { query: 'amenity=bath', icon: 'M4 12h16v3a4 4 0 01-4 4H8a4 4 0 01-4-4v-3zM6 12V6a2 2 0 012-2 2 2 0 012 2' },
+  ];
 
   const heroTitle = (isTh && homeContent.heroTitleTh) || t.heroTitle;
   const heroSubtitle = (isTh && homeContent.heroSubtitleTh) || t.heroSubtitle;
@@ -795,10 +780,14 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   );
 
   return (
-    <div className="overflow-x-hidden bg-[#F2F4F8] pb-[76px] text-[#161A22] sm:pb-0">
-      {/* ===== TOP HEADER ===== */}
-      <div className="bg-gradient-to-b from-[#0E1220] to-[#151C30]">
-        <div className="mx-auto flex h-auto min-h-[58px] max-w-[1240px] items-center gap-x-2.5 px-3 py-2 sm:min-h-[62px] sm:gap-x-5 sm:px-6 sm:py-2.5">
+    <div className="bg-[#F2F4F8] text-[#161A22] [overflow-x:clip]">
+      {/* ===== TOP HEADER =====
+          จอ lg ขึ้นไปปล่อยเต็มความกว้างจอ (โลโก้ชิดซ้าย ปุ่มชิดขวา) ไม่บีบอยู่กลางที่ 1240px
+          จอเล็กคุมความกว้างเหมือนเดิม
+          ตรึงไว้บนสุด (sticky) — เดิมเลื่อนหายไปกับหน้า พอไถลงเห็นพื้นสีอ่อนแทน เหมือนแถบเปลี่ยนเป็นสีขาว
+          z-30 = อยู่เหนือเนื้อหา แต่ต่ำกว่าลิ้นชักเมนู (z-80/81) และโมดัล */}
+      <div className="sticky top-0 z-30 bg-gradient-to-b from-[#0E1220] to-[#151C30] shadow-[0_2px_12px_rgba(8,12,24,0.18)]">
+        <div className="mx-auto flex h-auto min-h-[58px] max-w-[1240px] items-center gap-x-2.5 px-3 py-2 sm:min-h-[62px] sm:gap-x-5 sm:px-6 sm:py-2.5 lg:max-w-none lg:px-8 xl:px-12">
           <Link href="/" className="flex shrink-0 items-center gap-2">
             <HopakIcon size={30} className="sm:hidden" />
             <HopakIcon size={34} className="hidden sm:block" />
@@ -892,7 +881,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                     aria-label={t.logout}
                     className="hidden h-9 shrink-0 items-center justify-center gap-1.5 rounded-pill bg-[#F0604D]/15 px-3.5 text-[13px] font-semibold text-[#FF9382] transition hover:bg-[#F0604D]/25 hover:text-white sm:flex"
                   >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
                       <path
                         d="M15 17l5-5-5-5M20 12H9M9 4H6a2 2 0 00-2 2v12a2 2 0 002 2h3"
                         stroke="currentColor"
@@ -932,24 +921,19 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           หัวข้อของระบบกับการ์ดค้นหาจึงลงมาอยู่ใต้รูปเป็นชั้นๆ แทน
           ไม่มีโปสเตอร์ = ใช้แถบสี/gradient แบบเดิม หัวข้ออยู่บนแถบ การ์ดค้นหาซ้อนขึ้นไปครึ่งหนึ่งเหมือนเดิม */}
       {slides.length > 0 ? (
-        <div className="relative w-full bg-[#0B1020]">
-          {slides.map((slide, i) => {
-            const active = i === heroIndex % slides.length;
-            return active ? (
-              // รูปที่กำลังโชว์อยู่ในสายเลย์เอาต์ปกติ ความสูงของแถบจึงเท่ากับสัดส่วนรูปจริง ไม่ครอปสักด้าน
+        <div className="relative w-full overflow-hidden bg-[#0B1020]">
+          {/* รางเลื่อน — ทุกรูปเรียงต่อกันแนวนอน เลื่อนทั้งรางด้วย translateX ทีละ 100%
+              (เดิมสลับด้วยการซ่อน/แสดง = ภาพตัดทันที ไม่มีจังหวะเปลี่ยน)
+              ความสูงของแถบมาจากรูปจริง จึงไม่ครอปสักด้าน */}
+          <div
+            className="flex transition-transform duration-[900ms] ease-[cubic-bezier(.22,.61,.24,1)] will-change-transform motion-reduce:transition-none"
+            style={{ transform: `translateX(-${(heroIndex % slides.length) * 100}%)` }}
+          >
+            {slides.map((slide, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={`${slide.url}-${i}`}
-                src={slide.url}
-                alt=""
-                className="block w-full transition-opacity duration-700 ease-out motion-reduce:transition-none"
-              />
-            ) : (
-              // รูปที่ยังไม่ถึงคิว โหลดไว้เงียบๆ ตอนสลับจะได้ไม่วูบ
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={`${slide.url}-${i}`} src={slide.url} alt="" className="hidden" />
-            );
-          })}
+              <img key={`${slide.url}-${i}`} src={slide.url} alt="" className="block w-full shrink-0" />
+            ))}
+          </div>
 
           {slides.length > 1 && (
             <div className="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-1.5 sm:bottom-4">
@@ -978,20 +962,11 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
             {heroTitle}
           </h1>
           <p className="mt-2 text-[15px] text-[#EAF1FD] sm:text-[16px]">{heroSubtitle}</p>
-          <HeroCta onDark />
         </div>
       )}
 
-      {/* หัวข้อของระบบ — ใต้โปสเตอร์ พื้นอ่อน อ่านง่าย ไม่ต้องพึ่งเงาตัวอักษร */}
-      {slides.length > 0 && (
-        <div className="px-4 pb-2 pt-7 text-center sm:pt-9">
-          <h1 className="mx-auto max-w-3xl text-[24px] font-bold leading-tight tracking-tight text-ink-strong text-balance sm:text-[34px]">
-            {heroTitle}
-          </h1>
-          <p className="mt-2 text-[15px] text-ink-muted sm:text-[16px]">{heroSubtitle}</p>
-          <HeroCta />
-        </div>
-      )}
+      {/* ไม่มีหัวข้อซ้ำใต้โปสเตอร์ — โปสเตอร์มีข้อความของตัวเองอยู่แล้ว การ์ดค้นหาขึ้นมาต่อจากรูปเลย
+          (หัวข้อยังใช้อยู่ในกรณีไม่มีโปสเตอร์ ซึ่งอยู่บนแถบสีด้านบน) */}
       {/* ===== SEARCH CARD (floats over hero) ===== */}
       <div
         className={`relative z-[2] mx-auto w-full max-w-[880px] px-4 lg:max-w-[1040px] ${
@@ -1122,17 +1097,33 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           </button>
         </div>
 
-        {/* quick chips */}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <span className="text-[13px] text-[#5B616C]">{t.popularLabel}</span>
-          {t.chips.map((c) => (
-            <span
-              key={c}
-              className="rounded-full border border-[#E4E7EC] bg-white px-3.5 py-1.5 text-[13px] font-medium text-[#3A4050]"
-            >
-              {c}
-            </span>
-          ))}
+        {/* ชิปค้นหาด่วน — กดแล้วไปหน้าค้นหาพร้อมตัวกรองจริง */}
+        <div className="mt-6">
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-[#8A909B] sm:mb-2.5 sm:text-center sm:text-[12.5px]">
+            {t.popularLabel}
+          </div>
+          {/* มือถือ: แถวเดียวเลื่อนแนวนอน (5 ชิปตกลงมา 2 แถวกินพื้นที่จนดันการ์ดหอลงไป)
+              จอ sm ขึ้นไป: ตัดขาดเป็นแถวจัดกึ่งกลางตามเดิม ไม่มี scroll */}
+          <div className="-mx-4 flex snap-x items-center gap-2.5 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:justify-center sm:overflow-visible sm:px-0">
+            {t.chips.map((label, i) => (
+              <Link
+                key={label}
+                href={`/search?province=${encodeURIComponent(province)}&${quickChips[i].query}`}
+                className="inline-flex h-[38px] shrink-0 snap-start items-center gap-1.5 rounded-pill border border-[#E4E7EC] bg-white px-3.5 text-[13.5px] font-semibold text-[#2A2F3A] shadow-[0_2px_8px_rgba(16,24,40,0.06)] transition hover:-translate-y-0.5 hover:border-tenant hover:text-tenant hover:shadow-[0_8px_20px_rgba(47,111,224,0.18)] active:translate-y-0 sm:h-[46px] sm:gap-2 sm:px-5 sm:text-[15px]"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <path
+                    d={quickChips[i].icon}
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {label}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1481,8 +1472,9 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           onLogout={handleLogout}
         />
 
-        {/* dark bottom bar */}
-        <div className="bg-[#14171C] px-6 py-6">
+        {/* dark bottom bar — เผื่อความสูงแถบล่างมือถือไว้ในนี้ (เดิมเผื่อไว้ที่กล่องนอกซึ่งพื้นสีอ่อน
+            พอแถบล่างเลื่อนซ่อนตอนไถ จะเห็นเป็นแถบขาวโผล่ใต้ footer) */}
+        <div className="bg-[#14171C] px-6 pb-[calc(76px+1.5rem)] pt-6 sm:pb-6">
           <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-3">
             <HopakIcon size={32} />
             <span className="text-sm font-bold text-white">Hoprak.com</span>
