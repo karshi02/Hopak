@@ -9,6 +9,7 @@ declare global {
         el: HTMLElement,
         opts: {
           sitekey: string;
+          action?: string;
           callback: (token: string) => void;
           'expired-callback'?: () => void;
           'error-callback'?: () => void;
@@ -60,10 +61,13 @@ export function Turnstile({
   onToken,
   lang,
   align = 'left',
+  action,
 }: {
   onToken: (token: string) => void;
   lang?: 'th' | 'en';
   align?: 'left' | 'right';
+  /** ชื่อฟอร์ม — ฝั่ง API เทียบค่านี้กับที่ Cloudflare คืนมา กัน token จากฟอร์มอื่นมาใช้ข้าม */
+  action?: string;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
@@ -82,6 +86,7 @@ export function Turnstile({
         if (widgetId.current) return;
         widgetId.current = window.turnstile.render(boxRef.current, {
           sitekey: SITE_KEY,
+          action,
           language: lang === 'en' ? 'en' : 'th',
           // บังคับธีมสว่างให้เข้ากับฟอร์ม — ค่าเริ่มต้น auto จะกลายเป็นกล่องดำบนเครื่องที่ตั้ง dark mode
           theme: 'light',
@@ -103,7 +108,7 @@ export function Turnstile({
         widgetId.current = null;
       }
     };
-  }, [lang]);
+  }, [lang, action]);
 
   if (!SITE_KEY) return null;
 

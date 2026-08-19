@@ -41,7 +41,7 @@ export class OwnerApplicationsController {
   @RateLimit(5, 60_000) // เริ่มใบสมัคร: 5 ครั้ง/นาที/IP กันสแปม + กันไล่ยิงอีเมลคนอื่น
   async start(@Body() dto: StartApplicationDto, @Req() req: Request) {
     // ด่านกันบอท — endpoint นี้ส่งอีเมล OTP ออกไปให้ที่อยู่ที่กรอกมา ปล่อยให้ยิงรัวได้ = สแปมคนอื่นแทนเรา
-    await this.turnstile.verify(dto.turnstileToken, req.ip);
+    await this.turnstile.verify(dto.turnstileToken, req.ip, 'owner-signup');
     return this.service.start(dto);
   }
 

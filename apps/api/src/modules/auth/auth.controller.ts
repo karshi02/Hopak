@@ -35,7 +35,7 @@ export class AuthController {
   @RateLimit(10, 60_000) // สมัคร: 10 ครั้ง/นาที/IP
   async register(@Body() dto: RegisterDto, @Req() req: Request) {
     // ด่านกันบอทสมัครรัว — rate limit อย่างเดียวกันสคริปต์ที่หมุน IP ไม่อยู่
-    await this.turnstile.verify(dto.turnstileToken, ipFromReq(req));
+    await this.turnstile.verify(dto.turnstileToken, ipFromReq(req), 'signup');
     return this.authService.register(dto, deviceFromReq(req));
   }
 
