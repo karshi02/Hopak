@@ -2385,3 +2385,107 @@ tsc web ผ่าน · ถ่ายภาพยืนยันทั้ง desk
 - ย้ายบล็อก "ใกล้สถานที่สำคัญ" ออกมาเป็น section ของตัวเอง วางไว้หลัง "หอพักแนะนำ" ก่อน footer
 ลำดับหน้าแรกตอนนี้: hero -> การ์ดจุดขาย 3 ใบ -> หอพักใน<จังหวัด> -> ทำเลย่อย -> หอพักแนะนำ -> ใกล้สถานที่สำคัญ -> footer
 tsc web ผ่าน · ถ่ายภาพยืนยัน desktop 1440
+
+[156] 2026-08-19 ใบสมัครเจ้าของหอ + register ผู้เช่า: ตรวจพบ 6 จุด (รายงานจาก codex ตรวจซ้ำแล้วจริงทุกข้อ ยังไม่แก้)
+ตรวจซ้ำโดยอ่านโค้ดจริงทุกอ้างอิง ยืนยันครบทั้ง 6 ข้อ ยังไม่ได้แก้โค้ด
+
+[156.1] สูง — กลับมาทำใบสมัครต่อ แล้วเอกสารเดิมหายจากหน้าเว็บ ต้องอัปโหลดซ้ำ
+ไฟล์: apps/web/src/app/(auth)/partner-register/page.tsx:149 (state docs), :274 (verifyOtp)
+สาเหตุ: POST /owner-applications/:id/verify-otp คืนใบสมัครเต็ม (SAFE_SELECT มี documents +
+  ผ่าน withDocumentUrls แล้ว — owner-applications.service.ts:320) แต่หน้าเว็บอ่านแค่ res.secret
+  ทิ้ง documents ทั้งก้อน state docs จึงว่างเปล่าทุกครั้งที่กลับเข้ามาใหม่
+ผลกระทบ: ผู้สมัครต้องอัปโหลดเอกสารซ้ำ และไฟล์เดิมยังนับรวมเพดาน MAX_DOCUMENTS = 10
+  (service.ts:233) อัปซ้ำไม่กี่รอบก็ตัน "แนบเอกสารได้สูงสุด 10 ไฟล์"
+แก้ที่ควรทำ: setDocs จาก res.documents ตอน verifyOtp (และตอน GET /:id ถ้ามี)
+
+[156.2] สูง — API ไม่บังคับแนบเอกสารก่อน finish
+ไฟล์: apps/api/src/modules/owner-applications/owner-applications.service.ts:323 finish()
+finish() ตรวจแค่ dormName/province/lat/lng ไม่ได้ตรวจ app.documents.length
+หน้าเว็บบังคับอย่างน้อย 1 ไฟล์ (page.tsx:342) แต่เป็นด่านหน้าบ้านล้วน ยิง API ตรงข้ามได้
+ผลกระทบ: สร้างบัญชี OWNER + หอที่ไม่มีเอกสารยืนยันตัวตนได้เลย (แอดมินยังต้องอนุมัติก่อนหอขึ้นค้นหา
+  จึงไม่ถึงขั้นหลุดสู่ผู้ใช้ แต่ด่าน validation ฝั่ง API ขาดจริง)
+
+[156.3] กลาง — ปุ่มอัปโหลดเปิดทั้งที่ยังไม่มีสิทธิ์ กดแล้วเจอ 403
+ไฟล์: apps/web/src/app/(auth)/partner-register/page.tsx:589
+disabled={uploading || !appId} แต่การอัปโหลดต้องมี appSecret ด้วย (ส่งเป็น header
+  x-application-secret ที่ :312) เคสกลับเข้าใบสมัครเดิม appSecret จะยังเป็น null จนกว่าจะยืนยัน OTP
+แก้ที่ควรทำ: เติม || !appSecret ในเงื่อนไข disabled
+
+[156.4] กลาง — ชนิดไฟล์ที่หน้าเว็บยอมรับ กว้างกว่าที่ API รับจริง
+ไฟล์: apps/web/src/app/(auth)/partner-register/page.tsx:578 accept="image/*,application/pdf"
+  vs apps/api/src/common/upload-filters.ts:10 whitelist .jpg .jpeg .png .gif .webp .pdf
+image/* ทำให้เลือก AVIF / TIFF / BMP ได้ แล้วไปตายที่ API หน้าเว็บกันล่วงหน้าเฉพาะ HEIC/HEIF (:303)
+แก้ที่ควรทำ: accept=".jpg,.jpeg,.png,.gif,.webp,application/pdf" ให้ตรงกับ whitelist
+
+[156.5] กลาง — อัปโหลดเอกสารผิดไฟล์แล้วลบไม่ได้
+มีแต่ POST /owner-applications/:id/documents (controller.ts:79) ไม่มี DELETE และหน้าเว็บไม่มีปุ่มลบ
+ผลกระทบ: แนบผิดแล้วต้องปล่อยค้างให้แอดมินเห็น หรือเริ่มใบสมัครใหม่ทั้งใบ + กินโควตา 10 ไฟล์
+
+[156.6] กลาง — register ผู้เช่า: "อัปโหลดรูปโปรไฟล์" เป็น UI หลอก
+ไฟล์: apps/web/src/app/(auth)/register/page.tsx:382
+มีวงกลม avatar + ปุ่มบวก + ข้อความ t.uploadPhoto แต่ไม่มี <input type="file"> และไม่มี handler
+กดแล้วไม่เกิดอะไรขึ้น ผิดกติกาโปรเจคข้อ "ห้ามทำ UI ที่กดแล้วไม่ทำอะไรจริง"
+แก้ที่ควรทำ: ต่อ input + endpoint จริง หรือถอดปุ่ม/ข้อความออกไปเลย
+
+หมายเหตุ 413 ไฟล์ใหญ่บน production: repo ตั้ง client_max_body_size 12m แล้วที่
+  docker/nginx-hopak-ratelimit.conf:10 แต่ไฟล์นี้ต้องถูกคัดลอกไป /etc/nginx/conf.d/ บน VPS
+  แล้ว reload เอง ยังไม่ได้ทำ = prod ยังเป็นค่า default 1m อยู่
+
+[157] 2026-08-19 แก้ [156.1] [156.2] [156.3] [156.4] (เหลือ [156.5] [156.6] ยังไม่แก้)
+apps/web/src/app/(auth)/partner-register/page.tsx:
+- เพิ่ม state savedDocs (string[] = signed URL จากเซิร์ฟเวอร์) แยกจาก docs ที่เก็บชื่อ/ขนาดของรอบปัจจุบัน
+  ตอน verify-otp สำเร็จ setSavedDocs(res.documents) + setDocs([]) — response เป็นสถานะล่าสุดจาก
+  เซิร์ฟเวอร์อยู่แล้ว (รวมไฟล์ที่เพิ่งอัปในรอบนี้) ล้าง docs กันนับซ้ำ
+- รายการเอกสารเดิมโชว์เป็น "เอกสารที่แนบไว้แล้ว #n" + ลิงก์ "เปิดดู" (ไม่ปลอมชื่อไฟล์ เพราะ API
+  คืนมาเป็น signed URL ไม่มีชื่อ/ขนาดติดมา)
+- เงื่อนไขก่อน finish เปลี่ยนเป็น docs.length + savedDocs.length === 0
+- ปุ่มอัปโหลด disabled เพิ่ม !appSecret (เดิมเช็คแค่ !appId กดแล้วเจอ 403)
+- accept เปลี่ยนจาก image/*,application/pdf เป็นรายการตรงกับ upload-filters.ts
+  (.jpg .jpeg .png .gif .webp .pdf + MIME ของแต่ละตัว) กัน AVIF/TIFF/BMP หลุดไปตายที่ API
+apps/api/src/modules/owner-applications/owner-applications.service.ts finish():
+- เพิ่มด่าน if (!app.documents.length) -> 400 "กรุณาแนบเอกสารยืนยันอย่างน้อย 1 ไฟล์ก่อน"
+ทดสอบจริงด้วย curl บน API local (สร้างใบสมัคร 3 ใบ + ตั้ง otpCodeHash เองผ่าน prisma แล้วลบทิ้งหมดแล้ว):
+- verify-otp แบบไม่ถือ secret (เคสกลับเข้าใบสมัครเดิม) -> status EMAIL_VERIFIED, documents 1 ไฟล์, มี secret ใหม่
+- finish ทั้งที่ไม่มีเอกสาร -> HTTP 400 ข้อความตามด่านใหม่
+- แนบเอกสาร 1 ไฟล์แล้ว finish -> 201 ได้ accessToken ตามเดิม (ไม่พังของเก่า)
+- ลบ user/dorm/room/session/ownerApplication + ไฟล์ใน private-uploads ของเทสต์ออกหมดแล้ว
+tsc ผ่านทั้ง web และ api
+
+[158] 2026-08-19 สมัครสมาชิก: บังคับกรอกเบอร์โทรทั้งผู้เช่าและเจ้าของหอ
+เดิม: หน้า register ผู้เช่ามีช่องเบอร์แต่ไม่บังคับ · หน้า partner-register ไม่มีช่องเบอร์เลย
+  ทั้งที่ StartApplicationDto / ตาราง OwnerApplication / finish() รองรับ phone อยู่แล้ว
+  ผลคือบัญชี OWNER ทุกใบมี phone = null แอดมินไม่มีเบอร์โทรยืนยันตัวตน ผู้เช่าไม่มีเบอร์ติดต่อ
+  และล็อกอินด้วยเบอร์ (login.dto รองรับ) ใช้กับเจ้าของหอไม่ได้เลย
+แก้:
+- apps/web/src/app/(auth)/register/page.tsx — ช่องเบอร์เป็น required + type=tel/inputMode/autoComplete
+  ตรวจ /^0\d{9}$/ ก่อนยิง API (ตัดอักขระที่ไม่ใช่ตัวเลขออกก่อน) ส่งเป็นตัวเลขล้วน
+  เพิ่มข้อความ errPhone ทั้ง th/en
+- apps/web/src/app/(auth)/partner-register/page.tsx — เพิ่มช่อง "เบอร์โทรติดต่อ" ไว้ที่ขั้นที่ 2
+  (หน้าข้อมูลหอ) ตามที่สั่ง ไม่ใช่ขั้นที่ 1 · ส่งไปกับ PATCH /owner-applications/:id/dorm
+  · ดึงค่ากลับมาแสดงตอน verify-otp (res.phone) กรณีกลับเข้าใบสมัครเดิม
+- apps/api dto/update-dorm-info.dto.ts — เพิ่ม phone?: string + @Matches(/^0\d{9}$/)
+- apps/api owner-applications.service.ts updateDormInfo() — บันทึก phone + เช็คเบอร์ซ้ำกับบัญชี OWNER
+  (ด่านกันซ้ำใน start() ไม่ครอบ เพราะเบอร์เข้ามาทีหลัง) ซ้ำ = 409
+
+[159] 2026-08-19 ค่าคอมมิชชัน: แอดมินปรับเรตเองได้ + เปลี่ยนค่าตั้งต้น 20% -> 12%
+เดิมเรตเป็นค่าคงที่ในโค้ด แก้ทีต้อง build + deploy ใหม่ทุกครั้ง
+- prisma: SiteSettings เพิ่ม commissionRate / dailyCommissionRate (Float?) NULL = ใช้ค่า default ในโค้ด
+  migration 20260819000000_settings_commission_rate
+- packages/shared/constants/fees.ts: COMMISSION_RATE 0.2 -> 0.12 (เป็นแค่ค่าตั้งต้นแล้ว)
+  commissionRateFor(rentalType, rates?) รับเรตจาก DB มา override ได้ + isValidRate() กันค่าขยะ (0-1)
+- packages/shared/logic/commission.ts: calcPayout รับ rates? เพิ่ม
+- API SettingsService: getFees() / setFees() เพดาน 50% กันพิมพ์ 12 แทน 0.12
+  GET /settings/fees (สาธารณะ) · POST /admin/settings/fees (@Roles('admin'))
+- payments.service: อ่านเรตจาก settings ทุกครั้งที่ออก QR แล้วส่งเข้า calcPayout
+  ตัวเลขที่คิดได้ยังเก็บลง Payment เหมือนเดิม บิลเก่าจึงไม่เปลี่ยนตามเมื่อแก้เรตภายหลัง
+- web: hook ใหม่ useFees() (มี fallback เป็นค่าคงที่ ถ้า API ล่ม) ใช้แทนการ import ค่าคงที่มาโชว์
+  แก้ 3 จุดที่โชว์ % ให้ผู้ใช้เห็น: /owners (ข้อความโฆษณา + ตาราง), partner/dashboard (คอลัมน์ค่าคอมใน CSV),
+  partner/rooms/new (ยอดรับต่อคืน) · การ์ดแก้เรตใหม่ในหน้า /admin/finance (สองภาษา)
+ทดสอบจริงด้วย curl:
+- GET /settings/fees ก่อนตั้งค่า -> 0.12 / 0.1 (ค่า default จากโค้ด DB ยังว่าง)
+- POST /admin/settings/fees 0.15/0.08 -> อ่านกลับได้ 0.15/0.08 จริง
+- ค่าเกินเพดาน 0.6 -> 400 "ค่าคอมรายเดือน ต้องอยู่ระหว่าง 0 ถึง 50%"
+- ไม่มี token -> 401 · token ผู้เช่า -> 403
+- ตั้งกลับเป็น 0.12/0.1 เรียบร้อย · รหัสผ่านแอดมินที่ยืมใช้ทดสอบคืนค่าเดิมแล้ว
+tsc ผ่านทั้ง web และ api
+หมายเหตุ: prod ต้องรัน prisma migrate deploy ตอน deploy ไม่งั้นคอลัมน์ใหม่ไม่มี API จะพัง
