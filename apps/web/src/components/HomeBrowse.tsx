@@ -433,7 +433,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
   useEffect(() => {
     let cancelled = false;
     let autocomplete: google.maps.places.Autocomplete | null = null;
-
+ 
     loadGoogleMaps()
       .then((g) => {
         if (cancelled || !searchInputRef.current) return;
@@ -494,6 +494,80 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         : { tag: c.tagEn, title: c.titleEn, sub: c.subEn };
     return def;
   });
+
+  // จอมือถือ: การ์ดจุดขาย 3 ใบเรียงลงมากินพื้นที่เกือบเต็มจอ เปลี่ยนเป็นเลื่อนแนวนอนทีละใบ เลื่อนเองทุก 4 วิ
+  // เลื่อนด้วย scrollTo ของ container จริง (ไม่ใช่ transform) ปัดนิ้วเองยังทำงานตามปกติ จุดบอกตำแหน่งอ่านจาก scrollLeft
+  const promoRef = useRef<HTMLDivElement>(null);
+  const [promoIndex, setPromoIndex] = useState(0);
+  const [promoPaused, setPromoPaused] = useState(false);
+  // ระยะต่อหนึ่งใบ = ความกว้างการ์ด + gap ไม่ใช่ความกว้าง container (container มี padding อยู่ด้วย ใช้แทนกันแล้วเลื่อนเพี้ยนสะสม)
+  const promoStep = (el: HTMLDivElement) => {
+    const first = el.children[0] as HTMLElement | undefined;
+    const second = el.children[1] as HTMLElement | undefined;
+    if (!first) return el.clientWidth;
+    return second ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
+  };
+  const scrollPromoTo = (i: number) => {
+    const el = promoRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * promoStep(el), behavior: 'smooth' });
+  };
+  const renderPromo = (p: (typeof promos)[number], i: number, key: string, extraClass = '') => (
+    <div
+      key={key}
+      className={`relative h-[132px] w-full shrink-0 snap-center overflow-hidden rounded-2xl p-5 shadow-[0_4px_14px_rgba(16,24,40,0.08)] sm:w-auto sm:shrink ${extraClass} ${
+        i === 0
+          ? 'bg-gradient-to-br from-[#178F5A] to-[#12704A]'
+          : i === 1
+            ? 'bg-gradient-to-br from-[#2F6FE0] to-[#1E4FB0]'
+            : 'bg-gradient-to-br from-[#E0902F] to-[#D77A1E]'
+      }`}
+    >
+      <div className="pointer-events-none absolute -right-5 -top-8 h-[130px] w-[130px] rounded-full bg-white/[0.14]" />
+      <div className="relative">
+        <div
+          className={`inline-block rounded-full bg-white px-2.5 py-1 text-[11px] font-bold ${
+            i === 0 ? 'text-[#12704A]' : i === 1 ? 'text-tenant' : 'text-[#C77B14]'
+          }`}
+        >
+          {p.tag}
+        </div>
+        <div className="mt-2.5 text-[17px] font-bold leading-snug text-white">{p.title}</div>
+        <div className="mt-1 text-[13px] text-white/85">{p.sub}</div>
+      </div>
+    </div>
+  );
+
+  // วนไปข้างหน้าอย่างเดียว 1-2-3-1-2-3 ไม่มีจังหวะรูดย้อนกลับให้เห็น
+  // ทำโดยต่อสำเนาใบแรกไว้ท้ายแถว พอเลื่อนถึงสำเนาก็กระโดดกลับตำแหน่ง 0 แบบไม่มีอนิเมชัน (ภาพเหมือนกันเป๊ะ เลยไม่เห็นรอยต่อ)
+  useEffect(() => {
+    if (!isMobile || promoPaused) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let jump: number | undefined;
+    const id = window.setInterval(() => {
+      const el = promoRef.current;
+      if (!el) return;
+      const step = promoStep(el);
+      const cur = Math.round(el.scrollLeft / step);
+      // ถ้าผู้ใช้ปัดมาค้างที่ใบสำเนาเอง ให้กลับไปยืนที่ใบแรกก่อนแล้วค่อยเดินต่อ
+      if (cur >= promos.length) {
+        el.scrollTo({ left: 0, behavior: 'auto' });
+        el.scrollTo({ left: step, behavior: 'smooth' });
+        return;
+      }
+      const next = cur + 1;
+      el.scrollTo({ left: next * step, behavior: 'smooth' });
+      if (next === promos.length) {
+        jump = window.setTimeout(() => {
+          promoRef.current?.scrollTo({ left: 0, behavior: 'auto' });
+        }, 700);
+      }
+    }, 4000);
+    return () => {
+      window.clearInterval(id);
+      if (jump) window.clearTimeout(jump);
+    };
+  }, [isMobile, promoPaused, promos.length]);
   const provinceLabel = (p: string) => PROVINCE_LABEL[lang][p] ?? p;
 
   // รายเดือนกับรายวันแยกขาดจากกัน — ห้องหนึ่งเป็นได้อย่างเดียว (allowDaily เป็นตัวแบ่ง)
@@ -606,6 +680,63 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
     if (availableOnly) params.set('availableOnly', '1');
     router.push(`/search?${params.toString()}`);
   }
+
+  // ตัวเลือกจังหวัด — ใช้ที่แถวหัวข้อ "หอพักแนะนำ" ปกติ ถ้ายังไม่มีหอพักแนะนำจะย้ายไปอยู่แถว "หอพักใน<จังหวัด>" แทน ปุ่มจะได้ไม่หายไปทั้งหน้า
+  const provincePicker = (
+    <div className="relative w-full sm:w-[230px] sm:shrink-0">
+      <button
+        type="button"
+        aria-label={t.selectProvince}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-[44px] w-full cursor-pointer items-center gap-2.5 rounded-xl border border-[#D8DCE2] bg-white px-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
+          <path
+            d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z"
+            stroke="#2F6FE0"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          <circle cx="12" cy="11" r="2.3" stroke="#2F6FE0" strokeWidth="1.8" />
+        </svg>
+        <span className="flex-1 truncate text-left text-[15px] font-semibold text-ink-strong">{provinceLabel(province)}</span>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        >
+          <path d="M6 9l6 6 6-6" stroke="#8A909B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-12 z-10 w-[260px] rounded-xl border border-card-border bg-white p-1.5 shadow-[0_12px_30px_rgba(20,40,80,0.16)]">
+          {PROVINCES.map((p) => {
+            const selected = p === province;
+            return (
+              <div
+                key={p}
+                onClick={() => {
+                  setProvince(p);
+                  setOpen(false);
+                }}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[15px] hover:bg-[#F1F3F6] ${
+                  selected ? 'bg-tenant-tint text-tenant' : 'text-ink-body'
+                }`}
+              >
+                <span className={`flex-1 ${selected ? 'font-bold' : 'font-medium'}`}>{provinceLabel(p)}</span>
+                <span className="text-[13px] text-ink-muted">
+                  {byProvince.get(p)?.length ?? 0} {t.dormsUnit}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="overflow-x-hidden bg-[#F2F4F8] pb-[76px] text-[#161A22] sm:pb-0">
@@ -768,13 +899,13 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       </div>
 
       {/* ===== SEARCH CARD (floats over hero) ===== */}
-      <div className="relative z-[2] mx-auto -mt-[120px] w-full max-w-[880px] px-4 sm:-mt-[140px]">
+      <div className="relative z-[2] mx-auto -mt-[120px] w-full max-w-[880px] px-4 sm:-mt-[140px] lg:-mt-[160px] lg:max-w-[1040px]">
         {/* category tabs */}
         <div className="flex gap-1.5 pl-3.5">
           <button
             type="button"
             onClick={() => router.push('/')}
-            className={`flex items-center gap-2 rounded-t-xl px-6 py-3.5 text-[15px] font-semibold shadow-[0_-2px_8px_rgba(0,0,0,0.04)] ${
+            className={`flex items-center gap-2 rounded-t-xl px-6 py-3.5 text-[15px] font-semibold shadow-[0_-2px_8px_rgba(0,0,0,0.04)] lg:px-7 lg:py-4 lg:text-[16.5px] ${
               !dailyMode ? 'bg-white text-tenant' : 'bg-white/55 text-[#3A3F49]'
             }`}
           >
@@ -784,7 +915,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
           <button
             type="button"
             onClick={() => router.push('/daily')}
-            className={`flex items-center gap-2 rounded-t-xl px-6 py-3.5 text-[15px] font-semibold shadow-[0_-2px_8px_rgba(0,0,0,0.04)] ${
+            className={`flex items-center gap-2 rounded-t-xl px-6 py-3.5 text-[15px] font-semibold shadow-[0_-2px_8px_rgba(0,0,0,0.04)] lg:px-7 lg:py-4 lg:text-[16.5px] ${
               dailyMode ? 'bg-white text-tenant' : 'bg-white/55 text-[#3A3F49]'
             }`}
           >
@@ -794,15 +925,15 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
 
         {/* card */}
-        <div className="rounded-[0_18px_18px_18px] bg-white p-4 shadow-[0_12px_40px_rgba(20,40,80,0.18)] sm:p-6">
+        <div className="rounded-[0_18px_18px_18px] bg-white p-4 shadow-[0_12px_40px_rgba(20,40,80,0.18)] sm:p-6 lg:p-8">
           {/* main search field */}
-          <div className="flex min-w-0 items-center gap-3 rounded-[14px] border-2 border-tenant px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3 rounded-[14px] border-2 border-tenant px-4 py-3 lg:gap-4 lg:px-5 lg:py-4">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
               <circle cx="11" cy="11" r="7" stroke="#2F6FE0" strokeWidth="2.2" />
               <path d="M16.5 16.5L21 21" stroke="#2F6FE0" strokeWidth="2.2" strokeLinecap="round" />
             </svg>
             <div className="min-w-0 flex-1">
-              <div className="text-[12px] text-[#8A909B]">{t.fieldLabel}</div>
+              <div className="text-[12px] text-[#8A909B] lg:text-[13.5px]">{t.fieldLabel}</div>
               <input
                 ref={searchInputRef}
                 value={q}
@@ -816,24 +947,24 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                     ? topSearchPlaceholder
                     : `${provinceLabel(province)} · ${currentDorms.length} ${t.dormsUnit}`
                 }
-                className="w-full truncate bg-transparent text-[17px] font-semibold text-ink-strong outline-none placeholder:font-semibold placeholder:text-ink-strong"
+                className="w-full truncate bg-transparent text-[17px] font-semibold text-ink-strong outline-none placeholder:font-semibold placeholder:text-ink-strong lg:text-[19px]"
               />
             </div>
           </div>
 
           {/* sub fields */}
-          <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[14px] border border-[#E4E7EC] px-4 py-3">
+          <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:mt-4 lg:gap-4">
+            <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[14px] border border-[#E4E7EC] px-4 py-3 lg:gap-4 lg:px-5 lg:py-4">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
                 <path d="M4 20v-9l8-6 8 6v9" stroke="#5B616C" strokeWidth="1.7" strokeLinejoin="round" />
                 <rect x="9" y="13" width="6" height="7" stroke="#5B616C" strokeWidth="1.7" />
               </svg>
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] text-[#8A909B]">{t.roomType}</div>
+                <div className="text-[12.5px] text-[#8A909B] lg:text-[13.5px]">{t.roomType}</div>
                 <select
                   value={roomType}
                   onChange={(e) => setRoomType(e.target.value)}
-                  className="w-full appearance-none truncate bg-transparent text-[15px] font-semibold text-ink-strong outline-none"
+                  className="w-full appearance-none truncate bg-transparent text-[15px] font-semibold text-ink-strong outline-none lg:text-[16.5px]"
                 >
                   {roomTypeOptions.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -844,7 +975,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
               </div>
             </label>
 
-            <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[14px] border border-[#E4E7EC] px-4 py-3">
+            <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-[14px] border border-[#E4E7EC] px-4 py-3 lg:gap-4 lg:px-5 lg:py-4">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
                 <circle cx="12" cy="12" r="9" stroke="#5B616C" strokeWidth="1.7" />
                 <path
@@ -855,11 +986,11 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                 />
               </svg>
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] text-[#8A909B]">{t.budget}</div>
+                <div className="text-[12.5px] text-[#8A909B] lg:text-[13.5px]">{t.budget}</div>
                 <select
                   value={priceRange}
                   onChange={(e) => setPriceRange(e.target.value)}
-                  className="w-full appearance-none truncate bg-transparent text-[15px] font-semibold text-ink-strong outline-none"
+                  className="w-full appearance-none truncate bg-transparent text-[15px] font-semibold text-ink-strong outline-none lg:text-[16.5px]"
                 >
                   {priceRangeOptions.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -883,7 +1014,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
 
           <button
             onClick={handleSearch}
-            className="mt-4 flex h-[58px] w-full items-center justify-center gap-2 rounded-[14px] bg-tenant text-[19px] font-bold text-white hover:bg-tenant-dark"
+            className="mt-4 flex h-[58px] w-full items-center justify-center gap-2 rounded-[14px] bg-tenant text-[19px] font-bold text-white hover:bg-tenant-dark lg:mt-5 lg:h-[66px] lg:text-[21px]"
           >
             <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
               <circle cx="11" cy="11" r="7" stroke="#fff" strokeWidth="2.2" />
@@ -907,33 +1038,37 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
       </div>
 
-      {/* ===== PROMO STRIP ===== */}
-      <div className="mx-auto max-w-[1240px] px-6 pt-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* ===== PROMO STRIP =====
+          จอมือถือ = แถบเลื่อนแนวนอน snap ทีละใบ (เลื่อนเองทุก 4 วิ หยุดเมื่อผู้ใช้แตะ)
+          จอ sm ขึ้นไป = กริด 3 คอลัมน์เหมือนเดิม ไม่มี scroll */}
+      <div className="mx-auto max-w-[1240px] pt-8">
+        <div
+          ref={promoRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setPromoIndex(Math.round(el.scrollLeft / promoStep(el)) % promos.length);
+          }}
+          onPointerDown={() => setPromoPaused(true)}
+          className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-3 sm:overflow-x-visible"
+        >
+          {promos.map((p, i) => renderPromo(p, i, `${i}-${p.title}`))}
+          {/* สำเนาใบแรกต่อท้าย — มีเฉพาะจอมือถือ ใช้ทำรอยต่อตอนวนกลับให้เนียน */}
+          {promos.length > 1 && renderPromo(promos[0], 0, 'promo-loop-clone', 'sm:hidden')}
+        </div>
+
+        {/* จุดบอกตำแหน่ง — เฉพาะจอมือถือ กดเลื่อนไปใบที่ต้องการได้ */}
+        <div className="mt-2.5 flex items-center justify-center gap-1.5 sm:hidden">
           {promos.map((p, i) => (
-            <div
-              key={`${i}-${p.title}`}
-              className={`relative h-[132px] overflow-hidden rounded-2xl p-5 shadow-[0_4px_14px_rgba(16,24,40,0.08)] ${
-                i === 0
-                  ? 'bg-gradient-to-br from-[#178F5A] to-[#12704A]'
-                  : i === 1
-                    ? 'bg-gradient-to-br from-[#2F6FE0] to-[#1E4FB0]'
-                    : 'bg-gradient-to-br from-[#E0902F] to-[#D77A1E]'
-              }`}
-            >
-              <div className="pointer-events-none absolute -right-5 -top-8 h-[130px] w-[130px] rounded-full bg-white/[0.14]" />
-              <div className="relative">
-                <div
-                  className={`inline-block rounded-full bg-white px-2.5 py-1 text-[11px] font-bold ${
-                    i === 0 ? 'text-[#12704A]' : i === 1 ? 'text-tenant' : 'text-[#C77B14]'
-                  }`}
-                >
-                  {p.tag}
-                </div>
-                <div className="mt-2.5 text-[17px] font-bold leading-snug text-white">{p.title}</div>
-                <div className="mt-1 text-[13px] text-white/85">{p.sub}</div>
-              </div>
-            </div>
+            <button
+              key={`dot-${i}-${p.title}`}
+              type="button"
+              aria-label={`${lang === 'th' ? 'การ์ดที่' : 'Card'} ${i + 1}`}
+              onClick={() => {
+                setPromoPaused(true);
+                scrollPromoTo(i);
+              }}
+              className={`h-[6px] rounded-full transition-all ${i === promoIndex ? 'w-[18px] bg-tenant' : 'w-[6px] bg-[#C9D0DC]'}`}
+            />
           ))}
         </div>
       </div>
@@ -941,7 +1076,11 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
       {/* ===== RECOMMENDED DORMS (คะแนนรีวิวจริงสูงสุด) ===== */}
       {topDorms.length > 0 && (
         <div className="mx-auto max-w-[1240px] px-6 pt-12">
-          <SectionHead title={t.trendingTitle} sub={t.trendingSub} />
+          <SectionHead
+            title={t.trendingTitle}
+            sub={t.trendingSub}
+            action={provincePicker}
+          />
           <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-4">
             {topDorms.map((d) => {
               const isFavorited = favoriteIds.has(d.id);
@@ -998,8 +1137,8 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
         </div>
       )}
 
-      {/* ===== PROVINCE SELECTOR + BROWSE =====
-          ตัวเลือกจังหวัดอยู่ในหัวหมวดเลย ของเดิมลอยเป็นแถวเดี่ยวเหนือหัวข้อ ดูไม่รู้ว่าคุมอะไร */}
+      {/* ===== BROWSE BY PROVINCE =====
+          ตัวเลือกจังหวัดย้ายไปอยู่แถวหัวข้อ "หอพักแนะนำ" ด้านบน หมวดนี้เปลี่ยนตามจังหวัดที่เลือกที่นั่น */}
       <div className="mx-auto mt-12 max-w-[1240px] px-6">
         <SectionHead
           title={t.dormsIn(provinceLabel(province))}
@@ -1014,59 +1153,7 @@ export function HomeBrowse({ dailyMode }: { dailyMode: boolean }) {
                   {t.viewAllZones}
                 </Link>
               )}
-      <div className="relative w-full sm:w-[230px] sm:shrink-0">
-        <button
-          type="button"
-          aria-label={t.selectProvince}
-          onClick={() => setOpen((v) => !v)}
-          className="flex h-[44px] w-full cursor-pointer items-center gap-2.5 rounded-xl border border-[#D8DCE2] bg-white px-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
-            <path
-              d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1113 0c0 4.5-6.5 10-6.5 10z"
-              stroke="#2F6FE0"
-              strokeWidth="1.8"
-              strokeLinejoin="round"
-            />
-            <circle cx="12" cy="11" r="2.3" stroke="#2F6FE0" strokeWidth="1.8" />
-          </svg>
-          <span className="flex-1 truncate text-left text-[15px] font-semibold text-ink-strong">{provinceLabel(province)}</span>
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          >
-            <path d="M6 9l6 6 6-6" stroke="#8A909B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-
-        {open && (
-          <div className="absolute right-0 top-12 z-10 w-[260px] rounded-xl border border-card-border bg-white p-1.5 shadow-[0_12px_30px_rgba(20,40,80,0.16)]">
-            {PROVINCES.map((p) => {
-              const selected = p === province;
-              return (
-                <div
-                  key={p}
-                  onClick={() => {
-                    setProvince(p);
-                    setOpen(false);
-                  }}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-[15px] hover:bg-[#F1F3F6] ${
-                    selected ? 'bg-tenant-tint text-tenant' : 'text-ink-body'
-                  }`}
-                >
-                  <span className={`flex-1 ${selected ? 'font-bold' : 'font-medium'}`}>{provinceLabel(p)}</span>
-                  <span className="text-[13px] text-ink-muted">
-                    {byProvince.get(p)?.length ?? 0} {t.dormsUnit}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              {topDorms.length === 0 && provincePicker}
             </div>
           }
         />
