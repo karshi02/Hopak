@@ -6,6 +6,7 @@ import { MailService } from '../mail/mail.service';
 import { UploadsService } from '../uploads/uploads.service';
 import { PrismaService } from '../../prisma.service';
 import { requireEnv } from '../../common/env.util';
+import { TurnstileService } from '../../common/turnstile.service';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { requireEnv } from '../../common/env.util';
     }),
   ],
   controllers: [OwnerApplicationsController],
-  providers: [OwnerApplicationsService, MailService, UploadsService, PrismaService],
+  providers: [OwnerApplicationsService, MailService, UploadsService, PrismaService, TurnstileService],
 })
 export class OwnerApplicationsModule {}

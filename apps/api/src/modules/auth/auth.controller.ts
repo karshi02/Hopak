@@ -9,6 +9,7 @@ import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GoogleCallbackGuard } from './guards/google-callback.guard';
+import { TurnstileService } from '../../common/turnstile.service';
 import { consumeGoogleOAuthExchangeBinding, issueGoogleOAuthExchangeBinding } from './google-oauth-state';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -17,14 +18,24 @@ function deviceFromReq(req: Request): DeviceInfo {
   return { userAgent: req.headers['user-agent'], ip: req.ip };
 }
 
+// ส่งให้ Cloudflare ตรวจคู่กับ token (ช่วยจับ token ที่ถูกขโมยไปใช้จากที่อื่น)
+function ipFromReq(req: Request): string | undefined {
+  return req.ip;
+}
+
 @Controller('auth')
 @UseGuards(RateLimitGuard)
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private turnstile: TurnstileService,
+  ) {}
 
   @Post('register')
   @RateLimit(10, 60_000) // สมัคร: 10 ครั้ง/นาที/IP
-  register(@Body() dto: RegisterDto, @Req() req: Request) {
+  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+    // ด่านกันบอทสมัครรัว — rate limit อย่างเดียวกันสคริปต์ที่หมุน IP ไม่อยู่
+    await this.turnstile.verify(dto.turnstileToken, ipFromReq(req));
     return this.authService.register(dto, deviceFromReq(req));
   }
 

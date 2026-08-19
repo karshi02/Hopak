@@ -5,6 +5,8 @@ dist
 .env
 .env.production
 .env.*.local
+# .env.local ของ Next.js — pattern .env.*.local ด้านบนไม่ครอบ (ไม่มีส่วนกลาง)
+.env.local
 docker/.env
 *.log
 .expo

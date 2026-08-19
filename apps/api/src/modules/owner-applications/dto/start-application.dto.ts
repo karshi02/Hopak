@@ -10,4 +10,9 @@ export class StartApplicationDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  // token จากวิดเจ็ต Cloudflare Turnstile — ด่านกันบอทเปิดใบสมัครรัวจนสแปมอีเมลคนอื่น
+  @IsOptional()
+  @IsString()
+  turnstileToken?: string;
 }

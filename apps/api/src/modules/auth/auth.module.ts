@@ -10,6 +10,7 @@ import { MailService } from '../mail/mail.service';
 import { requireEnv } from '../../common/env.util';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GoogleCallbackGuard } from './guards/google-callback.guard';
+import { TurnstileService } from '../../common/turnstile.service';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { GoogleCallbackGuard } from './guards/google-callback.guard';
     GoogleCallbackGuard,
     PrismaService,
     MailService,
+    TurnstileService,
   ],
 })
 export class AuthModule {}

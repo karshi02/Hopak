@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { ALL_PROVINCES, normalizeProvince } from '@hopak/shared';
 import PlacesAutocompleteInput, { type PlacePick } from '@/components/map/PlacesAutocompleteInput';
 import { loadGoogleMaps } from '@/lib/googleMaps';
+import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
 
@@ -167,6 +168,8 @@ export default function PartnerRegisterPage() {
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [province, setProvince] = useState('');
   const [phone, setPhone] = useState('');
+  // token กันบอทจาก Cloudflare Turnstile — ใบสมัครนี้ยิงอีเมล OTP ออกไป ต้องกันบอทที่ขั้นแรก
+  const [captcha, setCaptcha] = useState('');
   const [placeName, setPlaceName] = useState('');
   const [outsideTh, setOutsideTh] = useState(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -222,6 +225,10 @@ export default function PartnerRegisterPage() {
       setError('กรอกชื่อและอีเมลก่อน');
       return;
     }
+    if (turnstileEnabled && !captcha) {
+      setError('กรุณายืนยันว่าคุณไม่ใช่บอทก่อน');
+      return;
+    }
     setBusy(true);
     try {
       let id = appId;
@@ -229,7 +236,7 @@ export default function PartnerRegisterPage() {
       if (!id || !secret) {
         const app = await apiClient.post<{ id: string; secret?: string; requiresOtp?: boolean }>(
           '/owner-applications',
-          { name: name.trim(), email: email.trim() },
+          { name: name.trim(), email: email.trim(), turnstileToken: captcha || undefined },
         );
         id = app.id;
         setAppId(id);
@@ -507,6 +514,9 @@ export default function PartnerRegisterPage() {
               <div className="space-y-4">
                 <Field label="ชื่อ-นามสกุล"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น พิมพ์ชนก ใจดี" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field>
                 <Field label="อีเมล" hint="เราจะส่งรหัส OTP ไปยืนยัน"><input value={email} type="email" onChange={(event) => setEmail(event.target.value)} placeholder="your@email.com" className="h-[52px] w-full rounded-[13px] border border-[#E7ECEA] bg-[#F6F8F7] px-4 font-sans text-[15px] outline-none transition placeholder:text-[#A6AFAA] focus:border-[#0E9F8E] focus:bg-white focus:ring-4 focus:ring-[#0E9F8E]/10" /></Field>
+              </div>
+              <div className="mt-5">
+                <Turnstile onToken={setCaptcha} />
               </div>
               <div className="flex-1" />
               {/* อีเมลนี้มีบัญชีเจ้าของหออยู่แล้ว — บอกให้ชัดตรงนี้เลย พร้อมทางไปต่อ ไม่ต้องให้เดา */}

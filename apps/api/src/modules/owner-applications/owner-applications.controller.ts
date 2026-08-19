@@ -10,8 +10,10 @@ import {
   UseInterceptors,
   Headers,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request } from 'express';
 import { imageFileFilter, documentFileFilter, IMAGE_LIMIT, DOC_LIMIT } from '../../common/upload-filters';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
@@ -21,6 +23,7 @@ import { UpdateDormInfoDto } from './dto/update-dorm-info.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { FinishApplicationDto } from './dto/finish-application.dto';
 import { SetCoverPhotoDto } from './dto/set-cover-photo.dto';
+import { TurnstileService } from '../../common/turnstile.service';
 
 // ใบสมัครเปิดหอพัก — ไม่ต้องล็อกอิน (ยังไม่มีบัญชีจริงจนกว่าจะถึง finish)
 // การเข้าถึงใช้ "continuation secret" ที่ออกให้ครั้งเดียวตอน POST /owner-applications
@@ -29,11 +32,16 @@ import { SetCoverPhotoDto } from './dto/set-cover-photo.dto';
 @Controller('owner-applications')
 @UseGuards(RateLimitGuard)
 export class OwnerApplicationsController {
-  constructor(private service: OwnerApplicationsService) {}
+  constructor(
+    private service: OwnerApplicationsService,
+    private turnstile: TurnstileService,
+  ) {}
 
   @Post()
   @RateLimit(5, 60_000) // เริ่มใบสมัคร: 5 ครั้ง/นาที/IP กันสแปม + กันไล่ยิงอีเมลคนอื่น
-  start(@Body() dto: StartApplicationDto) {
+  async start(@Body() dto: StartApplicationDto, @Req() req: Request) {
+    // ด่านกันบอท — endpoint นี้ส่งอีเมล OTP ออกไปให้ที่อยู่ที่กรอกมา ปล่อยให้ยิงรัวได้ = สแปมคนอื่นแทนเรา
+    await this.turnstile.verify(dto.turnstileToken, req.ip);
     return this.service.start(dto);
   }
 

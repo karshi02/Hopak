@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { setToken } from '@/lib/auth';
 import { useLang } from '@/hooks/useLang';
+import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
 import { HopakIcon } from '@/components/HopakIcon';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -40,6 +41,7 @@ const TEXT = {
     terms: 'การสมัครถือว่ายอมรับเงื่อนไขการใช้งานและนโยบายความเป็นส่วนตัว',
     err1: 'สร้างบัญชีไม่สำเร็จ',
     errPhone: 'กรอกเบอร์โทรให้ครบ 10 หลัก (ขึ้นต้นด้วย 0)',
+    errCaptcha: 'กรุณายืนยันว่าคุณไม่ใช่บอทก่อน',
     // step 2
     title2: 'ตั้งค่าโปรไฟล์',
     sub2: 'เพื่อให้หอพักติดต่อคุณได้สะดวก',
@@ -81,6 +83,7 @@ const TEXT = {
     terms: 'By signing up you accept our Terms of Service and Privacy Policy',
     err1: 'Could not create account',
     errPhone: 'Enter a valid 10-digit phone number starting with 0',
+    errCaptcha: 'Please complete the bot check first',
     title2: 'Set up your profile',
     sub2: 'So dorms can reach you easily',
     uploadPhoto: 'Upload profile photo',
@@ -121,6 +124,8 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // token กันบอทจาก Cloudflare Turnstile — ว่าง = ยังไม่ผ่านการยืนยัน
+  const [captcha, setCaptcha] = useState('');
   const [password, setPassword] = useState('');
   const [intent, setIntent] = useState<'monthly' | 'daily'>('monthly');
   const [address, setAddress] = useState('');
@@ -163,6 +168,10 @@ export default function RegisterPage() {
       setError(t.errPhone);
       return;
     }
+    if (turnstileEnabled && !captcha) {
+      setError(t.errCaptcha);
+      return;
+    }
     setSubmitting(true);
     try {
       const { accessToken } = await apiClient.post<{ accessToken: string }>('/auth/register', {
@@ -170,6 +179,7 @@ export default function RegisterPage() {
         email,
         phone: phoneDigits,
         password,
+        turnstileToken: captcha || undefined,
       });
       setToken(accessToken);
       setStep(2);
@@ -364,6 +374,10 @@ export default function RegisterPage() {
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.phPass} required minLength={6} className={inputBase} />
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <Turnstile onToken={setCaptcha} lang={lang} />
               </div>
 
               {error && <p className="mt-4 text-sm text-danger">{error}</p>}

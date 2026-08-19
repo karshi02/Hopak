@@ -14,6 +14,11 @@ export class RegisterDto {
 
   @MinLength(6)
   password!: string;
+
+  // token จากวิดเจ็ต Cloudflare Turnstile — บังคับเมื่อฝั่งเซิร์ฟเวอร์ตั้ง TURNSTILE_SECRET_KEY ไว้
+  @IsOptional()
+  @IsString()
+  turnstileToken?: string;
 }
 
 
