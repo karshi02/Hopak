@@ -17,6 +17,7 @@ import { FavoritesModule } from './modules/favorites/favorites.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { LandmarksModule } from './modules/landmarks/landmarks.module';
 import { OwnerApplicationsModule } from './modules/owner-applications/owner-applications.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { OwnerApplicationsModule } from './modules/owner-applications/owner-appl
     SettingsModule,
     LandmarksModule,
     OwnerApplicationsModule,
+    IntegrationsModule, // LS Hub อ่านยอดชำระ (read-only, LSHUB_API_KEY)
   ],
 })
 export class AppModule {}

@@ -31,6 +31,28 @@ curl -s -X POST https://api.hoprak.com/bookings/payment/webhook/xendit \
   -H "Content-Type: application/json" -d '{}'
 ```
 
+## ต่อ LS Hub (ระบบรวมยอดของกลุ่ม) — เพิ่ม 2026-09-13
+
+เส้นทางใหม่ใน API `GET /integrations/payments?since&until` (module `apps/api/src/modules/integrations/`) อ่านยอดชำระเงินอย่างเดียว (SETTLED/TRANSFERRED)
+ล็อกด้วย `Authorization: Bearer $LSHUB_API_KEY` — **ไม่ตั้ง env = 404** · ไม่มี migration · แตะเฉพาะ `api`
+
+```bash
+# 1) ใส่กุญแจใน env ของ API (ค่าเดียวกับ HOPAK_API_KEY ในเครื่อง LS Hub)
+cd /opt/hopak
+grep -q '^LSHUB_API_KEY=' apps/api/.env.production || echo 'LSHUB_API_KEY=<วางค่าที่ได้จาก LS Hub>' >> apps/api/.env.production
+
+# 2) build + up เฉพาะ api
+git pull origin main && cd docker
+docker compose -f docker-compose.prod.yml build api
+docker compose -f docker-compose.prod.yml up -d api
+docker compose -f docker-compose.prod.yml ps
+
+# 3) ตรวจ — ไม่มี key ต้อง 404 · มี key ต้อง 200 และเห็น count
+curl -s -o /dev/null -w "%{http_code}
+" https://api.hoprak.com/integrations/payments
+curl -s -H "Authorization: Bearer $(grep ^LSHUB_API_KEY= ../apps/api/.env.production | cut -d= -f2)"   'https://api.hoprak.com/integrations/payments?since=2026-01-01T00:00:00Z' | head -c 300
+```
+
 ## nginx
 
 ไฟล์บนเซิร์ฟเวอร์ (อย่าสับสน มีชื่อคล้ายกันหลายอัน):
