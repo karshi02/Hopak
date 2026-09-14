@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { BadRequestException, Controller, Get, Headers, NotFoundException, Query } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 
@@ -23,7 +24,8 @@ export class IntegrationsController {
   @Get('payments')
   async payments(@Headers('authorization') auth: string | undefined, @Query('since') sinceQ?: string, @Query('until') untilQ?: string) {
     const key = process.env.LSHUB_API_KEY;
-    if (!key || (auth ?? '') !== `Bearer ${key}`) throw new NotFoundException();
+    const given = (auth ?? '').replace(/^Bearer\s+/i, '');
+    if (!key || !safeEqual(given, key)) throw new NotFoundException();
 
     const now = new Date();
     const since = parseDate(sinceQ) ?? new Date(now.getTime() - 90 * 86400e3);
@@ -89,4 +91,11 @@ function parseDate(v?: string): Date | null {
   if (!v) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** เทียบ key แบบเวลาคงที่ (กันเดาทีละตัวอักษรจากเวลาตอบ) */
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
 }
